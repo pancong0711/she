@@ -17,8 +17,9 @@
     "control-plane": "pnpm --filter @she/control-plane start",
     "broker": "pnpm --filter @she/broker start",
     "pwa:build": "pnpm build && pnpm --filter @she/pwa build",
-    "pwa:serve": "pnpm --filter @she/pwa serve",
-    "pwa:dev": "pnpm --filter @she/pwa dev"
+    "pwa:serve": "pnpm companion",
+    "pwa:dev": "pnpm --filter @she/pwa dev",
+    "companion": "pnpm --filter @she/companion start"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

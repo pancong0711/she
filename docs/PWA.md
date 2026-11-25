@@ -4,7 +4,7 @@
 > 状态：T6.1–T6.2 完成，GitHub Pages 部署完成，T6.3 首屏只读面板完成
 > 代码：
 > - `apps/pwa/`
-> - `apps/pwa/server.mjs`
+> - `apps/companion/server.mjs`
 > - `apps/pwa/src/App.vue`
 > - `apps/pwa/public/manifest.webmanifest`
 > - `apps/pwa/public/sw.js`
@@ -17,7 +17,7 @@ PWA 是 SHE 本地控制台的 UI，不是第二套业务系统：
 浏览器/PWA
   │ 同源 HTTP: http://127.0.0.1:8787
   ▼
-apps/pwa/server.mjs
+apps/companion/server.mjs
   ├─ 静态文件：apps/pwa/dist
   └─ /v1/* 反向代理
           │ Unix socket
@@ -62,7 +62,7 @@ GitHub Pages 本身不能执行安装命令、不能访问 Docker、不能读取
 http://127.0.0.1:8787
 ```
 
-本地 PWA host 同时提供：
+本地 companion 同时提供：
 
 - 静态 PWA；
 - `/v1/*` 反向代理；

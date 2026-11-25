@@ -40,6 +40,12 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Check stable companion/core scripts
+        run: |
+          node --check apps/companion/server.mjs
+          node --check run-core.mjs
+          node scripts/release-manifest.mjs --out /tmp/she-release-manifest.json
+
       - name: Build PWA
         run: pnpm pwa:build
 

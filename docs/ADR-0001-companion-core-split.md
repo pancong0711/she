@@ -1,7 +1,7 @@
 # ADR-0001：稳定 companion + 可更新 core 的分层
 
 > 日期：2026-11-25
-> 状态：建议采纳
+> 状态：已采纳，执行中（T7.1–T7.3 已落地）
 > 参考经验：`2609-assignment-assistant/docs/22-D71-engine-launcher-two-phase-update.md`
 > 关联：PWA、control-plane、broker、发布与更新流程
 

@@ -1,0 +1,16 @@
+{
+  "name": "@she/companion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stable local companion for SHE: PWA host, control-plane/broker proxy, install and diagnostic jobs",
+  "bin": {
+    "she-companion": "./server.mjs"
+  },
+  "scripts": {
+    "start": "node ./server.mjs"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  }
+}

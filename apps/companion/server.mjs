@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Local-only PWA host for SHE.
+ * Stable local SHE companion.
  *
- * Serves the built Vite app from apps/pwa/dist and proxies /v1/* to the
- * control-plane Unix socket. It binds 127.0.0.1 only. The browser never sees
- * the optional bearer token; this process reads it from a local file.
+ * Serves a static PWA build, proxies control-plane/broker APIs over local Unix
+ * sockets, and runs allowlisted install/diagnostic jobs. It binds 127.0.0.1
+ * only. This layer must not import SHE core/control/broker implementation code.
  */
 
 import { createReadStream } from 'node:fs'
@@ -17,8 +17,11 @@ import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const distDir = join(here, 'dist')
 const repoRoot = resolve(here, '../..')
+const distDir = process.env.SHE_PWA_DIST?.trim()
+  ? resolve(process.env.SHE_PWA_DIST.trim())
+  : resolve(repoRoot, 'apps/pwa/dist')
+const companionVersion = JSON.parse(await readFile(join(here, 'package.json'), 'utf8')).version
 const host = '127.0.0.1'
 const port = Number(process.env.SHE_PWA_PORT ?? 8787)
 const runtimeHome = process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.local', 'run')
@@ -208,6 +211,48 @@ function startJob(kind) {
   return job
 }
 
+function probeSocket(socketPath, tokenFile) {
+  return new Promise(resolvePromise => {
+    let settled = false
+    const finish = value => {
+      if (settled) return
+      settled = true
+      resolvePromise(value)
+    }
+    readToken(tokenFile).then(token => {
+      const request = httpRequest({
+        socketPath,
+        path: '/v1/health',
+        method: 'GET',
+        headers: {
+          accept: 'application/json',
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+        },
+        timeout: 3_000,
+      }, response => {
+        const chunks = []
+        response.on('data', chunk => chunks.push(Buffer.from(chunk)))
+        response.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8')
+          let body = null
+          try { body = text === '' ? null : JSON.parse(text) } catch {}
+          finish({
+            reachable: true,
+            httpStatus: response.statusCode ?? 0,
+            ...(body === null ? {} : { response: body }),
+          })
+        })
+      })
+      request.on('timeout', () => {
+        request.destroy()
+        finish({ reachable: false, error: 'timeout' })
+      })
+      request.on('error', error => finish({ reachable: false, error: error.message }))
+      request.end()
+    }).catch(error => finish({ reachable: false, error: error.message }))
+  })
+}
+
 async function readBodyJson(request) {
   const chunks = []
   let size = 0
@@ -256,7 +301,50 @@ async function handleCompanionApi(request, response) {
         controlSocketPath,
         brokerSocketPath,
         activeJobId,
-        version: '0.1.0',
+        version: companionVersion,
+      },
+    })
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/version') {
+    sendJsonWithCors(request, response, 200, {
+      ok: true,
+      value: {
+        companion: companionVersion,
+        node: process.version,
+        repoRoot,
+        distDir,
+        protocols: {
+          companionApi: 'v1',
+          gateway: 'v1',
+          agent: 'v1',
+          sandbox: 'v1',
+        },
+      },
+    })
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/capabilities') {
+    sendJsonWithCors(request, response, 200, {
+      ok: true,
+      value: {
+        jobs: [...JOB_KINDS.keys()],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status'],
+        streams: ['ndjson'],
+        installs: ['job-based-allowlist'],
+      },
+    })
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/core/status') {
+    const control = await probeSocket(controlSocketPath, controlTokenFile)
+    const broker = await probeSocket(brokerSocketPath, brokerTokenFile)
+    sendJsonWithCors(request, response, 200, {
+      ok: true,
+      value: {
+        companion: companionVersion,
+        controlPlane: control,
+        broker,
       },
     })
     return

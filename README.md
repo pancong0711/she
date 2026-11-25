@@ -50,7 +50,8 @@ pnpm test
 
 ```sh
 pnpm pwa:build
-pnpm pwa:serve
+pnpm companion
+# 或兼容别名：pnpm pwa:serve
 # http://127.0.0.1:8787
 ```
 
@@ -83,6 +84,7 @@ pnpm pwa:serve
 - [从 secretary 迁移](docs/MIGRATION-FROM-SECRETARY.md)
 - [PWA 本地控制台](docs/PWA.md)
 - [ADR-0001：稳定 companion + 可更新 core](docs/ADR-0001-companion-core-split.md)
+- [Companion ↔ Core 契约 v1](docs/COMPANION-CORE-CONTRACT.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)
 

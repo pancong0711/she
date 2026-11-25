@@ -31,6 +31,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/client
 
+  apps/companion: {}
+
   apps/control-plane:
     dependencies:
       '@she/client':
