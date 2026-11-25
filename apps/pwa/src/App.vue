@@ -4,6 +4,10 @@ import HelpPanel from './components/HelpPanel.vue'
 import type { GatewayHealth, GatewaySnapshot, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
+  COMPANION_BUNDLE_URL,
+  COMPANION_INSTALLER_URL,
+  COMPANION_MANIFEST_URL,
+  COMPANION_RELEASE_URL,
   DEFAULT_CORE_MANIFEST_URL,
   INSTALL_COMMANDS,
   REPO_URL,
@@ -436,6 +440,21 @@ onBeforeUnmount(() => {
             </article>
           </div>
 
+          <div class="card download-card">
+            <h3>下载安装包</h3>
+            <p class="muted">首次使用需要在电脑上运行一次安装脚本。安装器和 bundle 均可校验 SHA-256，且不请求 root。</p>
+            <div class="hero-actions">
+              <a class="primary" :href="COMPANION_INSTALLER_URL" target="_blank" rel="noreferrer">下载 install-companion.sh</a>
+              <a class="secondary" :href="COMPANION_BUNDLE_URL" target="_blank" rel="noreferrer">下载 companion bundle</a>
+              <a class="secondary" :href="COMPANION_MANIFEST_URL" target="_blank" rel="noreferrer">查看 SHA/manifest</a>
+            </div>
+            <p class="muted small-note">
+              安装命令（示例，具体 SHA 以 manifest 为准）：<br />
+              <code>bash install-companion.sh she-companion-0.1.0.tar.gz --sha256 &lt;hash&gt;</code>
+            </p>
+            <a class="repo-link" :href="COMPANION_RELEASE_URL" target="_blank" rel="noreferrer">Release 页面 ↗</a>
+          </div>
+
           <div class="card install-card">
             <div class="install-head">
               <div>
@@ -512,6 +531,7 @@ onBeforeUnmount(() => {
             <p class="muted small-note">
               更新流程会下载并校验 bundle，停止旧 core，切换 current，启动新 core，并做 health check；
               失败时自动尝试回滚到 previous。全过程日志显示在右侧面板。
+              companion 自身不会由 core 更新替换；companion 升级必须使用新的 checksum-verified 安装器和 release。
             </p>
           </div>
 

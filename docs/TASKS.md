@@ -86,7 +86,7 @@
 | T6.4a | Companion Install & Doctor：白名单 job runner、环境检查、依赖/构建/测试、实时日志 | T6.2a | [x] |
 | T6.4b | 安装前 preflight 硬门禁与环境结果 API | T6.4a | [x] | Node/pnpm fail 阻断 install；PWA 实时显示 |
 | T6.4c1 | 用户级 Node/pnpm bootstrap（不请求 root） | T6.4b | [x] | `bootstrap-user.sh`/`.ps1`；companion `bootstrap` job |
-| T6.4c2 | signed companion installer 与平台安装向导 | T6.4c1/T7.4 | [ ] | checksum/签名、无 root、可回滚 |
+| T6.4c2 | signed companion installer 与平台安装向导 | T6.4c1/T7.4 | [x] | checksum/签名、无 root、可回滚 |
 | T6.4d | 特权环境（Docker/rootless/系统依赖）instructions-only 支持矩阵 | T6.4b | [x] | 只展示方法；不执行 sudo/不请求 root | 显式同意、checksum、审计、回滚 | PWA 点击触发并实时显示 stdout/stderr | 校验、权限确认、日志、回滚入口 |
 | T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [ ] | 只允许叶子目录；不可绕过 broker |
 | T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [ ] | 与 CLI/gateway 共用同一控制面会话 |
@@ -103,7 +103,7 @@
 | T7.4 | core bundle 打包、版本目录、current/previous | T7.3 | [x] | `she-core-<version>` 可安装/切换 |
 | T7.5 | staging/pending/停止/切换/健康检查/回滚 | T7.4 | [x] | 更新失败自动回滚 |
 | T7.6 | PWA 更新 UI 与实时阶段日志 | T7.5 | [x] | 下载/安装/重启/回滚进度可见 |
-| T7.7 | companion 自身升级边界 | T7.2 | [ ] | PWA 不替换运行中的 companion |
+| T7.7 | companion 自身升级边界 | T7.2 | [x] | PWA 不替换运行中的 companion |
 
 ## 当前执行记录
 
@@ -132,3 +132,4 @@
 - 2026-11-25：完成 T7.4：esbuild core bundle、`run-core` 双服务启动、release manifest、`install-core-bundle.sh` 用户级版本目录与 current/previous；bundle 实际启动与 socket health 验证通过。
 - 2026-11-25：完成 T7.5/T7.6：companion core supervisor、manifest 检查、staging/SHA 校验、停止/切换/启动/health check/自动回滚；PWA 增加 core 启停、版本、更新检查和实时更新日志。成功更新与失败回滚均已实测。
 - 2026-11-25：发布 core bundle `v0.1.0-core.1`，提供 `release-manifest.json` 与 `she-core-0.1.0.tar.gz`；PWA 默认 manifest URL 指向该 Release。
+- 2026-11-25：完成 T6.4c2/T7.7：companion bundle 构建、checksum-verified 用户级安装器、manifest、PWA 下载入口与 companion 自身升级边界；安装后 companion 实际启动和 PWA 静态/API smoke test 通过。

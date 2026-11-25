@@ -21,7 +21,8 @@
     "pwa:dev": "pnpm --filter @she/pwa dev",
     "companion": "pnpm --filter @she/companion start",
     "build:core": "bash scripts/build-core-bundle.sh",
-    "install:core": "bash scripts/install-core-bundle.sh"
+    "install:core": "bash scripts/install-core-bundle.sh",
+    "build:companion": "bash scripts/build-companion-bundle.sh"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

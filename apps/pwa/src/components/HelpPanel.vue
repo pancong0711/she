@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { REPO_URL } from '../api'
+import { COMPANION_BUNDLE_URL, COMPANION_INSTALLER_URL, COMPANION_MANIFEST_URL, COMPANION_RELEASE_URL, REPO_URL } from '../api'
 
 defineProps<{
   companionVersion?: string
@@ -82,6 +82,23 @@ defineProps<{
       <p class="muted">
         更新只写入当前用户目录；不执行 sudo，不请求 root。companion 自身的升级是独立边界，
         不会由 PWA 在运行中替换。
+      </p>
+    </article>
+
+    <article class="card">
+      <h2>Companion 自身升级</h2>
+      <p>
+        companion 是稳定层，不由 core 更新流程或 PWA 在运行中替换。升级 companion 时，
+        用户需要下载新的 checksum-verified companion bundle，并用新版安装器安装到用户目录。
+      </p>
+      <p>
+        安装器不请求 root、不安装 Node/Docker、不修改系统服务；旧版本目录可保留用于回滚。
+      </p>
+      <p>
+        <a :href="COMPANION_INSTALLER_URL" target="_blank" rel="noreferrer">安装脚本</a> ·
+        <a :href="COMPANION_BUNDLE_URL" target="_blank" rel="noreferrer">Companion bundle</a> ·
+        <a :href="COMPANION_MANIFEST_URL" target="_blank" rel="noreferrer">SHA/manifest</a> ·
+        <a :href="COMPANION_RELEASE_URL" target="_blank" rel="noreferrer">Release</a>
       </p>
     </article>
 

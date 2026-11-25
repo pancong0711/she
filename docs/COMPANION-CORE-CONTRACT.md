@@ -327,11 +327,19 @@ idle
 - `run-core` 参考入口；
 - release manifest 生成器。
 
-未完成：
+已完成：
 
 - core bundle 打包脚本；
 - current/previous 版本目录；
 - staging/pending/自动切换与回滚；
-- companion 自动启动 run-core；
+- companion 启停/重启 run-core；
 - PWA 更新 UI；
-- companion 自身升级。
+- checksum-verified companion installer；
+- companion release manifest。
+
+未完成：
+
+- companion 自身在线自更新（明确不做：PWA 不替换运行中的 companion）；
+- Windows 原生 companion 安装路径的完整真机验收；
+- 平台级 signed artifact / OS code signing；
+- Docker/rootless 系统 runtime 安装（保持 instructions-only）。

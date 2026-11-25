@@ -26,3 +26,4 @@ All notable changes to SHE are documented here.
 - Added esbuild core bundles, stable `run-core` entrypoint resolution, user-level versioned core installation, and SHA-256 release manifest generation.
 - Added companion core supervisor and two-phase update flow with staged download, SHA verification, stop/switch/start, health checks, automatic rollback, and PWA update UI.
 - Published core bundle `v0.1.0-core.1` with release manifest and SHA-256-verifiable bundle.
+- Added checksum-verified companion bundle/installer, PWA download links, and an explicit no-online-self-update boundary for companion.

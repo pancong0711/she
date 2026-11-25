@@ -211,7 +211,12 @@ PWA host：
 
 ### T6.4 软件包与安装/更新
 
-已完成首版：
+已完成：
+
+- companion bundle、checksum-verified 安装器和 PWA 下载入口；
+- companion 自身升级边界：PWA 不替换运行中的 companion；
+- core bundle 更新闭环：manifest、SHA、staging、前后版本、健康检查和回滚；
+
 
 - 本地 Install & Doctor 页面；
 - allowlisted job runner；

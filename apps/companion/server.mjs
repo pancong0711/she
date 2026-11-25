@@ -672,6 +672,11 @@ async function handleCompanionApi(request, response) {
           agent: 'v1',
           sandbox: 'v1',
         },
+        updateBoundary: {
+          selfUpdate: false,
+          method: 'checksum-verified companion installer',
+          note: 'PWA never replaces the running companion; upgrade via a new companion release/installer.',
+        },
       },
     })
     return

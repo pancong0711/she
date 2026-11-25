@@ -52,6 +52,12 @@ jobs:
           bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-root /tmp/she-core-install
           test -x /tmp/she-core-install/current/run-core.sh
 
+      - name: Build and install companion bundle
+        run: |
+          pnpm build:companion
+          bash scripts/install-companion.sh artifacts/companion/she-companion-0.1.0.tar.gz --sha256 "$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').bundle.sha256)")" --install-root /tmp/she-companion-install --bin-dir /tmp/she-companion-install/bin
+          test -x /tmp/she-companion-install/current/bin/she-companion
+
       - name: Build PWA
         run: pnpm pwa:build
 

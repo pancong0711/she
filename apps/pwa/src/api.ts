@@ -212,6 +212,12 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 
+export const COMPANION_RELEASE_TAG = 'v0.1.0-companion.1'
+export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
+export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
+export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-0.1.0.tar.gz`
+export const COMPANION_INSTALLER_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/install-companion.sh`
+
 function localActionHeaders(): Record<string, string> {
   return { accept: 'application/json', 'content-type': 'application/json', 'x-she-local-action': '1' }
 }
