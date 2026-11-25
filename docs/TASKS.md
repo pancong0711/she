@@ -89,6 +89,18 @@
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
 | T6.8 | 跨平台安装/更新向导与支持矩阵页面 | T6.4/T3.7 | [ ] | Linux 已验证；macOS/Windows 明确状态 |
 
+## M7 Companion / Core 分层与自更新
+
+| ID | 任务 | 依赖 | 状态 | 验收 |
+|---|---|---|---|---|
+| T7.1 | 定稿 companion/core ADR 与 `companion-api.v1` 契约 | M6 | [x] | ADR-0001 + API 契约文档 |
+| T7.2 | 从 `apps/pwa/server.mjs` 抽出 `apps/companion` | T7.1 | [ ] | companion 不 import core 内部 |
+| T7.3 | 定义 `run-core` 入口与 release manifest schema | T7.1 | [ ] | core 可由 companion 以稳定入口启动 |
+| T7.4 | core bundle 打包、版本目录、current/previous | T7.3 | [ ] | `she-core-<version>` 可安装/切换 |
+| T7.5 | staging/pending/停止/切换/健康检查/回滚 | T7.4 | [ ] | 更新失败自动回滚 |
+| T7.6 | PWA 更新 UI 与实时阶段日志 | T7.5 | [ ] | 下载/安装/重启/回滚进度可见 |
+| T7.7 | companion 自身升级边界 | T7.2 | [ ] | PWA 不替换运行中的 companion |
+
 ## 当前执行记录
 
 - 2026-11-25：完成 T0.1–T0.8，M0 基线完成。`pnpm typecheck` 通过，`pnpm test` 7/7 通过。
@@ -108,3 +120,4 @@
 - 2026-11-25：完成 T6.3a：PWA 增加 `/broker/v1/*` 代理、Sandboxes 只读列表/status/按需 stats、broker 离线提示；补充 PNG 192/512 安装图标。
 - 2026-11-25：完成 T6.4a：PWA Install & Doctor 页面、companion `/api/jobs` 白名单任务、环境检查/依赖安装/构建/测试和实时 NDJSON 日志；修复离线状态下导航看起来无响应的问题。
 - 2026-11-25：响应 feishu4dsh integration 建议：`@she/gateway-sdk` 纳入公开包；发布 GitHub Release tarball `v0.1.0-packages.1`；补充 tarball + pnpm overrides/`blockExoticSubdeps:false` 消费说明与 SHA；完成 Release URL 安装 smoke test。
+- 2026-11-25：新增 ADR-0001，确定 stable companion + updatable core + versioned protocol 分层；M7 任务组建立。

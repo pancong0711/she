@@ -82,6 +82,7 @@ pnpm pwa:serve
 - [M4 feishu4dsh 薄接入设计](docs/M4-FEISHU4DSH-THIN-ADAPTER.md)
 - [从 secretary 迁移](docs/MIGRATION-FROM-SECRETARY.md)
 - [PWA 本地控制台](docs/PWA.md)
+- [ADR-0001：稳定 companion + 可更新 core](docs/ADR-0001-companion-core-split.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)
 
