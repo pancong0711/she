@@ -56,10 +56,11 @@
 | T4.1 | `@she/client` handshake/health/command/interaction/events 实现 | T1.6 | [x] | fake Unix-socket server 契约测试通过 |
 | T4.1a | `@she/protocol` / `@she/client` 打包发布、版本矩阵与 golden fixtures | T4.1 | [x] | 生成可安装 tarball；两仓库可引用同一 fixture 版本 |
 | T4.1b | control-plane `/v1/*` server、事件重放窗口与 snapshot 入口 | T1.6/T4.1 | [x] | fake client 契约测试；cursor_expired 负例 |
-| T4.2 | feishu4dsh 依赖 `@she/client` 的接入模块设计落地 | T4.1 | [ ] | 无 SHE 内部 import |
-| T4.3 | `/she` 命令透传与只读 RenderIntent 映射 | T4.2 | [ ] | bridge/adapter 测试 |
-| T4.4 | 写操作、交互回调、文件审批闭环 | T4.3 | [ ] | 联合验收用例 |
-| T4.5 | 旧 secretary 兼容/迁移/回滚说明 | T4.4 | [ ] | 迁移文档 |
+| T4.2 | feishu4dsh 依赖 `@she/client` 的接入模块设计落地（SHE 侧参考 bridge + guide） | T4.1 | [x] | 无 SHE 内部 import |
+| T4.3 | `/she` 命令透传与只读 RenderIntent 映射（契约/参考桥测试） | T4.2 | [x] | bridge/adapter 测试 |
+| T4.4 | 写操作、交互回调、文件审批闭环（SHE 契约侧） | T4.3 | [x] | 联合验收用例 |
+| T4.5 | 旧 secretary 兼容/迁移/回滚说明 | T4.4 | [x] |
+| T4.6 | feishu4dsh 仓库实际接入与飞书真机验收 | T4.2–T4.5 | [ ] | 目标仓库 patch + 真机闭环 | 迁移文档 |
 
 ## M5 多 agent 与凭据
 
@@ -95,4 +96,5 @@
 - 2026-11-25：完成 T4.1a：`pnpm pack:public` 脚本、golden fixtures、tarball 校验与 `docs/PUBLISHING.md`；已生成并记录 protocol/client tarball。
 - 2026-11-25：完成 T4.1b：control-plane Unix-socket HTTP server、health/hello/command/interaction/snapshot/events、NDJSON、cursor_expired、bearer auth、默认命令服务与 CLI entrypoint；新增 `docs/CONTROL-PLANE-SERVER.md`。`pnpm test` 45/45 通过。
 - 2026-11-25：完成 M2 T2.1–T2.4：OpenCode HttpApi client、AgentAdapter、permission 基线、async prompt 事件映射、报告校验、TaskRunner 组合测试；新增 `docs/OPENCODE-ADAPTER.md`。`pnpm test` 49/49 通过。
-- 2026-11-25：完成 M3 T3.1–T3.5：broker daemon、DockerRuntime/CLI、固定 sandbox 路径、registry/audit、inbox/outbox 路由与 symlink 防护、SandboxBrokerClient 与 Unix-socket 集成测试；新增 `docs/SANDBOX-BROKER.md`。`pnpm test` 52/52 通过。下一步 M4 feishu4dsh 薄接入与联调。
+- 2026-11-25：完成 M3 T3.1–T3.5：broker daemon、DockerRuntime/CLI、固定 sandbox 路径、registry/audit、inbox/outbox 路由与 symlink 防护、SandboxBrokerClient 与 Unix-socket 集成测试；新增 `docs/SANDBOX-BROKER.md`。`pnpm test` 52/52 通过。
+- 2026-11-25：完成 M4 SHE 侧：`SheGatewayBridge`、命令/交互/RenderIntent/task event 转发、approval/file intent 契约测试、feishu4dsh 接入指南与 secretary 迁移/回滚文档。`pnpm test` 54/54 通过。feishu4dsh 仓库实际 patch 与真机验收列为 T4.6。

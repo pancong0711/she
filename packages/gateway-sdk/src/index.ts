@@ -4,6 +4,7 @@ import type {
   CapabilitySet,
   ExtensionBag,
   GatewayInboundEvent,
+  GatewayTaskEvent,
   RenderIntent,
   RenderTarget,
 } from '@she/protocol'
@@ -31,5 +32,8 @@ export interface GatewayAdapter {
   readonly descriptor: GatewayAdapterDescriptor
   start(sink: GatewayInboundSink): Promise<void>
   render(target: RenderTarget, intent: RenderIntent): Promise<RenderReceipt>
+  /** Optional task lifecycle hook for status panels/notifications. */
+  onTaskEvent?(event: GatewayTaskEvent): Promise<void>
   stop(): Promise<void>
 }
+export * from './bridge.js'

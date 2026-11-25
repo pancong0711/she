@@ -48,6 +48,10 @@ importers:
       '@she/store-sqlite':
         specifier: workspace:*
         version: link:../../packages/store-sqlite
+    devDependencies:
+      '@she/gateway-sdk':
+        specifier: workspace:*
+        version: link:../../packages/gateway-sdk
 
   packages/adapters/agent-opencode:
     dependencies:
@@ -112,6 +116,9 @@ importers:
 
   packages/gateway-sdk:
     dependencies:
+      '@she/client':
+        specifier: workspace:*
+        version: link:../client
       '@she/protocol':
         specifier: workspace:*
         version: link:../protocol

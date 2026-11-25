@@ -26,5 +26,8 @@
   },
   "bin": {
     "she-control-plane": "./dist/main.js"
+  },
+  "devDependencies": {
+    "@she/gateway-sdk": "workspace:*"
   }
 }

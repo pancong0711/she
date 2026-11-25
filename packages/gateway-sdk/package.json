@@ -17,6 +17,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@she/protocol": "workspace:*"
+    "@she/protocol": "workspace:*",
+    "@she/client": "workspace:*"
   }
 }
