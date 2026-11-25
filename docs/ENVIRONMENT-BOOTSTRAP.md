@@ -104,7 +104,47 @@ PWA 的实时日志会显示：
 3. 后续提供平台特定 bootstrap/installer；
 4. 系统级安装必须显式确认并记录审计。
 
-## 5. 计划中的 bootstrap
+## 5. 已实现的用户级 bootstrap
+
+脚本：
+
+```text
+scripts/bootstrap-user.sh     # Linux/macOS
+scripts/bootstrap-user.ps1    # Windows
+```
+
+用法：
+
+```sh
+bash scripts/bootstrap-user.sh --check
+bash scripts/bootstrap-user.sh --install-pnpm
+bash scripts/bootstrap-user.sh --install-deps
+```
+
+行为：
+
+- 以 UID 0 运行直接拒绝；
+- Node.js 缺失/版本过低：只提示用户自行安装，不请求 root；
+- pnpm 缺失或版本不匹配：优先 corepack，其次 npm `--prefix "$HOME/.local"` 用户级安装；
+- `--install-deps` 只执行 `pnpm install --frozen-lockfile`；
+- git/Docker 缺失只告警并给出“由用户自行安装”的提示；
+- 不执行 sudo，不安装 Docker/rootless，不建容器。
+
+PWA 中对应 job：
+
+```text
+bootstrap
+```
+
+按钮：
+
+```text
+用户级环境准备（不请求 root）
+```
+
+执行后会再次跑 preflight，并实时显示结果。
+
+## 6. 计划中的系统级 bootstrap
 
 ### Linux
 
@@ -128,7 +168,7 @@ PWA 的实时日志会显示：
 - Docker Desktop 需显式安装/授权；
 - 路径、named pipe、权限差异由平台 adapter 处理。
 
-## 6. 首次启动仍需一次本机操作
+## 7. 首次启动仍需一次本机操作
 
 目前 GitHub Pages PWA 不能自行拉起 companion。首次使用需要：
 
@@ -147,7 +187,7 @@ pnpm companion
 - companion 自动下载/更新 core bundle；
 - PWA 只负责 UI 和确认流程。
 
-## 7. 发布与安全要求
+## 8. 发布与安全要求
 
 - installer/checksum 必须可验证；
 - 不执行任意用户命令；
@@ -159,14 +199,16 @@ pnpm companion
 - 失败保留旧版本和日志；
 - 更新过程不得静默进行。
 
-## 8. 验收
+## 9. 验收
 
 - [x] 安装前 preflight 硬门禁；
 - [x] Node/pnpm 版本检查；
 - [x] git/Docker 状态检查；
 - [x] 构建/产物/socket 检查；
 - [x] PWA 实时显示检查结果；
-- [ ] Node/pnpm/git 用户级自动安装；
+- [x] 用户级 pnpm 安装脚本（corepack/npm user prefix）；
+- [x] PWA `bootstrap` job；
+- [ ] signed companion installer；
 - [ ] Docker/rootless 平台安装向导；
 - [ ] signed companion installer；
 - [ ] 系统安装审计与回滚。

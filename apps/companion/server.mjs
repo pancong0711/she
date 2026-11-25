@@ -22,6 +22,11 @@ const distDir = process.env.SHE_PWA_DIST?.trim()
   ? resolve(process.env.SHE_PWA_DIST.trim())
   : resolve(repoRoot, 'apps/pwa/dist')
 const companionVersion = JSON.parse(await readFile(join(here, 'package.json'), 'utf8')).version
+const userBin = join(homedir(), '.local', 'bin')
+const childEnv = {
+  ...process.env,
+  PATH: `${userBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
+}
 const host = '127.0.0.1'
 const port = Number(process.env.SHE_PWA_PORT ?? 8787)
 const runtimeHome = process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.local', 'run')
@@ -73,6 +78,7 @@ function securityHeaders(response, contentType) {
 
 const JOB_KINDS = new Map([
   ['doctor', '环境检查'],
+  ['bootstrap', '用户级环境准备'],
   ['install', '安装依赖'],
   ['build', '构建 PWA'],
   ['build-all', '构建全部'],
@@ -114,7 +120,7 @@ function runCommand(job, command, args, { allowFailure = false } = {}) {
     let settled = false
     const child = spawn(command, args, {
       cwd: repoRoot,
-      env: { ...process.env, CI: '1' },
+      env: { ...childEnv, CI: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     const finish = result => {
@@ -141,7 +147,7 @@ function captureCommand(job, command, args) {
     const stderr = []
     const child = spawn(command, args, {
       cwd: repoRoot,
-      env: { ...process.env, CI: '1' },
+      env: { ...childEnv, CI: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     const finish = result => {
@@ -250,6 +256,13 @@ async function executeJob(job) {
     if (job.kind === 'doctor') {
       const preflight = await runPreflight(job)
       job.exitCode = preflight.ok ? 0 : 1
+    } else if (job.kind === 'bootstrap') {
+      const isWindows = process.platform === 'win32'
+      const result = isWindows
+        ? await runCommand(job, 'powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(repoRoot, 'scripts/bootstrap-user.ps1'), 'install-pnpm'])
+        : await runCommand(job, 'bash', [join(repoRoot, 'scripts/bootstrap-user.sh'), '--install-pnpm'])
+      job.exitCode = result.code
+      if (result.ok) await runPreflight(job)
     } else if (job.kind === 'install') {
       // Hard gate: never install dependencies before the local toolchain passes
       // the minimum preflight. This prevents a half-installed environment.

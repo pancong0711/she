@@ -111,6 +111,7 @@ GET  /api/jobs/:id/events
 
 ```text
 doctor
+bootstrap
 install
 build
 build-all

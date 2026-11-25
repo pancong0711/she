@@ -49,6 +49,10 @@ pnpm test
 ## PWA 本地控制台
 
 ```sh
+# 可选：用户级检查/安装 pnpm（不请求 root）
+bash scripts/bootstrap-user.sh --check
+bash scripts/bootstrap-user.sh --install-pnpm
+
 pnpm pwa:build
 pnpm companion
 # 或兼容别名：pnpm pwa:serve

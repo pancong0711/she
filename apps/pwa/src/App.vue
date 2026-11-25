@@ -418,6 +418,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="job-actions">
               <button class="primary" :disabled="jobRunning" @click="runJob('doctor')">环境检查</button>
+              <button class="secondary" :disabled="jobRunning" @click="runJob('bootstrap')">用户级环境准备（不请求 root）</button>
               <button class="secondary" :disabled="jobRunning" @click="runJob('install')">安装依赖（自动预检）</button>
               <button class="secondary" :disabled="jobRunning" @click="runJob('build')">构建 PWA</button>
               <button class="secondary" :disabled="jobRunning" @click="runJob('build-all')">构建全部</button>
@@ -442,6 +443,7 @@ onBeforeUnmount(() => {
             <h3>Root / sudo 策略</h3>
             <p>
               SHE companion 不执行 sudo，不申请 root，也不会自动安装需要特权的系统组件。
+              “用户级环境准备”只会在当前用户目录安装 pnpm 等无需管理员权限的组件。
               如果环境检查提示 Docker/rootless Docker/系统依赖需要管理员权限，请由用户自己按官方说明完成；
               完成后再回到这里点击“环境检查”。
             </p>
