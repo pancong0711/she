@@ -58,9 +58,10 @@ pnpm test
 - [SQLite 持久化存储](docs/STORE-SQLITE.md)
 - [任务执行器与 fake agent 闭环](docs/TASK-RUNNER.md)
 - [公开包打包与发布](docs/PUBLISHING.md)
+- [Control-plane gateway.v1 server](docs/CONTROL-PLANE-SERVER.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)
 
 ## 状态
 
-M0/M1 完成；T4.1a 打包发布完成；下一步 T4.1b control-plane `/v1/*` server。PWA 与跨平台控制台列入 M6。
+M0/M1 完成；T4.1a/T4.1b 完成（公开包、control-plane gateway.v1 server）。下一步 M2 OpenCode adapter。PWA 与跨平台控制台列入 M6。

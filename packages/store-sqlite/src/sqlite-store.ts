@@ -7,6 +7,7 @@ import type {
   DomainAggregateType,
   EventPage,
   EventStore,
+  EventStoreBounds,
   LeaseRepository,
   SheDomainEvent,
   StoredEvent,
@@ -287,6 +288,12 @@ class SqliteTaskRepository implements TaskRepository {
     return rows.map(taskOf)
   }
 
+  async listAll(): Promise<readonly Task[]> {
+    const rows = this.db.prepare('SELECT * FROM tasks ORDER BY created_at ASC, topic_id ASC, seq ASC')
+      .all() as unknown as TaskRow[]
+    return rows.map(taskOf)
+  }
+
   async nextSeq(topicId: string): Promise<number> {
     const row = this.db.prepare(
       'SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM tasks WHERE topic_id = ?',
@@ -505,6 +512,28 @@ class SqliteEventStore implements EventStore {
       nextCursor: last?.cursor ?? cursor,
       hasMore: rows.length > limit,
     }
+  }
+
+  async bounds(): Promise<EventStoreBounds> {
+    const row = this.db.prepare(`
+      SELECT
+        MIN(sequence) AS oldest_sequence,
+        MAX(sequence) AS newest_sequence,
+        COUNT(*) AS count,
+        (SELECT occurred_at FROM events ORDER BY sequence ASC LIMIT 1) AS oldest_occurred_at
+      FROM events
+    `).get() as { oldest_sequence: number | null; newest_sequence: number | null; count: number; oldest_occurred_at: number | null }
+    return {
+      oldestSequence: row.oldest_sequence,
+      newestSequence: row.newest_sequence,
+      oldestOccurredAt: row.oldest_occurred_at,
+      count: row.count,
+    }
+  }
+
+  async pruneBefore(sequence: number): Promise<number> {
+    const result = this.db.prepare('DELETE FROM events WHERE sequence < ?').run(sequence)
+    return Number(result.changes)
   }
 }
 

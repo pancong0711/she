@@ -354,3 +354,31 @@ export interface GatewayInteractionResult {
   readonly interactionId: string
   readonly commandResult?: GatewayCommandOutput
 }
+
+export interface GatewayTaskSnapshot {
+  readonly taskId: string
+  readonly topicId: string
+  readonly seq: number
+  readonly status: string
+  readonly priority: string
+  readonly risk: string
+  readonly excerpt: string
+  readonly agentSessionId?: string
+  readonly sandboxName?: string
+  readonly error?: SheError
+  readonly createdAt: number
+  readonly updatedAt: number
+  readonly startedAt?: number
+  readonly finishedAt?: number
+}
+
+/**
+ * Read-only snapshot used when an event cursor has expired or a gateway needs
+ * to rebuild task state after reconnecting.
+ */
+export interface GatewaySnapshot {
+  readonly protocolVersion: GatewayProtocolVersion
+  readonly generatedAt: number
+  readonly cursor: string | null
+  readonly tasks: readonly GatewayTaskSnapshot[]
+}

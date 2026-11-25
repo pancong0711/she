@@ -73,6 +73,7 @@ describe('protocol common primitives', () => {
     expect(GATEWAY_V1_FIXTURES.channelCapabilities).toHaveLength(13)
     expect(GATEWAY_V1_FIXTURES.commandResult.commandResult?.renderIntents).toHaveLength(2)
     expect(GATEWAY_V1_FIXTURES.serverEvent.type).toBe('task')
+    expect(GATEWAY_V1_FIXTURES.snapshot.cursor).toBe('evt:1')
   })
 
   it('builds stable result and error values', () => {

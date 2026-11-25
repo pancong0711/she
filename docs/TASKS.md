@@ -55,7 +55,7 @@
 | T4.0 | feishu4dsh 评审回执与 canonical capability 对齐 | T0.8 | [x] | 13 个 v1 channel capability 锁定；评审回复文档 |
 | T4.1 | `@she/client` handshake/health/command/interaction/events 实现 | T1.6 | [x] | fake Unix-socket server 契约测试通过 |
 | T4.1a | `@she/protocol` / `@she/client` 打包发布、版本矩阵与 golden fixtures | T4.1 | [x] | 生成可安装 tarball；两仓库可引用同一 fixture 版本 |
-| T4.1b | control-plane `/v1/*` server、事件重放窗口与 snapshot 入口 | T1.6/T4.1 | [ ] | fake client 契约测试；cursor_expired 负例 |
+| T4.1b | control-plane `/v1/*` server、事件重放窗口与 snapshot 入口 | T1.6/T4.1 | [x] | fake client 契约测试；cursor_expired 负例 |
 | T4.2 | feishu4dsh 依赖 `@she/client` 的接入模块设计落地 | T4.1 | [ ] | 无 SHE 内部 import |
 | T4.3 | `/she` 命令透传与只读 RenderIntent 映射 | T4.2 | [ ] | bridge/adapter 测试 |
 | T4.4 | 写操作、交互回调、文件审批闭环 | T4.3 | [ ] | 联合验收用例 |
@@ -92,4 +92,5 @@
 - 2026-11-25：完成 T1.4：Topic 串行队列、TaskLease、heartbeat、owner 校验、过期恢复与并发 claim 测试；新增 `docs/QUEUE-LEASE.md` 与 JSDoc。`pnpm test` 25/25 通过。
 - 2026-11-25：完成 T1.5：`node:sqlite` store、schema migration、Topic/Task/Artifact/Lease/Event repository、跨重启恢复测试；新增 `docs/STORE-SQLITE.md`。`pnpm test` 29/29 通过。
 - 2026-11-25：处理 feishu4dsh 第二轮反馈：新增 CardRenderIntent、commandResult.renderIntents、部署命名约定与发布矩阵；完成 T1.6 TaskRunner + fake agent adapter 端到端闭环；task_requests 迁移 v2。`pnpm test` 36/36 通过。
-- 2026-11-25：完成 T4.1a：`pnpm pack:public` 脚本、golden fixtures、tarball 校验与 `docs/PUBLISHING.md`；已生成并记录 protocol/client tarball。下一步 T4.1b control-plane `/v1/*` server。
+- 2026-11-25：完成 T4.1a：`pnpm pack:public` 脚本、golden fixtures、tarball 校验与 `docs/PUBLISHING.md`；已生成并记录 protocol/client tarball。
+- 2026-11-25：完成 T4.1b：control-plane Unix-socket HTTP server、health/hello/command/interaction/snapshot/events、NDJSON、cursor_expired、bearer auth、默认命令服务与 CLI entrypoint；新增 `docs/CONTROL-PLANE-SERVER.md`。`pnpm test` 45/45 通过。下一步 M2 OpenCode adapter。

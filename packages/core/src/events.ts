@@ -65,9 +65,19 @@ export interface EventPage {
   readonly hasMore: boolean
 }
 
+export interface EventStoreBounds {
+  readonly oldestSequence: number | null
+  readonly newestSequence: number | null
+  readonly oldestOccurredAt: number | null
+  readonly count: number
+}
+
 export interface EventStore {
   append(events: readonly SheDomainEvent[]): Promise<readonly StoredEvent<SheDomainEvent>[]>
   readAfter(cursor: string | null, limit?: number): Promise<EventPage>
+  bounds(): Promise<EventStoreBounds>
+  /** Remove events with sequence below the given sequence. Returns deleted count. */
+  pruneBefore(sequence: number): Promise<number>
 }
 
 export function eventCursor(sequence: number): string {

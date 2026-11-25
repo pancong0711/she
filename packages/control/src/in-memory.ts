@@ -5,6 +5,7 @@ import type {
   ArtifactRepository,
   EventPage,
   EventStore,
+  EventStoreBounds,
   SheDomainEvent,
   StoredEvent,
   Task,
@@ -65,6 +66,10 @@ export class InMemoryTaskRepository implements TaskRepository {
     return [...this.tasks.values()]
       .filter(task => task.topicId === topicId)
       .sort((left, right) => left.seq - right.seq)
+  }
+
+  async listAll(): Promise<readonly Task[]> {
+    return [...this.tasks.values()].sort((left, right) => left.createdAt - right.createdAt || left.seq - right.seq)
   }
 
   async nextSeq(topicId: string): Promise<number> {
@@ -132,6 +137,29 @@ export class InMemoryEventStore implements EventStore {
       nextCursor: last?.cursor ?? cursor,
       hasMore: matching.length > page.length,
     }
+  }
+
+  async bounds(): Promise<EventStoreBounds> {
+    const first = this.ordered[0]
+    const last = this.ordered.at(-1)
+    return {
+      oldestSequence: first?.sequence ?? null,
+      newestSequence: last?.sequence ?? null,
+      oldestOccurredAt: first?.event.occurredAt ?? null,
+      count: this.ordered.length,
+    }
+  }
+
+  async pruneBefore(sequence: number): Promise<number> {
+    let removed = 0
+    while (this.ordered.length > 0 && (this.ordered[0]?.sequence ?? 0) < sequence) {
+      const item = this.ordered.shift()
+      if (item !== undefined) {
+        this.byId.delete(item.event.eventId)
+        removed += 1
+      }
+    }
+    return removed
   }
 }
 

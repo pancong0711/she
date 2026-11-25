@@ -23,6 +23,7 @@ export interface TaskRepository {
   get(id: TaskId): Promise<Task | undefined>
   findByIdempotencyKey(key: string): Promise<Task | undefined>
   listByTopic(topicId: TopicId): Promise<readonly Task[]>
+  listAll(): Promise<readonly Task[]>
   nextSeq(topicId: TopicId): Promise<number>
   save(task: Task): Promise<void>
 }

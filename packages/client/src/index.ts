@@ -9,6 +9,7 @@ import type {
   GatewayInteractionRequest,
   GatewayInteractionResult,
   GatewayServerEvent,
+  GatewaySnapshot,
   GatewayWelcome,
   Result,
   SheError,
@@ -147,6 +148,11 @@ export class SheClient {
     return unwrapResult<GatewayInteractionResult>(response, 'interaction failed')
   }
 
+  async snapshot(signal?: AbortSignal): Promise<GatewaySnapshot> {
+    const response = await this.requestJson<unknown>('GET', '/v1/snapshot', undefined, signal)
+    return unwrapResult<GatewaySnapshot>(response, 'snapshot failed')
+  }
+
   async *events(options: SubscribeOptions = {}): AsyncIterable<GatewayServerEvent> {
     this.assertOpen()
     const query = new URLSearchParams({ protocolVersion: GATEWAY_PROTOCOL_VERSION })
@@ -157,6 +163,22 @@ export class SheClient {
       undefined,
       options.signal,
     )
+    if (response.statusCode !== undefined && response.statusCode >= 400) {
+      const chunks: Buffer[] = []
+      for await (const chunk of response) chunks.push(Buffer.from(chunk))
+      const text = Buffer.concat(chunks).toString('utf8')
+      let payload: unknown
+      try {
+        payload = text === '' ? undefined : JSON.parse(text)
+      } catch {
+        payload = undefined
+      }
+      throw errorFromPayload(
+        payload,
+        'unavailable',
+        `SHE control plane returned HTTP ${response.statusCode}`,
+      )
+    }
     let buffer = ''
     try {
       for await (const chunk of response) {

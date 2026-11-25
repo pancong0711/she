@@ -41,6 +41,9 @@ importers:
       '@she/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@she/store-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/store-sqlite
 
   packages/adapters/agent-opencode:
     dependencies:

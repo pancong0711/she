@@ -9,6 +9,7 @@ import type {
   GatewayCommandRequest,
   GatewayCommandResult,
   GatewayServerEvent,
+  GatewaySnapshot,
   GatewayTaskEvent,
   RenderIntent,
 } from './gateway.js'
@@ -66,6 +67,25 @@ export const GATEWAY_V1_TASK_EVENT: GatewayTaskEvent = {
   queuePosition: 1,
 }
 
+export const GATEWAY_V1_SNAPSHOT: GatewaySnapshot = {
+  protocolVersion: GATEWAY_PROTOCOL_VERSION,
+  generatedAt: 1_700_000_000_000,
+  cursor: 'evt:1',
+  tasks: [
+    {
+      taskId: 'task-fixture-1',
+      topicId: 'topic-fixture-1',
+      seq: 1,
+      status: 'queued',
+      priority: 'interactive',
+      risk: 'workspace-write',
+      excerpt: 'fixture task',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    },
+  ],
+}
+
 export const GATEWAY_V1_SERVER_EVENT: GatewayServerEvent = {
   type: 'task',
   event: GATEWAY_V1_TASK_EVENT,
@@ -83,4 +103,5 @@ export const GATEWAY_V1_FIXTURES = {
   renderIntents: GATEWAY_V1_RENDER_INTENTS,
   taskEvent: GATEWAY_V1_TASK_EVENT,
   serverEvent: GATEWAY_V1_SERVER_EVENT,
+  snapshot: GATEWAY_V1_SNAPSHOT,
 } as const

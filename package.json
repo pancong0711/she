@@ -13,7 +13,8 @@
     "test": "pnpm build && vitest run",
     "test:watch": "vitest",
     "clean": "tsc -b --clean",
-    "pack:public": "bash scripts/pack-packages.sh"
+    "pack:public": "bash scripts/pack-packages.sh",
+    "control-plane": "pnpm --filter @she/control-plane start"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
