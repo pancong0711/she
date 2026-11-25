@@ -60,9 +60,10 @@ pnpm test
 - [公开包打包与发布](docs/PUBLISHING.md)
 - [Control-plane gateway.v1 server](docs/CONTROL-PLANE-SERVER.md)
 - [OpenCode agent adapter](docs/OPENCODE-ADAPTER.md)
+- [Sandbox Broker 与 Docker provider](docs/SANDBOX-BROKER.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)
 
 ## 状态
 
-M0/M1/M2 完成；T4.1a/T4.1b 完成（公开包、gateway.v1 server、OpenCode adapter）。下一步 M3 sandbox/broker。PWA 与跨平台控制台列入 M6。
+M0/M1/M2/M3 完成；T4.1a/T4.1b 完成（公开包、gateway.v1 server、OpenCode adapter、sandbox broker）。下一步 M4 feishu4dsh 薄接入与联调。PWA 与跨平台控制台列入 M6。

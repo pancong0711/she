@@ -26,6 +26,10 @@ importers:
       '@she/sandbox-sdk':
         specifier: workspace:*
         version: link:../../packages/sandbox-sdk
+    devDependencies:
+      '@she/client':
+        specifier: workspace:*
+        version: link:../../packages/client
 
   apps/control-plane:
     dependencies:

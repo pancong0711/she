@@ -40,11 +40,11 @@
 
 | ID | 任务 | 依赖 | 状态 | 验收 |
 |---|---|---|---|---|
-| T3.1 | `@she/sandbox-sdk` provider 接口与 `@she/client` broker client 契约 | T0.5 | [ ] | 契约测试 |
-| T3.2 | `@she/broker` 独立 daemon：Unix socket、health、registry | T3.1 | [ ] | 0600/socket/health 测试 |
-| T3.3 | fixed sandbox spec、Docker provider、start/stop/restart/destroy | T3.2 | [ ] | fake Docker runtime 测试 |
-| T3.4 | inbox/outbox、artifactRef、路径/symlink 防护 | T3.3 | [ ] | 越权/逃逸负例 |
-| T3.5 | audit/registry 持久化与重启恢复 | T3.2–T3.4 | [ ] | 重启恢复测试 |
+| T3.1 | `@she/sandbox-sdk` provider 接口与 `@she/client` broker client 契约 | T0.5 | [x] | 契约测试 |
+| T3.2 | `@she/broker` 独立 daemon：Unix socket、health、registry | T3.1 | [x] | 0600/socket/health 测试 |
+| T3.3 | fixed sandbox spec、Docker provider、start/stop/restart/destroy | T3.2 | [x] | fake Docker runtime 测试 |
+| T3.4 | inbox/outbox、artifactRef、路径/symlink 防护 | T3.3 | [x] | 越权/逃逸负例 |
+| T3.5 | audit/registry 持久化与重启恢复 | T3.2–T3.4 | [x] | 重启恢复测试 |
 | T3.6 | Linux/rootless 平台 provider 能力探测与支持矩阵 | T3.3 | [ ] | 宿主能力/路径/UID 负例测试 |
 | T3.7 | macOS/Windows 平台适配设计（Docker Desktop/WSL2/named pipe） | T3.6 | [ ] | 设计文档 + 未验证项清单 |
 
@@ -94,4 +94,5 @@
 - 2026-11-25：处理 feishu4dsh 第二轮反馈：新增 CardRenderIntent、commandResult.renderIntents、部署命名约定与发布矩阵；完成 T1.6 TaskRunner + fake agent adapter 端到端闭环；task_requests 迁移 v2。`pnpm test` 36/36 通过。
 - 2026-11-25：完成 T4.1a：`pnpm pack:public` 脚本、golden fixtures、tarball 校验与 `docs/PUBLISHING.md`；已生成并记录 protocol/client tarball。
 - 2026-11-25：完成 T4.1b：control-plane Unix-socket HTTP server、health/hello/command/interaction/snapshot/events、NDJSON、cursor_expired、bearer auth、默认命令服务与 CLI entrypoint；新增 `docs/CONTROL-PLANE-SERVER.md`。`pnpm test` 45/45 通过。
-- 2026-11-25：完成 M2 T2.1–T2.4：OpenCode HttpApi client、AgentAdapter、permission 基线、async prompt 事件映射、报告校验、TaskRunner 组合测试；新增 `docs/OPENCODE-ADAPTER.md`。`pnpm test` 49/49 通过。下一步 M3 sandbox/broker。
+- 2026-11-25：完成 M2 T2.1–T2.4：OpenCode HttpApi client、AgentAdapter、permission 基线、async prompt 事件映射、报告校验、TaskRunner 组合测试；新增 `docs/OPENCODE-ADAPTER.md`。`pnpm test` 49/49 通过。
+- 2026-11-25：完成 M3 T3.1–T3.5：broker daemon、DockerRuntime/CLI、固定 sandbox 路径、registry/audit、inbox/outbox 路由与 symlink 防护、SandboxBrokerClient 与 Unix-socket 集成测试；新增 `docs/SANDBOX-BROKER.md`。`pnpm test` 52/52 通过。下一步 M4 feishu4dsh 薄接入与联调。

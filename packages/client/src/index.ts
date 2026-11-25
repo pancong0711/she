@@ -13,35 +13,16 @@ import type {
   GatewayWelcome,
   Result,
   SheError,
-  SheErrorCode,
 } from '@she/protocol'
+import { SHE_CLIENT_VERSION, SheClientError, type SheClientErrorCode } from './errors.js'
 import {
   CHANNEL_CAPABILITIES_V1,
   GATEWAY_PROTOCOL_VERSION,
   makeCapabilitySet,
 } from '@she/protocol'
 
-export const SHE_CLIENT_VERSION = '0.1.0'
-
-export type SheClientErrorCode = SheErrorCode | 'transport_error'
-
-export class SheClientError extends Error {
-  readonly code: SheClientErrorCode
-  readonly retryable: boolean
-  readonly details?: Readonly<Record<string, unknown>>
-
-  constructor(
-    code: SheClientErrorCode,
-    message: string,
-    options: { readonly retryable?: boolean; readonly details?: Readonly<Record<string, unknown>> } = {},
-  ) {
-    super(message)
-    this.name = 'SheClientError'
-    this.code = code
-    this.retryable = options.retryable ?? false
-    if (options.details !== undefined) this.details = options.details
-  }
-}
+export { SHE_CLIENT_VERSION, SheClientError } from './errors.js'
+export type { SheClientErrorCode } from './errors.js'
 
 export interface SheClientOptions {
   readonly socketPath: string
@@ -298,3 +279,4 @@ export class SheClient {
 }
 
 export type { GatewayCommandResult, GatewayInteractionResult, GatewayServerEvent, Result, SheError }
+export * from './broker-client.js'

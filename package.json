@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "clean": "tsc -b --clean",
     "pack:public": "bash scripts/pack-packages.sh",
-    "control-plane": "pnpm --filter @she/control-plane start"
+    "control-plane": "pnpm --filter @she/control-plane start",
+    "broker": "pnpm --filter @she/broker start"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

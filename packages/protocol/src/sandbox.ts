@@ -37,7 +37,7 @@ export interface SandboxWelcome extends ProtocolWelcome {
 
 export type SandboxRole = 'standalone' | 'main' | 'worker' | 'observer' | 'utility'
 export type SandboxNetworkMode = 'none' | 'egress'
-export type SandboxStatus = 'pending' | 'running' | 'stopped' | 'failed' | 'destroyed'
+export type SandboxStatus = 'pending' | 'running' | 'stopped' | 'failed' | 'destroyed' | 'unknown'
 
 export interface SandboxResources {
   readonly cpus?: number
@@ -146,4 +146,13 @@ export interface SandboxApi {
   stats(name: string): Promise<SandboxStats | undefined>
   sendMessage(message: SandboxMessageRequest): Promise<SandboxMessageReceipt>
   subscribe(input: { readonly cursor?: string; readonly signal?: AbortSignal }): AsyncIterable<SandboxEvent>
+}
+
+export interface SandboxBrokerHealth {
+  readonly status: 'ok' | 'degraded'
+  readonly provider: 'she-broker'
+  readonly version: string
+  readonly protocolVersion: SandboxProtocolVersion
+  readonly capabilities: CapabilitySet
+  readonly checkedAt: number
 }
