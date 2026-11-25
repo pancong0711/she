@@ -135,7 +135,7 @@ SHE_PWA_PORT
 SHE_TOKEN_FILE
 ```
 
-浏览器不会接触 token；PWA host 从 `SHE_TOKEN_FILE` 读取后注入代理请求。
+浏览器不会接触 token；PWA host 从 `SHE_TOKEN_FILE` / `SHE_BROKER_TOKEN_FILE` 读取后注入对应代理请求。
 
 ## 4. 当前页面
 
@@ -148,6 +148,7 @@ SHE_TOKEN_FILE
   - companion URL 配置；
 - Dashboard：
   - control plane health；
+  - sandbox 数量/运行数；
   - gateway protocol；
   - snapshot cursor；
   - task 数量/运行数/attention 数；
@@ -155,6 +156,11 @@ SHE_TOKEN_FILE
 - Tasks：
   - 只读任务表；
   - 状态、摘要、priority、更新时间；
+- Sandboxes：
+  - 通过 `/broker/v1/*` 代理访问 sandbox broker；
+  - list/status/role/agent/image；
+  - 按需加载 CPU/memory/PIDs stats；
+  - broker 离线时显示启动提示；
 - Settings：
   - companion URL；
   - 连接状态；
@@ -173,7 +179,9 @@ PWA host：
 - 不监听 LAN；
 - 提供 CSP：`default-src 'self'`；
 - 拒绝路径逃逸；
-- 只有 `/v1/*` 会转发到控制面；
+- `/v1/*` 转发到 control plane；
+- `/broker/v1/*` 转发到 sandbox broker；
+- 两个代理都经过同一 origin/CORS 策略；
 - 浏览器不接触 bearer token；
 - service worker 不缓存 `/v1/*` 响应。
 
@@ -265,9 +273,12 @@ pnpm pwa:build  ✓
 本地 smoke test：
 
 ```text
-GET http://127.0.0.1:8787/v1/health   ✓
-GET http://127.0.0.1:8787/v1/snapshot ✓
-GET http://127.0.0.1:8787/            ✓
+GET http://127.0.0.1:8787/v1/health          ✓
+GET http://127.0.0.1:8787/v1/snapshot        ✓
+GET http://127.0.0.1:8787/broker/v1/health   ✓
+GET http://127.0.0.1:8787/broker/v1/sandboxes ✓
+GET http://127.0.0.1:8787/                   ✓
+GET http://127.0.0.1:8787/icons/she-512.png  ✓
 ```
 
 CORS smoke test：

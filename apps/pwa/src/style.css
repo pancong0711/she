@@ -93,3 +93,20 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
   .steps { grid-template-columns: 1fr; }
   .connect-row { flex-direction: column; }
 }
+
+.broker-foot { margin-top: -18px; }
+.section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.sandbox-page { display: grid; gap: 16px; }
+.sandbox-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.sandbox-card { border: 1px solid #1e293b; border-radius: 14px; padding: 16px; background: #02061788; }
+.sandbox-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.sandbox-head strong { display: block; font-size: 17px; }
+.sandbox-head small { color: #64748b; }
+.sandbox-meta { display: grid; gap: 6px; margin: 16px 0; color: #64748b; font-size: 13px; }
+.sandbox-meta b { color: #cbd5e1; font-weight: 500; }
+.sandbox-stats { display: flex; gap: 16px; padding: 12px; border-radius: 10px; background: #0f172a; color: #64748b; font-size: 12px; }
+.sandbox-stats b { color: #bae6fd; }
+.stats-button { margin-top: 14px; width: 100%; }
+.pill.stopped { background: #3f3f46; color: #e4e4e7; }
+.pill.unknown { background: #422006; color: #fde68a; }
+@media (max-width: 860px) { .sandbox-grid { grid-template-columns: 1fr; } }

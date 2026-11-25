@@ -1,5 +1,5 @@
-const CACHE = 'she-pwa-v1'
-const SHELL = ['./', './manifest.webmanifest', './icons/she.svg']
+const CACHE = 'she-pwa-v2'
+const SHELL = ['./', './manifest.webmanifest', './icons/she.svg', './icons/she-192.png', './icons/she-512.png']
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)))

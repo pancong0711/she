@@ -1,8 +1,19 @@
-import type { GatewayHealth, GatewaySnapshot } from '@she/protocol'
+import type {
+  GatewayHealth,
+  GatewaySnapshot,
+  SandboxBrokerHealth,
+  SandboxStats,
+  SandboxView,
+} from '@she/protocol'
 
 export interface SnapshotResult {
   readonly health: GatewayHealth
   readonly snapshot: GatewaySnapshot
+}
+
+export interface SandboxResult {
+  readonly health: SandboxBrokerHealth
+  readonly sandboxes: readonly SandboxView[]
 }
 
 const COMPANION_KEY = 'she.companionUrl'
@@ -24,6 +35,10 @@ export function setCompanionUrl(value: string): void {
 
 export function apiBase(): string {
   return isLocalOrigin() ? '' : getCompanionUrl().replace(/\/+$/, '')
+}
+
+export function brokerBase(): string {
+  return '/broker'
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -49,12 +64,33 @@ export async function loadSnapshot(signal?: AbortSignal): Promise<SnapshotResult
   return { health, snapshot }
 }
 
+export async function loadSandboxes(signal?: AbortSignal): Promise<SandboxResult> {
+  const [health, sandboxes] = await Promise.all([
+    getJson<SandboxBrokerHealth>(`${brokerBase()}/v1/health`, signal),
+    getResult<readonly SandboxView[]>(`${brokerBase()}/v1/sandboxes`, signal),
+  ])
+  return { health, sandboxes }
+}
+
+export async function loadSandboxStats(name: string, signal?: AbortSignal): Promise<SandboxStats | undefined> {
+  const value = await getResult<SandboxStats | null>(
+    `${brokerBase()}/v1/sandboxes/${encodeURIComponent(name)}/stats`,
+    signal,
+  )
+  return value ?? undefined
+}
+
 export const INSTALL_COMMANDS = [
   'git clone https://github.com/pancong0711/she.git',
   'cd she',
   'pnpm install',
   'pnpm pwa:build',
   'pnpm pwa:serve',
+]
+
+export const BROKER_COMMANDS = [
+  '# 另开终端启动 sandbox broker',
+  'pnpm broker',
 ]
 
 export const REPO_URL = 'https://github.com/pancong0711/she'

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { GatewayHealth, GatewaySnapshot } from '@she/protocol'
+import type { GatewayHealth, GatewaySnapshot, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   INSTALL_COMMANDS,
   REPO_URL,
+  BROKER_COMMANDS,
   getCompanionUrl,
   isLocalOrigin,
+  loadSandboxStats,
+  loadSandboxes,
   loadSnapshot,
   setCompanionUrl,
 } from './api'
@@ -24,6 +27,11 @@ const tabs: Array<{ id: Tab; label: string }> = [
 const active = ref<Tab>('dashboard')
 const health = ref<GatewayHealth | null>(null)
 const snapshot = ref<GatewaySnapshot | null>(null)
+const sandboxes = ref<readonly SandboxView[]>([])
+const brokerHealth = ref<SandboxBrokerHealth | null>(null)
+const sandboxStats = ref<Record<string, SandboxStats>>({})
+const sandboxError = ref('')
+const loadingStats = ref('')
 const error = ref('')
 const loading = ref(false)
 const remoteMode = !isLocalOrigin()
@@ -39,18 +47,49 @@ const online = computed(() => health.value?.status === 'ok')
 
 async function refresh(): Promise<void> {
   loading.value = true
-  try {
-    const result = await loadSnapshot()
-    health.value = result.health
-    snapshot.value = result.snapshot
+  const [snapshotResult, sandboxResult] = await Promise.allSettled([
+    loadSnapshot(),
+    loadSandboxes(),
+  ])
+  if (snapshotResult.status === 'fulfilled') {
+    health.value = snapshotResult.value.health
+    snapshot.value = snapshotResult.value.snapshot
     error.value = ''
-  } catch (cause) {
+  } else {
     health.value = null
     snapshot.value = null
-    error.value = cause instanceof Error ? cause.message : String(cause)
-  } finally {
-    loading.value = false
+    error.value = snapshotResult.reason instanceof Error ? snapshotResult.reason.message : String(snapshotResult.reason)
   }
+  if (sandboxResult.status === 'fulfilled') {
+    brokerHealth.value = sandboxResult.value.health
+    sandboxes.value = sandboxResult.value.sandboxes
+    sandboxError.value = ''
+  } else {
+    brokerHealth.value = null
+    sandboxes.value = []
+    sandboxError.value = sandboxResult.reason instanceof Error ? sandboxResult.reason.message : String(sandboxResult.reason)
+  }
+  loading.value = false
+}
+
+async function loadStats(name: string): Promise<void> {
+  loadingStats.value = name
+  try {
+    const stats = await loadSandboxStats(name)
+    if (stats !== undefined) sandboxStats.value = { ...sandboxStats.value, [name]: stats }
+  } catch (cause) {
+    sandboxError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    loadingStats.value = ''
+  }
+}
+
+function formatBytes(bytes?: number): string {
+  if (bytes === undefined) return '-'
+  if (bytes < 1024) return `${String(bytes)} B`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KiB`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`
+  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`
 }
 
 async function connectCompanion(): Promise<void> {
@@ -107,7 +146,11 @@ onBeforeUnmount(() => {
       </nav>
       <div class="sidebar-foot">
         <span :class="['dot', online ? 'ok' : 'bad']"></span>
-        {{ online ? 'companion online' : remoteMode ? 'companion offline' : 'control plane offline' }}
+        control {{ online ? 'online' : 'offline' }}
+      </div>
+      <div class="sidebar-foot broker-foot">
+        <span :class="['dot', brokerHealth?.status === 'ok' ? 'ok' : 'bad']"></span>
+        broker {{ brokerHealth?.status === 'ok' ? 'online' : 'offline' }}
       </div>
       <a class="repo-link" :href="REPO_URL" target="_blank" rel="noreferrer">GitHub 仓库 ↗</a>
     </aside>
@@ -211,6 +254,11 @@ onBeforeUnmount(() => {
             <strong>{{ snapshot?.cursor ?? 'empty' }}</strong>
             <small>generated {{ relativeTime(snapshot?.generatedAt) }}</small>
           </article>
+          <article class="card metric">
+            <span>Sandboxes</span>
+            <strong>{{ sandboxes.length }}</strong>
+            <small>{{ sandboxes.filter(item => item.status === 'running').length }} running</small>
+          </article>
           <article class="card wide">
             <h2>Recent tasks</h2>
             <p v-if="tasks.length === 0" class="muted">No tasks yet. Submit via `/she submit` or CLI.</p>
@@ -242,6 +290,50 @@ onBeforeUnmount(() => {
           </table>
         </section>
 
+        <section v-else-if="active === 'sandboxes'" class="sandbox-page">
+          <div v-if="sandboxError" class="alert">
+            <strong>Sandbox broker 不可用</strong>
+            <p>{{ sandboxError }}</p>
+            <pre><code>{{ BROKER_COMMANDS.join('\n') }}</code></pre>
+          </div>
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Sandboxes</h2>
+                <p class="muted">
+                  {{ brokerHealth ? `broker ${brokerHealth.status} · ${brokerHealth.version}` : 'broker offline' }}
+                </p>
+              </div>
+              <button class="secondary" :disabled="loading" @click="refresh">Refresh</button>
+            </div>
+            <p v-if="sandboxes.length === 0" class="muted">还没有 sandbox。后续将从安装向导或 Sandboxes 页面创建 main sandbox。</p>
+            <div v-else class="sandbox-grid">
+              <article v-for="sandbox in sandboxes" :key="sandbox.name" class="sandbox-card">
+                <div class="sandbox-head">
+                  <div>
+                    <strong>{{ sandbox.name }}</strong>
+                    <small>{{ sandbox.agentId }} · {{ sandbox.role }}</small>
+                  </div>
+                  <span :class="['pill', sandbox.status]">{{ sandbox.status }}</span>
+                </div>
+                <div class="sandbox-meta">
+                  <span>health <b>{{ sandbox.health ?? 'unknown' }}</b></span>
+                  <span>image <b>{{ sandbox.image ?? '-' }}</b></span>
+                  <span>started <b>{{ relativeTime(sandbox.startedAt) }}</b></span>
+                </div>
+                <div v-if="sandboxStats[sandbox.name]" class="sandbox-stats">
+                  <span>CPU <b>{{ sandboxStats[sandbox.name]?.cpuPercent?.toFixed(1) ?? '-' }}%</b></span>
+                  <span>MEM <b>{{ formatBytes(sandboxStats[sandbox.name]?.memoryBytes) }}</b></span>
+                  <span>PIDs <b>{{ sandboxStats[sandbox.name]?.pids ?? '-' }}</b></span>
+                </div>
+                <button class="secondary stats-button" :disabled="loadingStats === sandbox.name" @click="loadStats(sandbox.name)">
+                  {{ loadingStats === sandbox.name ? 'Loading…' : 'Load stats' }}
+                </button>
+              </article>
+            </div>
+          </div>
+        </section>
+
         <section v-else-if="active === 'settings'" class="card settings-card">
           <h2>本地 companion</h2>
           <p class="muted">当前页面通过 companion 访问本机 SHE control plane。</p>
@@ -252,7 +344,9 @@ onBeforeUnmount(() => {
           </div>
           <div class="status-box">
             <span :class="['dot', online ? 'ok' : 'bad']"></span>
-            <span>{{ online ? '已连接' : '未连接' }}</span>
+            <span>control {{ online ? '已连接' : '未连接' }}</span>
+            <span :class="['dot', brokerHealth?.status === 'ok' ? 'ok' : 'bad']"></span>
+            <span>broker {{ brokerHealth?.status === 'ok' ? '已连接' : '未连接' }}</span>
             <span class="muted">{{ remoteMode ? 'GitHub Pages → local companion' : '本地同源模式' }}</span>
           </div>
           <p class="muted">

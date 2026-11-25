@@ -18,10 +18,12 @@ const here = dirname(fileURLToPath(import.meta.url))
 const distDir = join(here, 'dist')
 const host = '127.0.0.1'
 const port = Number(process.env.SHE_PWA_PORT ?? 8787)
-const socketPath = process.env.SHE_CONTROL_SOCKET?.trim()
-  || join(process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.local', 'run'), 'she', 'control.sock')
-const tokenFile = process.env.SHE_TOKEN_FILE?.trim()
-  || join(process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config'), 'she', 'token')
+const runtimeHome = process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.local', 'run')
+const configHome = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config')
+const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
+const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
+const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
+const brokerTokenFile = process.env.SHE_BROKER_TOKEN_FILE?.trim() || join(configHome, 'she', 'broker-token')
 const allowedOrigins = new Set(
   (process.env.SHE_ALLOWED_ORIGINS
     ?? 'https://pancong0711.github.io,http://127.0.0.1:8787,http://localhost:8787,http://127.0.0.1:5173,http://localhost:5173')
@@ -43,9 +45,9 @@ const mime = new Map([
   ['.woff2', 'font/woff2'],
 ])
 
-async function readToken() {
+async function readToken(path) {
   try {
-    const value = (await readFile(tokenFile, 'utf8')).trim()
+    const value = (await readFile(path, 'utf8')).trim()
     return value === '' ? undefined : value
   } catch {
     return undefined
@@ -78,7 +80,7 @@ function corsHeaders(request) {
   }
 }
 
-async function proxyApi(request, response) {
+async function proxyApi(request, response, target) {
   const cors = corsHeaders(request)
   if (cors === undefined) {
     response.writeHead(403, { 'content-type': 'application/json; charset=utf-8' })
@@ -93,14 +95,14 @@ async function proxyApi(request, response) {
     response.end()
     return
   }
-  const token = await readToken()
+  const token = await readToken(target.tokenFile)
   const headers = { ...request.headers }
   if (token !== undefined) headers.authorization = `Bearer ${token}`
   delete headers.host
 
   const proxy = httpRequest({
-    socketPath,
-    path: request.url,
+    socketPath: target.socketPath,
+    path: target.rewritePath(request.url ?? '/'),
     method: request.method,
     headers,
   }, upstream => {
@@ -116,9 +118,9 @@ async function proxyApi(request, response) {
       ok: false,
       error: {
         code: 'unavailable',
-        message: `SHE control plane unavailable: ${error.message}`,
+        message: `${target.label} unavailable: ${error.message}`,
         retryable: true,
-        details: { socketPath },
+        details: { socketPath: target.socketPath },
       },
     })
     response.writeHead(503, { 'content-type': 'application/json; charset=utf-8' })
@@ -145,11 +147,19 @@ async function serveStatic(request, response) {
     return
   }
   let file = candidate
+  let spaFallback = false
   try {
     const info = await stat(file)
     if (info.isDirectory()) file = join(file, 'index.html')
   } catch {
-    if (extname(pathname) === '') file = join(distDir, 'index.html')
+    if (extname(pathname) === '') {
+      file = join(distDir, 'index.html')
+      spaFallback = true
+    } else {
+      response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+      response.end('not found')
+      return
+    }
   }
   try {
     const info = await stat(file)
@@ -162,20 +172,37 @@ async function serveStatic(request, response) {
     response.writeHead(200)
     createReadStream(file).pipe(response)
   } catch {
-    if ((await stat(join(distDir, 'index.html')).catch(() => undefined)) === undefined) {
+    if (spaFallback) {
       response.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' })
       response.end('SHE PWA is not built. Run: pnpm pwa:build')
       return
     }
-    securityHeaders(response, 'text/html; charset=utf-8')
-    response.writeHead(200)
-    createReadStream(join(distDir, 'index.html')).pipe(response)
+    response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end('not found')
   }
 }
 
+const controlTarget = {
+  label: 'SHE control plane',
+  socketPath: controlSocketPath,
+  tokenFile: controlTokenFile,
+  rewritePath: path => path,
+}
+const brokerTarget = {
+  label: 'SHE sandbox broker',
+  socketPath: brokerSocketPath,
+  tokenFile: brokerTokenFile,
+  rewritePath: path => path.startsWith('/broker') ? path.slice('/broker'.length) || '/' : path,
+}
+
 const server = createServer((request, response) => {
-  if ((request.url ?? '').startsWith('/v1/')) {
-    void proxyApi(request, response)
+  const pathname = (request.url ?? '').split('?', 1)[0]
+  if (pathname.startsWith('/broker/v1/')) {
+    void proxyApi(request, response, brokerTarget)
+    return
+  }
+  if (pathname.startsWith('/v1/')) {
+    void proxyApi(request, response, controlTarget)
     return
   }
   if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -188,7 +215,8 @@ const server = createServer((request, response) => {
 
 server.listen(port, host, () => {
   process.stdout.write(`she-pwa listening on http://${host}:${String(port)}\n`)
-  process.stdout.write(`control-plane socket: ${socketPath}\n`)
+  process.stdout.write(`control-plane socket: ${controlSocketPath}\n`)
+  process.stdout.write(`broker socket: ${brokerSocketPath}\n`)
   process.stdout.write(`serving: ${distDir}\n`)
   process.stdout.write(`allowed browser origins: ${[...allowedOrigins].join(', ')}\n`)
 })
