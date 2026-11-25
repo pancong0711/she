@@ -4,11 +4,15 @@ import HelpPanel from './components/HelpPanel.vue'
 import type { GatewayHealth, GatewaySnapshot, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
+  DEFAULT_CORE_MANIFEST_URL,
   INSTALL_COMMANDS,
   REPO_URL,
+  checkCoreUpdate,
+  coreAction,
   getCompanionUrl,
   isLocalOrigin,
   loadCompanionHealth,
+  loadCoreStatus,
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
@@ -16,6 +20,8 @@ import {
   startJob,
   streamJobEvents,
   type CompanionHealth,
+  type CoreStatus,
+  type CoreUpdateCheck,
   type JobEvent,
   type JobSummary,
 } from './api'
@@ -53,6 +59,12 @@ const jobEvents = ref<JobEvent[]>([])
 const jobRunning = ref(false)
 const jobError = ref('')
 const jobKind = ref('')
+const coreStatus = ref<CoreStatus | null>(null)
+const coreError = ref('')
+const coreActionRunning = ref('')
+const coreManifestUrl = ref(DEFAULT_CORE_MANIFEST_URL)
+const coreUpdateCheck = ref<CoreUpdateCheck | null>(null)
+const coreUpdateError = ref('')
 let timer: ReturnType<typeof setInterval> | undefined
 
 const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
@@ -65,10 +77,11 @@ const companionOnline = computed(() => companion.value !== null)
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
+    loadCoreStatus(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -95,6 +108,13 @@ async function refresh(): Promise<void> {
     companion.value = null
     companionError.value = companionResult.reason instanceof Error ? companionResult.reason.message : String(companionResult.reason)
   }
+  if (coreStatusResult.status === 'fulfilled') {
+    coreStatus.value = coreStatusResult.value
+    coreError.value = ''
+  } else {
+    coreStatus.value = null
+    coreError.value = coreStatusResult.reason instanceof Error ? coreStatusResult.reason.message : String(coreStatusResult.reason)
+  }
   loading.value = false
 }
 
@@ -113,6 +133,36 @@ async function copyInstallCommands(): Promise<void> {
   }
 }
 
+async function runCoreAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
+  if (coreActionRunning.value !== '') return
+  coreActionRunning.value = action
+  coreError.value = ''
+  try {
+    coreStatus.value = await coreAction(action)
+    await refresh()
+  } catch (cause) {
+    coreError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    coreActionRunning.value = ''
+  }
+}
+
+async function runCoreUpdateCheck(): Promise<void> {
+  coreUpdateError.value = ''
+  coreUpdateCheck.value = null
+  try {
+    coreUpdateCheck.value = await checkCoreUpdate(coreManifestUrl.value)
+  } catch (cause) {
+    coreUpdateError.value = cause instanceof Error ? cause.message : String(cause)
+  }
+}
+
+async function applyCoreUpdate(): Promise<void> {
+  coreUpdateError.value = ''
+  await runJob('core-update', { manifestUrl: coreManifestUrl.value })
+  await refresh()
+}
+
 async function loadStats(name: string): Promise<void> {
   loadingStats.value = name
   try {
@@ -125,14 +175,14 @@ async function loadStats(name: string): Promise<void> {
   }
 }
 
-async function runJob(kind: string): Promise<void> {
+async function runJob(kind: string, options: Readonly<Record<string, unknown>> = {}): Promise<void> {
   if (jobRunning.value) return
   jobRunning.value = true
   jobKind.value = kind
   jobError.value = ''
   jobEvents.value = []
   try {
-    const started = await startJob(kind)
+    const started = await startJob(kind, options)
     job.value = started
     for await (const event of streamJobEvents(started.id)) {
       jobEvents.value.push(event)
@@ -428,6 +478,41 @@ onBeforeUnmount(() => {
             </div>
             <p v-if="jobError" class="error-text">{{ jobError }}</p>
             <p v-if="job" class="muted">last job: {{ job.kind }} · {{ job.status }} · {{ job.id }}</p>
+          </div>
+
+          <div class="card core-card">
+            <p class="eyebrow">CORE RUNTIME</p>
+            <h2>Core 版本与更新</h2>
+            <p v-if="coreError" class="error-text">{{ coreError }}</p>
+            <div class="health-grid">
+              <div><span>supervisor</span><b>{{ coreStatus?.supervisor.state ?? 'unknown' }}</b></div>
+              <div><span>pid</span><b>{{ coreStatus?.supervisor.pid ?? '-' }}</b></div>
+              <div><span>current</span><b>{{ coreStatus?.installed.current ?? 'not installed' }}</b></div>
+              <div><span>previous</span><b>{{ coreStatus?.installed.previous ?? '-' }}</b></div>
+              <div><span>control</span><b>{{ coreStatus?.controlPlane.reachable ? 'reachable' : 'offline' }}</b></div>
+              <div><span>broker</span><b>{{ coreStatus?.broker.reachable ? 'reachable' : 'offline' }}</b></div>
+              <div><span>last update</span><b>{{ coreStatus?.lastUpdate?.status ?? '-' }}</b></div>
+            </div>
+            <div class="job-actions">
+              <button class="secondary" :disabled="coreActionRunning !== ''" @click="runCoreAction('start')">{{ coreActionRunning === 'start' ? 'Starting…' : '启动 core' }}</button>
+              <button class="secondary" :disabled="coreActionRunning !== ''" @click="runCoreAction('stop')">{{ coreActionRunning === 'stop' ? 'Stopping…' : '停止 core' }}</button>
+              <button class="secondary" :disabled="coreActionRunning !== ''" @click="runCoreAction('restart')">{{ coreActionRunning === 'restart' ? 'Restarting…' : '重启 core' }}</button>
+            </div>
+            <label for="core-manifest">Release manifest URL</label>
+            <div class="connect-row">
+              <input id="core-manifest" v-model="coreManifestUrl" placeholder="https://…/release-manifest.json" />
+              <button class="secondary" :disabled="jobRunning" @click="runCoreUpdateCheck">检查更新</button>
+            </div>
+            <p v-if="coreUpdateError" class="error-text">{{ coreUpdateError }}</p>
+            <div v-if="coreUpdateCheck" class="update-check">
+              <p>当前：<b>{{ coreUpdateCheck.current ?? '未安装' }}</b> · 可用：<b>{{ coreUpdateCheck.available ?? 'unknown' }}</b></p>
+              <p v-if="!coreUpdateCheck.needsUpdate" class="muted">已是最新版本。</p>
+              <button v-else class="primary" :disabled="jobRunning" @click="applyCoreUpdate">应用 core 更新</button>
+            </div>
+            <p class="muted small-note">
+              更新流程会下载并校验 bundle，停止旧 core，切换 current，启动新 core，并做 health check；
+              失败时自动尝试回滚到 previous。全过程日志显示在右侧面板。
+            </p>
           </div>
 
           <div class="card console-card">

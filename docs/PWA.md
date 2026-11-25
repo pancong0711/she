@@ -164,6 +164,13 @@ SHE_TOKEN_FILE
 - Settings：
   - companion URL；
   - 连接状态；
+- Core 更新（Install & Doctor 内）：
+  - current/previous 版本；
+  - supervisor 状态；
+  - 启动/停止/重启 core；
+  - manifest URL 检查；
+  - staging、切换、health check、自动回滚；
+  - 实时更新日志。
 - 占位页：
   - Sandboxes；
   - Packages；

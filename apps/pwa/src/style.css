@@ -137,3 +137,8 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .policy-note { border-color: #854d0e; background: #42200655; }
 .policy-note p { color: #fde68a; }
 .policy-note .muted { color: #d6b96a; }
+
+.core-card { align-self: start; }
+.small-note { font-size: 12px; line-height: 1.6; }
+.update-check { margin-top: 12px; padding: 12px; border-radius: 10px; background: #0f172a; }
+.update-check p { margin: 0 0 10px; color: #cbd5e1; }

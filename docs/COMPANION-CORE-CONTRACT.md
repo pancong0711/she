@@ -36,6 +36,11 @@ GET /api/version
 GET /api/capabilities
 GET /api/core/status
 GET /api/preflight
+POST /api/core/start
+POST /api/core/stop
+POST /api/core/restart
+POST /api/core/update/check
+POST /api/core/update/apply-job (via /api/jobs kind=core-update)
 ```
 
 `/api/health` 返回 companion 自身信息：
@@ -275,7 +280,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz \
 - 两个 socket `/v1/health` 均返回 200；
 - 版本目录与 `current` symlink 安装验证通过。
 
-## 5. 更新状态机（T7.5 实现）
+## 5. 更新状态机（已实现）
 
 ```text
 idle
@@ -291,7 +296,24 @@ idle
        ↘ failed → rolling-back → rolled-back
 ```
 
-状态通过 companion job/events 推送给 PWA。
+实现：
+
+- `POST /api/core/update/check` 获取 manifest 并比较当前版本；
+- `POST /api/jobs { kind: "core-update", manifestUrl }` 执行更新；
+- 下载到 `coreRoot/staging/`；
+- SHA-256 不匹配立即失败；
+- 写 `pending.json`；
+- 停止当前 core；
+- 调用用户级 `install-core-bundle.sh`；
+- 启动新 core；
+- 等 control-plane + broker 都可达；
+- 任一步失败则切回 `previous` 并启动旧 core；
+- 结果通过 job NDJSON 实时推送给 PWA。
+
+已验证：
+
+- 0.1.0 → 0.1.1 成功切换；
+- 故意提供启动失败的 0.1.2 bundle → health check 失败 → 自动回滚到 0.1.0 并恢复健康。
 
 ## 6. 当前实现边界
 

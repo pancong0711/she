@@ -8,12 +8,12 @@
  */
 
 import { createReadStream } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { access, mkdir, readFile, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises'
 import { createServer, request as httpRequest } from 'node:http'
 import { spawn } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { dirname, extname, join, relative, resolve } from 'node:path'
+import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -31,6 +31,8 @@ const host = '127.0.0.1'
 const port = Number(process.env.SHE_PWA_PORT ?? 8787)
 const runtimeHome = process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.local', 'run')
 const configHome = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config')
+const dataHome = process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share')
+const coreRoot = process.env.SHE_CORE_ROOT?.trim() || join(dataHome, 'she', 'core')
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
 const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
@@ -83,10 +85,16 @@ const JOB_KINDS = new Map([
   ['build', '构建 PWA'],
   ['build-all', '构建全部'],
   ['test', '运行测试'],
+  ['core-update', 'Core 更新'],
 ])
 const jobs = new Map()
 let activeJobId = null
 let lastPreflight = null
+let coreChild = null
+let coreStartedAt = null
+let coreLastError = null
+let lastUpdate = null
+const coreLogs = []
 
 function jobSummary(job) {
   return {
@@ -248,6 +256,229 @@ async function runPreflight(job) {
 }
 
 
+function recordCoreOutput(stream, text, job) {
+  for (const line of String(text).replace(/\r/g, '').split('\n')) {
+    if (line === '') continue
+    coreLogs.push({ at: Date.now(), stream, text: line })
+    while (coreLogs.length > 300) coreLogs.shift()
+    if (job !== undefined) appendJobEvent(job, { type: 'log', stream, text: line })
+  }
+}
+
+async function readCurrentCoreVersion() {
+  try {
+    const target = await readlink(join(coreRoot, 'current'))
+    const version = (await readFile(join(coreRoot, 'current', 'VERSION'), 'utf8')).trim()
+    return { target, version }
+  } catch {
+    return undefined
+  }
+}
+
+async function readPreviousCoreVersion() {
+  try {
+    const target = await readlink(join(coreRoot, 'previous'))
+    const version = (await readFile(join(coreRoot, 'previous', 'VERSION'), 'utf8')).trim()
+    return { target, version }
+  } catch {
+    return undefined
+  }
+}
+
+async function coreStatus() {
+  const [current, previous, controlPlane, broker] = await Promise.all([
+    readCurrentCoreVersion(),
+    readPreviousCoreVersion(),
+    probeSocket(controlSocketPath, controlTokenFile),
+    probeSocket(brokerSocketPath, brokerTokenFile),
+  ])
+  return {
+    supervisor: {
+      state: coreChild === null ? 'stopped' : 'running',
+      pid: coreChild?.pid ?? null,
+      startedAt: coreStartedAt,
+      lastError: coreLastError,
+      logs: coreLogs.slice(-20),
+    },
+    installed: {
+      root: coreRoot,
+      current: current?.version ?? null,
+      currentTarget: current?.target ?? null,
+      previous: previous?.version ?? null,
+      previousTarget: previous?.target ?? null,
+    },
+    controlPlane,
+    broker,
+    lastUpdate,
+  }
+}
+
+async function startCore(job) {
+  if (coreChild !== null) return { alreadyRunning: true }
+  const entry = process.platform === 'win32'
+    ? join(coreRoot, 'current', 'run-core.cmd')
+    : join(coreRoot, 'current', 'run-core.sh')
+  await access(entry)
+  coreLastError = null
+  coreStartedAt = Date.now()
+  const command = process.platform === 'win32' ? 'cmd' : 'bash'
+  const args = process.platform === 'win32' ? ['/c', entry] : [entry]
+  if (job !== undefined) appendJobEvent(job, { type: 'system', text: `starting core: ${entry}` })
+  const child = spawn(command, args, {
+    cwd: join(coreRoot, 'current'),
+    env: childEnv,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  coreChild = child
+  child.stdout.on('data', chunk => recordCoreOutput('stdout', chunk.toString('utf8'), job))
+  child.stderr.on('data', chunk => recordCoreOutput('stderr', chunk.toString('utf8'), job))
+  child.on('error', error => {
+    coreLastError = error.message
+    recordCoreOutput('stderr', `core spawn failed: ${error.message}`, job)
+  })
+  child.on('exit', (code, signal) => {
+    recordCoreOutput('stderr', `core exited code=${String(code)} signal=${String(signal)}`, job)
+    coreChild = null
+    coreStartedAt = null
+    if (code !== 0 && code !== null) coreLastError = `core exited with code ${String(code)}`
+  })
+  return { started: true, pid: child.pid }
+}
+
+async function stopCore(job) {
+  const child = coreChild
+  if (child === null) return { stopped: false }
+  if (job !== undefined) appendJobEvent(job, { type: 'system', text: 'stopping core' })
+  const exited = new Promise(resolvePromise => child.once('exit', () => resolvePromise(true)))
+  child.kill('SIGTERM')
+  const graceful = await Promise.race([
+    exited,
+    new Promise(resolvePromise => setTimeout(() => resolvePromise(false), 5_000)),
+  ])
+  if (!graceful) child.kill('SIGKILL')
+  coreChild = null
+  coreStartedAt = null
+  return { stopped: true }
+}
+
+async function waitForCoreHealthy(timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    // A stale socket from a previous process is not proof that the newly
+    // spawned core is healthy. The supervisor must still be alive.
+    if (coreChild === null) {
+      return { ok: false, error: coreLastError ?? 'core process exited before health check' }
+    }
+    const [control, broker] = await Promise.all([
+      probeSocket(controlSocketPath, controlTokenFile),
+      probeSocket(brokerSocketPath, brokerTokenFile),
+    ])
+    if (control.reachable && broker.reachable) return { ok: true, control, broker }
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 500))
+  }
+  const [control, broker] = await Promise.all([
+    probeSocket(controlSocketPath, controlTokenFile),
+    probeSocket(brokerSocketPath, brokerTokenFile),
+  ])
+  return { ok: false, control, broker, error: coreLastError ?? 'health check timed out' }
+}
+
+async function rollbackCore(job) {
+  const previous = await readPreviousCoreVersion()
+  if (previous === undefined) throw new Error('no previous core version available for rollback')
+  appendJobEvent(job, { type: 'system', text: `rolling back core to ${previous.version}` })
+  await unlink(join(coreRoot, 'current')).catch(() => undefined)
+  await symlink(previous.target, join(coreRoot, 'current'))
+  await writeFile(join(coreRoot, 'state.json'), `${JSON.stringify({ schema: 1, current: previous.version, rolledBackAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 })
+  await startCore(job)
+  return waitForCoreHealthy()
+}
+
+async function readManifest(url) {
+  if (url.startsWith('file://')) {
+    return JSON.parse(await readFile(new URL(url), 'utf8'))
+  }
+  if (!/^https?:\/\//.test(url)) throw new Error('manifest URL must be http(s) or file://')
+  const response = await fetch(url, { signal: AbortSignal.timeout(20_000) })
+  if (!response.ok) throw new Error(`manifest HTTP ${response.status}`)
+  return await response.json()
+}
+
+async function downloadBundle(manifestUrl, manifest, job) {
+  const file = manifest?.bundle?.file
+  const expected = manifest?.bundle?.sha256
+  if (typeof file !== 'string' || typeof expected !== 'string') throw new Error('manifest bundle.file/sha256 missing')
+  const url = manifestUrl.startsWith('file://')
+    ? new URL(file, manifestUrl).href
+    : new URL(file, manifestUrl).href
+  appendJobEvent(job, { type: 'system', text: `downloading bundle: ${url}` })
+  let bytes
+  if (url.startsWith('file://')) {
+    bytes = await readFile(new URL(url))
+  } else if (/^https?:\/\//.test(url)) {
+    const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
+    if (!response.ok) throw new Error(`bundle HTTP ${response.status}`)
+    bytes = Buffer.from(await response.arrayBuffer())
+  } else {
+    throw new Error('bundle URL must be http(s) or file://')
+  }
+  const actual = createHash('sha256').update(bytes).digest('hex')
+  if (actual !== expected) throw new Error(`bundle SHA-256 mismatch: expected ${expected}, got ${actual}`)
+  const staging = join(coreRoot, 'staging')
+  await mkdir(staging, { recursive: true, mode: 0o700 })
+  const target = join(staging, basename(file))
+  await writeFile(target, bytes, { mode: 0o600 })
+  return { path: target, sha256: actual, bytes: bytes.byteLength }
+}
+
+async function executeCoreUpdate(job) {
+  const manifestUrl = String(job.input?.manifestUrl ?? '').trim()
+  if (manifestUrl === '') throw new Error('manifestUrl is required')
+  const manifest = await readManifest(manifestUrl)
+  if (manifest?.schema !== 1 || typeof manifest?.version !== 'string') throw new Error('unsupported release manifest')
+  const current = await readCurrentCoreVersion()
+  lastUpdate = { at: Date.now(), manifestUrl, from: current?.version ?? null, to: manifest.version, status: 'downloading' }
+  appendJobEvent(job, { type: 'system', text: `core update ${current?.version ?? 'none'} -> ${manifest.version}` })
+  const download = await downloadBundle(manifestUrl, manifest, job)
+  const pending = {
+    schema: 1,
+    version: manifest.version,
+    bundle: download,
+    manifestUrl,
+    createdAt: Date.now(),
+  }
+  await writeFile(join(coreRoot, 'pending.json'), `${JSON.stringify(pending, null, 2)}\n`, { mode: 0o600 })
+  lastUpdate.status = 'stopping'
+  await stopCore(job)
+  const installScript = join(repoRoot, 'scripts/install-core-bundle.sh')
+  const install = await runCommand(job, 'bash', [installScript, download.path, '--sha256', download.sha256, '--core-root', coreRoot])
+  if (!install.ok) throw new Error('core bundle installation failed')
+  lastUpdate.status = 'starting'
+  await startCore(job)
+  const health = await waitForCoreHealthy()
+  if (!health.ok) {
+    lastUpdate.status = 'rolling-back'
+    await stopCore(job)
+    const rolled = await rollbackCore(job)
+    lastUpdate.status = rolled.ok ? 'rolled-back' : 'failed'
+    throw new Error(`new core failed health check (${health.error ?? 'unhealthy'}); rollback ${rolled.ok ? 'succeeded' : 'failed'}`)
+  }
+  await unlink(join(coreRoot, 'pending.json')).catch(() => undefined)
+  lastUpdate.status = 'succeeded'
+  appendJobEvent(job, { type: 'system', text: `core ${manifest.version} is healthy` })
+}
+
+async function checkCoreUpdate(manifestUrl) {
+  const manifest = await readManifest(manifestUrl)
+  const current = await readCurrentCoreVersion()
+  return {
+    current: current?.version ?? null,
+    available: typeof manifest?.version === 'string' ? manifest.version : null,
+    needsUpdate: typeof manifest?.version === 'string' && manifest.version !== current?.version,
+    manifest,
+  }
+}
+
 async function executeJob(job) {
   job.status = 'running'
   job.startedAt = Date.now()
@@ -283,6 +514,9 @@ async function executeJob(job) {
     } else if (job.kind === 'test') {
       const result = await runCommand(job, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['test'])
       job.exitCode = result.code
+    } else if (job.kind === 'core-update') {
+      await executeCoreUpdate(job)
+      job.exitCode = 0
     } else {
       throw new Error(`unsupported job kind: ${job.kind}`)
     }
@@ -298,7 +532,7 @@ async function executeJob(job) {
   }
 }
 
-function startJob(kind) {
+function startJob(kind, input = {}) {
   if (!JOB_KINDS.has(kind)) throw new Error(`unsupported job kind: ${kind}`)
   if (activeJobId !== null) throw new Error('another install/debug job is already running')
   const job = {
@@ -309,6 +543,7 @@ function startJob(kind) {
     startedAt: null,
     finishedAt: null,
     exitCode: null,
+    input,
     events: [],
     listeners: new Set(),
   }
@@ -446,7 +681,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'preflight'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -455,16 +690,42 @@ async function handleCompanionApi(request, response) {
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/core/status') {
-    const control = await probeSocket(controlSocketPath, controlTokenFile)
-    const broker = await probeSocket(brokerSocketPath, brokerTokenFile)
+    const status = await coreStatus()
     sendJsonWithCors(request, response, 200, {
       ok: true,
-      value: {
-        companion: companionVersion,
-        controlPlane: control,
-        broker,
-      },
+      value: { companion: companionVersion, ...status },
     })
+    return
+  }
+  if (request.method === 'POST' && /^\/api\/core\/(start|stop|restart)$/.test(url.pathname)) {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    const action = url.pathname.split('/').pop()
+    try {
+      if (action === 'start') await startCore()
+      else if (action === 'stop') await stopCore()
+      else { await stopCore(); await startCore() }
+      const health = action === 'stop' ? { ok: true } : await waitForCoreHealthy()
+      sendJsonWithCors(request, response, 200, { ok: true, value: { action, health, status: await coreStatus() } })
+    } catch (error) {
+      sendJsonWithCors(request, response, 409, { ok: false, error: { code: 'conflict', message: error.message, retryable: true } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/core/update/check') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      const result = await checkCoreUpdate(String(body.manifestUrl ?? '').trim())
+      sendJsonWithCors(request, response, 200, { ok: true, value: result })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/preflight') {
@@ -485,7 +746,7 @@ async function handleCompanionApi(request, response) {
     }
     try {
       const body = await readBodyJson(request)
-      const job = startJob(String(body.kind ?? ''))
+      const job = startJob(String(body.kind ?? ''), body)
       sendJsonWithCors(request, response, 202, { ok: true, value: jobSummary(job) })
     } catch (error) {
       sendJsonWithCors(request, response, 409, { ok: false, error: { code: 'conflict', message: error.message, retryable: false } })

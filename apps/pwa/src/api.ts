@@ -129,7 +129,7 @@ export async function loadCompanionHealth(signal?: AbortSignal): Promise<Compani
   return payload.value
 }
 
-export async function startJob(kind: string): Promise<JobSummary> {
+export async function startJob(kind: string, options: Readonly<Record<string, unknown>> = {}): Promise<JobSummary> {
   const response = await fetch(`${apiBase()}/api/jobs`, {
     method: 'POST',
     headers: {
@@ -137,7 +137,7 @@ export async function startJob(kind: string): Promise<JobSummary> {
       'content-type': 'application/json',
       'x-she-local-action': '1',
     },
-    body: JSON.stringify({ kind }),
+    body: JSON.stringify({ kind, ...options }),
   })
   const payload = await response.json() as { ok: boolean; value?: JobSummary; error?: { message?: string } }
   if (!response.ok || !payload.ok || payload.value === undefined) {
@@ -174,4 +174,75 @@ export async function* streamJobEvents(jobId: string, signal?: AbortSignal): Asy
   } finally {
     reader.releaseLock()
   }
+}
+
+export interface CoreStatus {
+  readonly companion: string
+  readonly supervisor: {
+    readonly state: 'running' | 'stopped'
+    readonly pid: number | null
+    readonly startedAt: number | null
+    readonly lastError: string | null
+    readonly logs: readonly { readonly at: number; readonly stream: string; readonly text: string }[]
+  }
+  readonly installed: {
+    readonly root: string
+    readonly current: string | null
+    readonly currentTarget: string | null
+    readonly previous: string | null
+    readonly previousTarget: string | null
+  }
+  readonly controlPlane: { readonly reachable: boolean; readonly httpStatus?: number; readonly response?: unknown; readonly error?: string }
+  readonly broker: { readonly reachable: boolean; readonly httpStatus?: number; readonly response?: unknown; readonly error?: string }
+  readonly lastUpdate: {
+    readonly at: number
+    readonly manifestUrl: string
+    readonly from: string | null
+    readonly to: string
+    readonly status: string
+  } | null
+}
+
+export interface CoreUpdateCheck {
+  readonly current: string | null
+  readonly available: string | null
+  readonly needsUpdate: boolean
+  readonly manifest: unknown
+}
+
+export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
+
+function localActionHeaders(): Record<string, string> {
+  return { accept: 'application/json', 'content-type': 'application/json', 'x-she-local-action': '1' }
+}
+
+export async function loadCoreStatus(signal?: AbortSignal): Promise<CoreStatus> {
+  const payload = await getJson<{ ok: boolean; value?: CoreStatus; error?: { message?: string } }>('/api/core/status', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'core status unavailable')
+  return payload.value
+}
+
+export async function coreAction(action: 'start' | 'stop' | 'restart'): Promise<CoreStatus> {
+  const response = await fetch(`${apiBase()}/api/core/${action}`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+  })
+  const payload = await response.json() as { ok: boolean; value?: { status?: CoreStatus }; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value?.status === undefined) {
+    throw new Error(payload.error?.message ?? `core action failed: HTTP ${response.status}`)
+  }
+  return payload.value.status
+}
+
+export async function checkCoreUpdate(manifestUrl: string): Promise<CoreUpdateCheck> {
+  const response = await fetch(`${apiBase()}/api/core/update/check`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify({ manifestUrl }),
+  })
+  const payload = await response.json() as { ok: boolean; value?: CoreUpdateCheck; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `update check failed: HTTP ${response.status}`)
+  }
+  return payload.value
 }

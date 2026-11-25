@@ -64,6 +64,27 @@ defineProps<{
       </p>
     </article>
 
+    <article class="card">
+      <h2>Core 运行时与更新</h2>
+      <p>
+        PWA 的可视化壳可以长期稳定，core（control-plane + broker）通过版本化 bundle 更新。
+        Install &amp; Doctor 会显示 current/previous 版本、supervisor 状态、control/broker
+        reachability 和最近一次更新状态。
+      </p>
+      <ul>
+        <li>更新前先下载 bundle，并校验 manifest 中的 SHA-256；</li>
+        <li>下载到 staging，不覆盖正在运行的 core；</li>
+        <li>停止旧 core，切换 current，启动新 core；</li>
+        <li>检查 control-plane 和 broker health；</li>
+        <li>失败自动切回 previous 并启动旧 core；</li>
+        <li>全过程显示在实时日志面板。</li>
+      </ul>
+      <p class="muted">
+        更新只写入当前用户目录；不执行 sudo，不请求 root。companion 自身的升级是独立边界，
+        不会由 PWA 在运行中替换。
+      </p>
+    </article>
+
     <article class="card policy-help">
       <h2>Root / sudo 策略</h2>
       <p>
