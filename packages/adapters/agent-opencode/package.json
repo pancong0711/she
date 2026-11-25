@@ -19,5 +19,8 @@
   "dependencies": {
     "@she/protocol": "workspace:*",
     "@she/agent-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@she/control": "workspace:*"
   }
 }

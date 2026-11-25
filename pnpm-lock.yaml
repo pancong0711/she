@@ -53,6 +53,10 @@ importers:
       '@she/protocol':
         specifier: workspace:*
         version: link:../../protocol
+    devDependencies:
+      '@she/control':
+        specifier: workspace:*
+        version: link:../../control
 
   packages/adapters/sandbox-docker:
     dependencies:

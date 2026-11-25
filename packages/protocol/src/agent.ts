@@ -75,6 +75,9 @@ export interface AgentPromptRequest {
   readonly text: string
   readonly attachments?: readonly AttachmentRef[]
   readonly idempotencyKey?: string
+  /** Adapter-defined scalar metadata (for example `reportPath`). */
+  readonly metadata?: Readonly<Record<string, string>>
+  readonly signal?: AbortSignal
   readonly extensions?: ExtensionBag
 }
 

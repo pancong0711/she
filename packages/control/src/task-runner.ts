@@ -27,6 +27,8 @@ export interface RunNextInput {
   readonly ownerId: string
   readonly leaseTtlMs?: number
   readonly model?: AgentModelRef
+  readonly workspacePath?: string
+  readonly promptMetadata?: Readonly<Record<string, string>>
 }
 
 export interface RunNextResult {
@@ -103,7 +105,10 @@ export class TaskRunner {
       agentSession = await this.deps.agent.createSession({
         adapterId: this.deps.agent.descriptor.adapterId,
         sessionKey: claimed.topic.id,
-        workspace: { key: claimed.topic.workspaceKey },
+        workspace: {
+          key: claimed.topic.workspaceKey,
+          ...(input.workspacePath === undefined ? {} : { path: input.workspacePath }),
+        },
         ...(input.model === undefined ? {} : { model: input.model }),
         metadata: { taskId: claimed.task.id, topicId: claimed.topic.id },
       })
@@ -131,7 +136,7 @@ export class TaskRunner {
       timer.unref()
 
       try {
-        const outcome = await this.consumePrompt(running.task, agentSession, requestText)
+        const outcome = await this.consumePrompt(running.task, agentSession, requestText, input.promptMetadata)
         agentEvents = outcome.events
         if (heartbeatFailure !== undefined) {
           final = await this.settleFailure(running.task, heartbeatFailure, 'lease_heartbeat_failed')
@@ -196,6 +201,7 @@ export class TaskRunner {
     task: Task,
     session: AgentSessionRef,
     requestText: string,
+    promptMetadata: Readonly<Record<string, string>> | undefined,
   ): Promise<{
     readonly events: readonly AgentEventEnvelope[]
     readonly failure: DomainError | undefined
@@ -210,6 +216,7 @@ export class TaskRunner {
         sessionId: session.sessionId,
         text: requestText,
         idempotencyKey: task.id,
+        ...(promptMetadata === undefined ? {} : { metadata: promptMetadata }),
       })) {
         events.push(envelope)
         if (envelope.event.kind === 'error') {

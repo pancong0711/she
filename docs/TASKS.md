@@ -31,10 +31,10 @@
 
 | ID | 任务 | 依赖 | 状态 | 验收 |
 |---|---|---|---|---|
-| T2.1 | OpenCode HTTP client：Basic auth、`/api/info`、prompt/status/cancel | T0.4 | [ ] | fake HTTP 测试 |
-| T2.2 | session create/resume、model/variant/permission 映射 | T2.1 | [ ] | 会话复用与错误负例 |
-| T2.3 | 报告/产物路径校验、超时、中断回收 | T1.6/T2.2 | [ ] | 报告缺失/超限负例 |
-| T2.4 | OpenCode adapter 与 control 组合测试 | T2.3 | [ ] | 完整任务状态闭环 |
+| T2.1 | OpenCode HTTP client：Basic auth、`/api/info`、prompt/status/cancel | T0.4 | [x] | fake HTTP 测试 |
+| T2.2 | session create/resume、model/variant/permission 映射 | T2.1 | [x] | 会话复用与错误负例 |
+| T2.3 | 报告/产物路径校验、超时、中断回收 | T1.6/T2.2 | [x] | 报告缺失/超限负例 |
+| T2.4 | OpenCode adapter 与 control 组合测试 | T2.3 | [x] | 完整任务状态闭环 |
 
 ## M3 sandbox/broker
 
@@ -93,4 +93,5 @@
 - 2026-11-25：完成 T1.5：`node:sqlite` store、schema migration、Topic/Task/Artifact/Lease/Event repository、跨重启恢复测试；新增 `docs/STORE-SQLITE.md`。`pnpm test` 29/29 通过。
 - 2026-11-25：处理 feishu4dsh 第二轮反馈：新增 CardRenderIntent、commandResult.renderIntents、部署命名约定与发布矩阵；完成 T1.6 TaskRunner + fake agent adapter 端到端闭环；task_requests 迁移 v2。`pnpm test` 36/36 通过。
 - 2026-11-25：完成 T4.1a：`pnpm pack:public` 脚本、golden fixtures、tarball 校验与 `docs/PUBLISHING.md`；已生成并记录 protocol/client tarball。
-- 2026-11-25：完成 T4.1b：control-plane Unix-socket HTTP server、health/hello/command/interaction/snapshot/events、NDJSON、cursor_expired、bearer auth、默认命令服务与 CLI entrypoint；新增 `docs/CONTROL-PLANE-SERVER.md`。`pnpm test` 45/45 通过。下一步 M2 OpenCode adapter。
+- 2026-11-25：完成 T4.1b：control-plane Unix-socket HTTP server、health/hello/command/interaction/snapshot/events、NDJSON、cursor_expired、bearer auth、默认命令服务与 CLI entrypoint；新增 `docs/CONTROL-PLANE-SERVER.md`。`pnpm test` 45/45 通过。
+- 2026-11-25：完成 M2 T2.1–T2.4：OpenCode HttpApi client、AgentAdapter、permission 基线、async prompt 事件映射、报告校验、TaskRunner 组合测试；新增 `docs/OPENCODE-ADAPTER.md`。`pnpm test` 49/49 通过。下一步 M3 sandbox/broker。

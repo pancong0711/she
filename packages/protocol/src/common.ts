@@ -112,6 +112,9 @@ export type SheErrorCode =
   | 'protocol_mismatch'
   | 'capability_missing'
   | 'cursor_expired'
+  | 'report_missing'
+  | 'report_too_large'
+  | 'report_outside_workspace'
   | 'internal'
 
 export interface SheError {
