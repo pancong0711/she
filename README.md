@@ -68,4 +68,6 @@ pnpm test
 
 ## 状态
 
+> 开发中基线：接口、协议、sandbox/broker 安全边界仍在迭代，暂不建议用于生产环境。
+
 M0–M3 完成；M4 SHE 侧参考 bridge/契约/迁移文档完成；下一步 feishu4dsh 仓库实际接入（T4.6）与 PWA（M6）。

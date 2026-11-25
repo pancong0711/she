@@ -2,7 +2,7 @@
 
 > 日期：2026-11-25
 
-1. 项目在独立仓库 `<local-workspace>` 开发，项目名为 `she`。
+1. 项目在独立仓库 `she` 中开发，项目名为 `she`。
 2. gateway、agent、sandbox 作为三个边界平面，控制面核心独立存在。
 3. feishu4dsh 继续负责飞书 gateway adapter；SHE 不实现飞书 SDK。
 4. feishu4dsh 依赖 SHE 发布的 `@she/protocol` / `@she/client` 公开包；SHE 不反向依赖 feishu4dsh。
