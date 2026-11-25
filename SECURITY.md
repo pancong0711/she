@@ -28,6 +28,8 @@ The project explicitly documents these boundaries:
 - channel adapters hold platform secrets, not SHE core;
 - static bearer tokens are an early local-development mechanism and are not a substitute for OS peer credentials;
 - OpenCode permission rules are defense-in-depth, not an OS sandbox;
-- local control-plane sockets must remain local-only until authenticated remote transport is designed.
+- local control-plane sockets must remain local-only until authenticated remote transport is designed;
+- SHE never executes `sudo`/`su`/`pkexec`, never asks for root credentials, and never silently installs system-level components;
+- the companion must run as a normal user; root-owned Docker access is detected and reported as a risk, not treated as rootless isolation.
 
 Do not include real credentials, private keys, customer data, or unredacted logs in reports or test fixtures.

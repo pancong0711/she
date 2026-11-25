@@ -178,8 +178,10 @@ client 只依赖 `@she/protocol` + Node 标准库。
 
 ## 9. 已知限制
 
-- `DockerCliRuntime` 尚未在真机 rootless Docker 上验收；
-- 默认使用 Docker daemon 当前账户权限，部署时必须使用专用账户/rootless；
+- `DockerCliRuntime` 尚未在全平台真机验收；
+- SHE 不请求 root，也不自行初始化 rootless Docker；
+- 使用当前用户可访问的 Docker context；若依赖 docker 组，preflight 会提示 root-equivalent 风险；
+- 已由用户/管理员配置好的 rootless Docker 可直接使用；
 - 事件订阅 `subscribe()` 目前为空实现，后续补 broker event stream；
 - 资源限额/挂载模板需要真机安全验收；
 - 文件传输暂只支持 outbox 文件和文本 manifest，artifact 共享卷后续补；

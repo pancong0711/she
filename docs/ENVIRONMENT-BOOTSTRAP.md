@@ -33,7 +33,9 @@
   Docker / rootless Docker
 ```
 
-这些 runtime 的首次安装仍需用户显式操作，后续由 T6.4c 的 signed installer / bootstrap 流程补齐。
+这些 runtime 的首次安装仍需用户显式操作。若某项安装/配置需要 root（典型如系统 Docker、rootless Docker 初始化、把用户加入 docker 组），SHE 只展示官方方法，不执行、不请求 root 权限。
+
+未来 T6.4c 只自动化**无需 root 的用户级安装**；需要管理员权限的步骤仍由用户自行完成。
 
 ## 2. 当前 preflight 检查项
 
@@ -109,7 +111,8 @@ PWA 的实时日志会显示：
 - 检测发行版/架构；
 - 检查 Node/pnpm/git/Docker/rootless；
 - 优先使用用户级安装（如 Node 官方二进制、corepack）避免系统污染；
-- Docker/rootless 需要显式提示管理员操作；
+- Docker/rootless 初始化需要 root 的步骤只展示官方方法，不代替用户执行；
+- rootless Docker 若已由用户/管理员配置好，SHE 只做检测和使用；
 - 安装包 checksum + 版本锁定。
 
 ### macOS
@@ -150,7 +153,9 @@ pnpm companion
 - 不执行任意用户命令；
 - 不允许 ping-through 到系统 shell；
 - 不把 token 暴露给网页；
-- 系统级安装和 Docker 操作必须显式授权；
+- 不执行 sudo / 不请求 root；
+- 系统级安装只提供方法，Docker/rootless 初始化由用户本人完成；
+- 当前用户可用的 Docker context 可被 SHE 使用，但 docker 组权限的 root-equivalent 风险必须显示；
 - 失败保留旧版本和日志；
 - 更新过程不得静默进行。
 

@@ -85,7 +85,8 @@
 | T6.4 | 软件包目录、下载、校验、显式确认安装/更新 | T6.3/T3.6 | [~] |
 | T6.4a | Companion Install & Doctor：白名单 job runner、环境检查、依赖/构建/测试、实时日志 | T6.2a | [x] |
 | T6.4b | 安装前 preflight 硬门禁与环境结果 API | T6.4a | [x] | Node/pnpm fail 阻断 install；PWA 实时显示 |
-| T6.4c | Node/pnpm/git/Docker 平台 bootstrap 与 signed installer | T6.4b/T7.4 | [ ] | 显式同意、checksum、审计、回滚 | PWA 点击触发并实时显示 stdout/stderr | 校验、权限确认、日志、回滚入口 |
+| T6.4c | 用户级 Node/pnpm bootstrap 与 signed installer（不请求 root） | T6.4b/T7.4 | [ ] |
+| T6.4d | 特权环境（Docker/rootless/系统依赖）instructions-only 支持矩阵 | T6.4b | [x] | 只展示方法；不执行 sudo/不请求 root | 显式同意、checksum、审计、回滚 | PWA 点击触发并实时显示 stdout/stderr | 校验、权限确认、日志、回滚入口 |
 | T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [ ] | 只允许叶子目录；不可绕过 broker |
 | T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [ ] | 与 CLI/gateway 共用同一控制面会话 |
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
@@ -125,3 +126,4 @@
 - 2026-11-25：新增 ADR-0001，确定 stable companion + updatable core + versioned protocol 分层；M7 任务组建立。
 - 2026-11-25：完成 T7.2/T7.3：抽出 `apps/companion`，新增 companion-api v1、`/api/version`、`/api/capabilities`、`/api/core/status`，新增 `run-core` 参考入口与 release manifest 生成器；新增 `docs/COMPANION-CORE-CONTRACT.md`。
 - 2026-11-25：完成 T6.4b：install 前强制 preflight；Node/pnpm 版本 fail 阻断；新增 `/api/preflight`、实时检查事件和 `docs/ENVIRONMENT-BOOTSTRAP.md`。
+- 2026-11-25：新增 ADR-0002 与 T6.4d：SHE 不执行/不请求 root；preflight 检查 uid 与 Docker rootless 状态；Docker 组权限标记 root-equivalent warning；需要 root 的安装只展示方法。

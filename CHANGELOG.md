@@ -21,3 +21,4 @@ All notable changes to SHE are documented here.
 - ADR-0001 defining a stable companion layer, replaceable core bundles, `companion-api.v1`, and a stable `run-core` entrypoint with staged updates and rollback.
 - Extracted `apps/companion`, added companion v1 status/capability APIs, `run-core` supervisor entrypoints, and a deterministic release manifest generator.
 - Added mandatory environment preflight before dependency installation, live check results in PWA, and `/api/preflight`.
+- Added ADR-0002: SHE never executes or requests root; preflight checks non-root UID and warns when Docker access is root-equivalent rather than rootless.

@@ -133,3 +133,7 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .job-line.check.fail { color: #fca5a5; }
 .job-line.done { color: #fde68a; }
 @media (max-width: 1000px) { .setup-grid { grid-template-columns: 1fr; } .wide-card { grid-column: auto; } }
+
+.policy-note { border-color: #854d0e; background: #42200655; }
+.policy-note p { color: #fde68a; }
+.policy-note .muted { color: #d6b96a; }

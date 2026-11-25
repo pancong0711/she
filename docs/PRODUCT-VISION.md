@@ -166,7 +166,7 @@ gateway 是可选远程入口，不是核心。
 
 首期实现建议：
 
-1. 先完成 Linux/rootless 的 sandbox provider；
+1. 先完成当前普通用户可管理的 Docker sandbox provider（已配置的 rootless runtime 优先使用，但不要求 SHE 自行初始化 rootless）；
 2. 所有 Docker 操作封装在 `SandboxProvider` 和 broker 内；
 3. PWA 通过 provider capability 展示当前系统支持项；
 4. macOS/Windows 后续增加平台 adapter，而不是改 core；

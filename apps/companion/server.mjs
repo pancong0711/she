@@ -206,6 +206,9 @@ async function runPreflight(job) {
     }
   }
 
+  const uid = typeof process.getuid === 'function' ? process.getuid() : undefined
+  add(uid === 0 ? 'fail' : 'ok', 'user', uid === undefined ? 'uid unavailable on this platform' : uid === 0 ? 'SHE companion must not run as root' : `uid=${String(uid)}; no sudo/root execution`)
+
   const nodeVersion = process.versions.node
   add(nodeVersionSupported(nodeVersion) ? 'ok' : 'fail', 'Node.js', `v${nodeVersion}; required ^22.19.0 || >=24.0.0`)
 
@@ -217,7 +220,14 @@ async function runPreflight(job) {
   add(gitResult.ok ? 'ok' : 'warn', 'git', gitResult.ok ? gitResult.stdout : (gitResult.stderr || 'not installed; needed for clone/update'))
 
   const dockerResult = await captureCommand(job, 'docker', ['version', '--format', '{{.Server.Version}}'])
-  add(dockerResult.ok ? 'ok' : 'warn', 'Docker', dockerResult.ok ? dockerResult.stdout : (dockerResult.stderr || 'not available; sandbox features will be degraded'))
+  const dockerSecurity = await captureCommand(job, 'docker', ['info', '--format', '{{json .SecurityOptions}}'])
+  if (!dockerResult.ok) {
+    add('warn', 'Docker runtime', dockerResult.stderr || 'not available; sandbox features will be degraded. Install/configure Docker yourself if needed; SHE will not request root.')
+  } else if (dockerSecurity.ok && dockerSecurity.stdout.includes('rootless')) {
+    add('ok', 'Docker runtime', `rootless Docker ${dockerResult.stdout}`)
+  } else {
+    add('warn', 'Docker runtime', `Docker ${dockerResult.stdout} is accessible to this user but not detected as rootless; access may be root-equivalent. SHE does not request or execute root.`)
+  }
 
   await checkPath('control-plane build', join(repoRoot, 'apps/control-plane/dist/main.js'))
   await checkPath('broker build', join(repoRoot, 'apps/broker/dist/main.js'))
@@ -391,6 +401,11 @@ async function handleCompanionApi(request, response) {
         brokerSocketPath,
         activeJobId,
         version: companionVersion,
+        privilege: {
+          rootRequired: false,
+          executesSudo: false,
+          privilegedInstall: 'instructions-only',
+        },
       },
     })
     return
@@ -421,6 +436,7 @@ async function handleCompanionApi(request, response) {
         api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'preflight'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
+        privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
       },
     })
     return

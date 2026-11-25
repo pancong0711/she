@@ -438,6 +438,19 @@ onBeforeUnmount(() => {
             <pre v-else class="job-console"><code><div v-for="(event, index) in jobEvents" :key="index" :class="['job-line', event.type, event.type === 'check' ? event.status : '']">{{ jobEventText(event) }}</div></code></pre>
           </div>
 
+          <div class="card wide-card policy-note">
+            <h3>Root / sudo 策略</h3>
+            <p>
+              SHE companion 不执行 sudo，不申请 root，也不会自动安装需要特权的系统组件。
+              如果环境检查提示 Docker/rootless Docker/系统依赖需要管理员权限，请由用户自己按官方说明完成；
+              完成后再回到这里点击“环境检查”。
+            </p>
+            <p class="muted">
+              SHE 自身、control plane、broker、agent 和 sandbox 数据都应在当前普通用户下运行。
+              Docker 访问若依赖 docker 组，可能是 root-equivalent，SHE 会显示 warning，不把它伪装成 rootless 安全边界。
+            </p>
+          </div>
+
           <div class="card wide-card">
             <h3>当前限制</h3>
             <p class="muted">
