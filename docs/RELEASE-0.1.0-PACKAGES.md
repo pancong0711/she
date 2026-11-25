@@ -61,13 +61,16 @@ edcad42bb0aeb69e0515844a099a9319c23b0659898f6de9391b6c7db0e44eec  she-client-0.1
 }
 ```
 
-pnpm 11 的 overrides 放在 `pnpm-workspace.yaml`：
+pnpm 11 的 overrides 放在 `pnpm-workspace.yaml`，并需要允许 URL 形式的传递依赖：
 
 ```yaml
+blockExoticSubdeps: false
 overrides:
   '@she/protocol': https://github.com/pancong0711/she/releases/download/v0.1.0-packages.1/she-protocol-0.1.0.tgz
   '@she/client': https://github.com/pancong0711/she/releases/download/v0.1.0-packages.1/she-client-0.1.0.tgz
 ```
+
+`blockExoticSubdeps: false` 只应作为 registry 发布前的临时消费方案；正式切回 npm registry 后应删除该设置。
 
 然后：
 
@@ -78,7 +81,7 @@ pnpm install --frozen-lockfile
 验证：
 
 ```sh
-node --input-type=module -e "import { SheClient } from '@she/client'; import { GATEWAY_V1_FIXTURES } from '@she/protocol'; import { SheGatewayBridge } from '@she/gateway-sdk'; console.log(GATEWAY_V1_FIXTURES.protocolVersion, typeof SheClient, typeof SheGatewayBridge)"
+node --input-type=module -e "import { SheClient, SandboxBrokerClient } from '@she/client'; import { GATEWAY_V1_FIXTURES } from '@she/protocol'; import { SheGatewayBridge } from '@she/gateway-sdk'; console.log('ok', GATEWAY_V1_FIXTURES.protocolVersion, typeof SheClient, typeof SandboxBrokerClient, typeof SheGatewayBridge)"
 ```
 
 ## 5. 与 feishu4dsh 的关系

@@ -107,4 +107,4 @@
 - 2026-11-25：完成 T6.2a：GitHub Pages PWA 部署工作流、相对 base、首次使用向导、companion URL 配置、CORS/PNA 支持。Pages 静态页面可安装并可连接本地 `127.0.0.1:8787` companion。
 - 2026-11-25：完成 T6.3a：PWA 增加 `/broker/v1/*` 代理、Sandboxes 只读列表/status/按需 stats、broker 离线提示；补充 PNG 192/512 安装图标。
 - 2026-11-25：完成 T6.4a：PWA Install & Doctor 页面、companion `/api/jobs` 白名单任务、环境检查/依赖安装/构建/测试和实时 NDJSON 日志；修复离线状态下导航看起来无响应的问题。
-- 2026-11-25：响应 feishu4dsh integration 建议：`@she/gateway-sdk` 纳入公开包；发布 GitHub Release tarball `v0.1.0-packages.1`；补充 tarball + pnpm overrides 消费说明与 SHA。
+- 2026-11-25：响应 feishu4dsh integration 建议：`@she/gateway-sdk` 纳入公开包；发布 GitHub Release tarball `v0.1.0-packages.1`；补充 tarball + pnpm overrides/`blockExoticSubdeps:false` 消费说明与 SHA；完成 Release URL 安装 smoke test。

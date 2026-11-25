@@ -64,6 +64,14 @@ pnpm add /tmp/she-packages/she-gateway-sdk-0.1.0.tgz
 
 如果只安装 `she-client` 的 tarball，其传递依赖 `@she/protocol` 仍会按 semver 查找 registry；因此没有 registry 时，必须同时显式安装 `she-protocol` tarball 或在 pnpm overrides 中指向 tarball URL。
 
+pnpm 11 还需要在消费方的 `pnpm-workspace.yaml` 中设置：
+
+```yaml
+blockExoticSubdeps: false
+```
+
+否则 URL 形式的子依赖会被 `ERR_PNPM_EXOTIC_SUBDEP` 拒绝。该设置只作为 registry 发布前的临时方案。
+
 约束：
 
 - 只能在临时 integration 分支/临时环境使用；
