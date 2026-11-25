@@ -14,7 +14,7 @@ release-manifest.json
 SHA-256：
 
 ```text
-4b8140ae0dc13048f205834387d4624e93eff0309fddb4d9e17fe1193b268ffd  she-core-0.1.0.tar.gz
+abd0e40408cb3be0af98cb25419c14b3d60b7b6e66fd58bfe40130d5df9e5940  she-core-0.1.0.tar.gz
 ```
 
 Manifest 下载地址：
@@ -77,7 +77,7 @@ https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manif
 
 ```sh
 bash scripts/install-core-bundle.sh she-core-0.1.0.tar.gz \
-  --sha256 4b8140ae0dc13048f205834387d4624e93eff0309fddb4d9e17fe1193b268ffd \
+  --sha256 abd0e40408cb3be0af98cb25419c14b3d60b7b6e66fd58bfe40130d5df9e5940 \
   --core-root ~/.local/share/she/core
 ```
 
