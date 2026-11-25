@@ -100,7 +100,7 @@
 | T7.1 | 定稿 companion/core ADR 与 `companion-api.v1` 契约 | M6 | [x] | ADR-0001 + API 契约文档 |
 | T7.2 | 从 `apps/pwa/server.mjs` 抽出 `apps/companion` | T7.1 | [x] | companion 不 import core 内部 |
 | T7.3 | 定义 `run-core` 入口与 release manifest schema | T7.1 | [x] | core 可由 companion 以稳定入口启动 |
-| T7.4 | core bundle 打包、版本目录、current/previous | T7.3 | [ ] | `she-core-<version>` 可安装/切换 |
+| T7.4 | core bundle 打包、版本目录、current/previous | T7.3 | [x] | `she-core-<version>` 可安装/切换 |
 | T7.5 | staging/pending/停止/切换/健康检查/回滚 | T7.4 | [ ] | 更新失败自动回滚 |
 | T7.6 | PWA 更新 UI 与实时阶段日志 | T7.5 | [ ] | 下载/安装/重启/回滚进度可见 |
 | T7.7 | companion 自身升级边界 | T7.2 | [ ] | PWA 不替换运行中的 companion |
@@ -129,3 +129,4 @@
 - 2026-11-25：完成 T6.4b：install 前强制 preflight；Node/pnpm 版本 fail 阻断；新增 `/api/preflight`、实时检查事件和 `docs/ENVIRONMENT-BOOTSTRAP.md`。
 - 2026-11-25：新增 ADR-0002 与 T6.4d：SHE 不执行/不请求 root；preflight 检查 uid 与 Docker rootless 状态；Docker 组权限标记 root-equivalent warning；需要 root 的安装只展示方法。
 - 2026-11-25：完成 T6.4c1：新增用户级 `bootstrap-user.sh`/`.ps1` 与 companion `bootstrap` job；仅用户目录安装 pnpm，不执行 sudo，不安装 Docker；PWA 增加“用户级环境准备”按钮并复跑 preflight。
+- 2026-11-25：完成 T7.4：esbuild core bundle、`run-core` 双服务启动、release manifest、`install-core-bundle.sh` 用户级版本目录与 current/previous；bundle 实际启动与 socket health 验证通过。

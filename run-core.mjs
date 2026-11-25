@@ -3,19 +3,23 @@
 
 import { spawn } from 'node:child_process'
 import { stat } from 'node:fs/promises'
-import { dirname, isAbsolute, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const controlPlaneEntry = resolve(process.env.SHE_CONTROL_PLANE_ENTRY || resolve(here, 'apps/control-plane/dist/main.js'))
-const brokerEntry = resolve(process.env.SHE_BROKER_ENTRY || resolve(here, 'apps/broker/dist/main.js'))
 const nodeBin = process.execPath
 const children = []
 let shuttingDown = false
 
-async function requireFile(path, label) {
-  const info = await stat(path).catch(() => undefined)
-  if (info === undefined || !info.isFile()) throw new Error(`${label} entrypoint not found: ${path}`)
+async function findEntry(label, explicit, bundledName, devRelativePath) {
+  const candidates = explicit
+    ? [resolve(explicit)]
+    : [resolve(here, bundledName), resolve(here, devRelativePath)]
+  for (const candidate of candidates) {
+    const info = await stat(candidate).catch(() => undefined)
+    if (info !== undefined && info.isFile()) return candidate
+  }
+  throw new Error(`${label} entrypoint not found; tried: ${candidates.join(', ')}`)
 }
 
 function start(label, entry) {
@@ -51,10 +55,14 @@ async function shutdown(code) {
 }
 
 async function main() {
-  if (process.env.SHE_CORE_SKIP_CONTROL_PLANE !== '1') await requireFile(controlPlaneEntry, 'control plane')
-  if (process.env.SHE_CORE_SKIP_BROKER !== '1') await requireFile(brokerEntry, 'broker')
-  if (process.env.SHE_CORE_SKIP_CONTROL_PLANE !== '1') start('control-plane', controlPlaneEntry)
-  if (process.env.SHE_CORE_SKIP_BROKER !== '1') start('broker', brokerEntry)
+  const controlPlaneEntry = process.env.SHE_CORE_SKIP_CONTROL_PLANE === '1'
+    ? undefined
+    : await findEntry('control plane', process.env.SHE_CONTROL_PLANE_ENTRY, 'control-plane.mjs', 'apps/control-plane/dist/main.js')
+  const brokerEntry = process.env.SHE_CORE_SKIP_BROKER === '1'
+    ? undefined
+    : await findEntry('broker', process.env.SHE_BROKER_ENTRY, 'broker.mjs', 'apps/broker/dist/main.js')
+  if (controlPlaneEntry !== undefined) start('control-plane', controlPlaneEntry)
+  if (brokerEntry !== undefined) start('broker', brokerEntry)
   process.stdout.write(`[run-core] started with companion contract (pid ${String(process.pid)})\n`)
   if (process.env.SHE_CORE_SKIP_CONTROL_PLANE === '1' && process.env.SHE_CORE_SKIP_BROKER === '1') {
     throw new Error('both control-plane and broker are disabled; nothing to run')

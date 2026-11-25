@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import HelpPanel from './components/HelpPanel.vue'
 import type { GatewayHealth, GatewaySnapshot, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
@@ -19,7 +20,7 @@ import {
   type JobSummary,
 } from './api'
 
-type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'setup' | 'packages' | 'gateway' | 'settings'
+type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -29,6 +30,7 @@ const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'packages', label: 'Packages' },
   { id: 'gateway', label: 'Gateway' },
   { id: 'settings', label: 'Settings' },
+  { id: 'help', label: 'Help' },
 ]
 
 const active = ref<Tab>('dashboard')
@@ -484,6 +486,14 @@ onBeforeUnmount(() => {
         <p class="muted">
           普通用户应优先直接打开 <code>http://127.0.0.1:8787</code>，同源模式无需额外配置 CORS。
         </p>
+      </section>
+
+      <section v-else-if="active === 'help'">
+        <HelpPanel
+          :companion-version="companion?.version ?? 'offline'"
+          :control-version="health?.version ?? 'offline'"
+          :broker-version="brokerHealth?.version ?? 'offline'"
+        />
       </section>
 
       <section v-else class="placeholder card">

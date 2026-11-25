@@ -57,6 +57,10 @@ pnpm pwa:build
 pnpm companion
 # 或兼容别名：pnpm pwa:serve
 # http://127.0.0.1:8787
+
+# core bundle（供 companion 更新使用）
+pnpm build:core
+bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-root ~/.local/share/she/core
 ```
 
 - 本地同源模式：`http://127.0.0.1:8787`

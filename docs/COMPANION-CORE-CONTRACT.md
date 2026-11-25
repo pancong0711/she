@@ -212,6 +212,69 @@ Schema：
 - protocol major 不兼容时必须显式拒绝；
 - companion 不根据 package-lock 猜测兼容性，必须读 manifest/capability。
 
+## 4.1 Core bundle 构建与安装
+
+构建：
+
+```sh
+pnpm build:core
+# 或
+bash scripts/build-core-bundle.sh
+```
+
+输出：
+
+```text
+artifacts/core/
+  she-core-0.1.0/
+    control-plane.mjs
+    broker.mjs
+    run-core.sh
+    run-core.cmd
+    run-core.mjs
+    VERSION
+    bundle.json
+    LICENSE
+  she-core-0.1.0.tar.gz
+  release-manifest.json
+```
+
+安装到用户级版本目录：
+
+```sh
+bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz \
+  --sha256 <manifest.bundle.sha256> \
+  --core-root ~/.local/share/she/core
+```
+
+布局：
+
+```text
+~/.local/share/she/core/
+  versions/
+    0.1.0/
+  current -> versions/0.1.0
+  previous -> versions/<旧版本>
+  state.json
+  staging/
+```
+
+`install-core-bundle.sh`：
+
+- 拒绝以 root 运行；
+- 可校验 SHA-256；
+- 安装到用户目录；
+- 不启动/停止进程；
+- 同一版本默认不覆盖，需 `--force`；
+- 进程切换与回滚在 T7.5 实现。
+
+实测：
+
+- core bundle 成功打包；
+- bundle 内 `run-core.sh` 成功同时启动 control-plane 与 broker；
+- 两个 socket `/v1/health` 均返回 200；
+- 版本目录与 `current` symlink 安装验证通过。
+
 ## 5. 更新状态机（T7.5 实现）
 
 ```text

@@ -19,10 +19,13 @@
     "pwa:build": "pnpm build && pnpm --filter @she/pwa build",
     "pwa:serve": "pnpm companion",
     "pwa:dev": "pnpm --filter @she/pwa dev",
-    "companion": "pnpm --filter @she/companion start"
+    "companion": "pnpm --filter @she/companion start",
+    "build:core": "bash scripts/build-core-bundle.sh",
+    "install:core": "bash scripts/install-core-bundle.sh"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.0",
     "vitest": "^4.1.0"
   }

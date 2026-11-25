@@ -23,3 +23,4 @@ All notable changes to SHE are documented here.
 - Added mandatory environment preflight before dependency installation, live check results in PWA, and `/api/preflight`.
 - Added ADR-0002: SHE never executes or requests root; preflight checks non-root UID and warns when Docker access is root-equivalent rather than rootless.
 - Added user-level bootstrap scripts and a companion `bootstrap` job for installing pnpm without sudo; PWA reruns preflight after bootstrap.
+- Added esbuild core bundles, stable `run-core` entrypoint resolution, user-level versioned core installation, and SHA-256 release manifest generation.
