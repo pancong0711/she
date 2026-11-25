@@ -35,6 +35,7 @@ GET /api/health
 GET /api/version
 GET /api/capabilities
 GET /api/core/status
+GET /api/preflight
 ```
 
 `/api/health` 返回 companion 自身信息：
@@ -69,6 +70,8 @@ GET /api/core/status
 - 支持的 API；
 - streaming 类型；
 - 安装能力声明。
+
+`/api/preflight`：返回最近一次环境检查结果；`install` job 会先强制执行同一组检查，存在 fail 时中止。
 
 `/api/core/status`：
 

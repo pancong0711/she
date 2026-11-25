@@ -119,7 +119,7 @@ export interface JobSummary {
 export type JobEvent =
   | { readonly at: number; readonly type: 'log'; readonly stream: 'stdout' | 'stderr'; readonly text: string }
   | { readonly at: number; readonly type: 'system'; readonly text: string }
-  | { readonly at: number; readonly type: 'check'; readonly status: 'ok' | 'warn'; readonly label: string; readonly detail: string }
+  | { readonly at: number; readonly type: 'check'; readonly status: 'ok' | 'warn' | 'fail'; readonly label: string; readonly detail: string }
   | { readonly at: number; readonly type: 'status'; readonly status: JobSummary['status'] }
   | { readonly at: number; readonly type: 'done'; readonly status: JobSummary['status']; readonly exitCode: number }
 

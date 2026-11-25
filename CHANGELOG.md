@@ -20,3 +20,4 @@ All notable changes to SHE are documented here.
 - Public package release `v0.1.0-packages.1` with protocol/client/gateway-sdk tarballs and pnpm override consumption guidance.
 - ADR-0001 defining a stable companion layer, replaceable core bundles, `companion-api.v1`, and a stable `run-core` entrypoint with staged updates and rollback.
 - Extracted `apps/companion`, added companion v1 status/capability APIs, `run-core` supervisor entrypoints, and a deterministic release manifest generator.
+- Added mandatory environment preflight before dependency installation, live check results in PWA, and `/api/preflight`.

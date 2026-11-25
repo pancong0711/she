@@ -418,7 +418,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="job-actions">
               <button class="primary" :disabled="jobRunning" @click="runJob('doctor')">环境检查</button>
-              <button class="secondary" :disabled="jobRunning" @click="runJob('install')">安装依赖</button>
+              <button class="secondary" :disabled="jobRunning" @click="runJob('install')">安装依赖（自动预检）</button>
               <button class="secondary" :disabled="jobRunning" @click="runJob('build')">构建 PWA</button>
               <button class="secondary" :disabled="jobRunning" @click="runJob('build-all')">构建全部</button>
               <button class="secondary" :disabled="jobRunning" @click="runJob('test')">运行测试</button>
@@ -435,7 +435,7 @@ onBeforeUnmount(() => {
               </span>
             </div>
             <p v-if="jobEvents.length === 0" class="muted">点击左侧按钮后，命令输出会实时显示在这里。</p>
-            <pre v-else class="job-console"><code><div v-for="(event, index) in jobEvents" :key="index" :class="['job-line', event.type]">{{ jobEventText(event) }}</div></code></pre>
+            <pre v-else class="job-console"><code><div v-for="(event, index) in jobEvents" :key="index" :class="['job-line', event.type, event.type === 'check' ? event.status : '']">{{ jobEventText(event) }}</div></code></pre>
           </div>
 
           <div class="card wide-card">

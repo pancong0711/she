@@ -129,5 +129,7 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .job-line.stderr { color: #fca5a5; }
 .job-line.system { color: #38bdf8; }
 .job-line.check { color: #86efac; }
+.job-line.check.warn { color: #fde68a; }
+.job-line.check.fail { color: #fca5a5; }
 .job-line.done { color: #fde68a; }
 @media (max-width: 1000px) { .setup-grid { grid-template-columns: 1fr; } .wide-card { grid-column: auto; } }

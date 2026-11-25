@@ -80,6 +80,7 @@ const JOB_KINDS = new Map([
 ])
 const jobs = new Map()
 let activeJobId = null
+let lastPreflight = null
 
 function jobSummary(job) {
   return {
@@ -132,15 +133,104 @@ function runCommand(job, command, args, { allowFailure = false } = {}) {
   })
 }
 
-async function checkFile(job, label, path) {
-  try {
-    const info = await stat(path)
-    const kind = info.isSocket() ? 'socket' : info.isFile() ? 'file' : info.isDirectory() ? 'directory' : 'path'
-    appendJobEvent(job, { type: 'check', status: 'ok', label, detail: `${path} (${kind})` })
-  } catch {
-    appendJobEvent(job, { type: 'check', status: 'warn', label, detail: `missing: ${path}` })
-  }
+function captureCommand(job, command, args) {
+  appendJobEvent(job, { type: 'system', text: `$ ${[command, ...args].join(' ')}` })
+  return new Promise(resolvePromise => {
+    let settled = false
+    const stdout = []
+    const stderr = []
+    const child = spawn(command, args, {
+      cwd: repoRoot,
+      env: { ...process.env, CI: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const finish = result => {
+      if (settled) return
+      settled = true
+      resolvePromise(result)
+    }
+    child.stdout.on('data', chunk => {
+      const text = chunk.toString('utf8')
+      stdout.push(text)
+      appendLog(job, 'stdout', text)
+    })
+    child.stderr.on('data', chunk => {
+      const text = chunk.toString('utf8')
+      stderr.push(text)
+      appendLog(job, 'stderr', text)
+    })
+    child.on('error', error => {
+      appendJobEvent(job, { type: 'system', text: `spawn failed: ${error.message}` })
+      finish({ code: 127, ok: false, stdout: '', stderr: error.message })
+    })
+    child.on('close', code => finish({
+      code: code ?? 1,
+      ok: code === 0,
+      stdout: stdout.join('').trim(),
+      stderr: stderr.join('').trim(),
+    }))
+  })
 }
+
+function parseMajorMinor(version) {
+  const match = /^v?([0-9]+)\.([0-9]+)/.exec(version.trim())
+  return match === null ? undefined : { major: Number(match[1]), minor: Number(match[2]) }
+}
+
+function nodeVersionSupported(version) {
+  const parsed = parseMajorMinor(version)
+  if (parsed === undefined) return false
+  return parsed.major === 22 ? parsed.minor >= 19 : parsed.major >= 24
+}
+
+function pnpmVersionSupported(version) {
+  const parsed = parseMajorMinor(version)
+  if (parsed === undefined) return false
+  return parsed.major > 11 || (parsed.major === 11 && parsed.minor >= 22)
+}
+
+async function runPreflight(job) {
+  const checks = []
+  const add = (status, label, detail) => {
+    const check = { type: 'check', status, label, detail }
+    checks.push(check)
+    appendJobEvent(job, check)
+  }
+  const checkPath = async (label, path) => {
+    try {
+      const info = await stat(path)
+      const kind = info.isSocket() ? 'socket' : info.isFile() ? 'file' : info.isDirectory() ? 'directory' : 'path'
+      add('ok', label, `${path} (${kind})`)
+    } catch {
+      add('warn', label, `missing: ${path}`)
+    }
+  }
+
+  const nodeVersion = process.versions.node
+  add(nodeVersionSupported(nodeVersion) ? 'ok' : 'fail', 'Node.js', `v${nodeVersion}; required ^22.19.0 || >=24.0.0`)
+
+  const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+  const pnpmResult = await captureCommand(job, pnpmCommand, ['--version'])
+  add(pnpmResult.ok && pnpmVersionSupported(pnpmResult.stdout) ? 'ok' : 'fail', 'pnpm', pnpmResult.ok ? `${pnpmResult.stdout}; required >=11.22.0` : pnpmResult.stderr || 'not found')
+
+  const gitResult = await captureCommand(job, 'git', ['--version'])
+  add(gitResult.ok ? 'ok' : 'warn', 'git', gitResult.ok ? gitResult.stdout : (gitResult.stderr || 'not installed; needed for clone/update'))
+
+  const dockerResult = await captureCommand(job, 'docker', ['version', '--format', '{{.Server.Version}}'])
+  add(dockerResult.ok ? 'ok' : 'warn', 'Docker', dockerResult.ok ? dockerResult.stdout : (dockerResult.stderr || 'not available; sandbox features will be degraded'))
+
+  await checkPath('control-plane build', join(repoRoot, 'apps/control-plane/dist/main.js'))
+  await checkPath('broker build', join(repoRoot, 'apps/broker/dist/main.js'))
+  await checkPath('PWA build', join(distDir, 'index.html'))
+  await checkPath('control socket', controlSocketPath)
+  await checkPath('broker socket', brokerSocketPath)
+
+  const ok = checks.filter(check => check.type === 'check' && check.status === 'fail').length === 0
+  lastPreflight = { at: Date.now(), ok, checks }
+  appendJobEvent(job, { type: 'system', text: ok ? 'preflight passed' : 'preflight failed; install/build actions may be unsafe to continue' })
+  return { ok, checks }
+}
+
 
 async function executeJob(job) {
   job.status = 'running'
@@ -148,20 +238,19 @@ async function executeJob(job) {
   appendJobEvent(job, { type: 'status', status: 'running' })
   try {
     if (job.kind === 'doctor') {
-      const node = await runCommand(job, process.execPath, ['--version'])
-      const pnpm = await runCommand(job, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['--version'], { allowFailure: true })
-      const git = await runCommand(job, 'git', ['--version'], { allowFailure: true })
-      await runCommand(job, 'docker', ['version', '--format', '{{.Server.Version}}'], { allowFailure: true })
-      await checkFile(job, 'control-plane build', join(repoRoot, 'apps/control-plane/dist/main.js'))
-      await checkFile(job, 'broker build', join(repoRoot, 'apps/broker/dist/main.js'))
-      await checkFile(job, 'PWA build', join(distDir, 'index.html'))
-      await checkFile(job, 'control socket', controlSocketPath)
-      await checkFile(job, 'broker socket', brokerSocketPath)
-      if (!node.ok || !pnpm.ok || !git.ok) job.exitCode = 1
-      else job.exitCode = 0
+      const preflight = await runPreflight(job)
+      job.exitCode = preflight.ok ? 0 : 1
     } else if (job.kind === 'install') {
-      const result = await runCommand(job, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['install', '--frozen-lockfile'])
-      job.exitCode = result.code
+      // Hard gate: never install dependencies before the local toolchain passes
+      // the minimum preflight. This prevents a half-installed environment.
+      const preflight = await runPreflight(job)
+      if (!preflight.ok) {
+        appendJobEvent(job, { type: 'system', text: 'install aborted: fix failing preflight checks first' })
+        job.exitCode = 1
+      } else {
+        const result = await runCommand(job, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['install', '--frozen-lockfile'])
+        job.exitCode = result.code
+      }
     } else if (job.kind === 'build') {
       const result = await runCommand(job, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['pwa:build'])
       job.exitCode = result.code
@@ -329,7 +418,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'preflight'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
       },
@@ -346,6 +435,13 @@ async function handleCompanionApi(request, response) {
         controlPlane: control,
         broker,
       },
+    })
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/preflight') {
+    sendJsonWithCors(request, response, 200, {
+      ok: true,
+      value: lastPreflight ?? { at: null, ok: null, checks: [] },
     })
     return
   }
