@@ -1,11 +1,40 @@
+# Dependencies
 node_modules/
+.pnpm-store/
+.pnp.*
+.yarn/
+
+# Build output
 dist/
 lib/
-coverage/
-.turbo/
 *.tsbuildinfo
+*.tgz
+
+# Test / coverage / caches
+coverage/
+.vitest/
+.cache/
+.turbo/
+*.log
+
+# Local environment and secrets
 .env
 .env.*
 !.env.example
-.DS_Store
+*.pem
+*.key
+*.crt
+
+# Packed public artifacts
 artifacts/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local scratch
+tmp/
+scratch/
