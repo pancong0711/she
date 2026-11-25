@@ -15,4 +15,4 @@ All notable changes to SHE are documented here.
 - Public `@she/protocol` / `@she/client` packaging and gateway golden fixtures.
 - Reference gateway bridge and feishu4dsh integration/migration docs.
 - CI workflow and public repository hygiene files.
-- Vue 3/Vite PWA shell, local loopback host, API proxy, manifest, service worker, and read-only Dashboard/Tasks pages.
+- Vue 3/Vite PWA shell, local loopback host, API proxy, manifest, service worker, read-only Dashboard/Tasks pages, onboarding/companion connection, and GitHub Pages deployment.

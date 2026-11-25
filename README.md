@@ -2,6 +2,8 @@
 
 `she` 是独立的 agent control plane 项目。
 
+**在线 PWA**：<https://pancong0711.github.io/she/>（静态安装/引导页，可连接本机 SHE companion）
+
 它的职责是管理 agent **怎么跑、在哪里跑、和谁协作、用什么凭据**，而不是实现某个聊天平台。飞书通道继续由 `feishu4dsh` 负责；`she` 通过版本化协议与其薄适配层协作。
 
 ## 初始原则
@@ -51,6 +53,10 @@ pnpm pwa:build
 pnpm pwa:serve
 # http://127.0.0.1:8787
 ```
+
+- 本地同源模式：`http://127.0.0.1:8787`
+- GitHub Pages 静态 PWA：`https://pancong0711.github.io/she/`
+- Pages 页面连接本地 companion：`http://127.0.0.1:8787`
 
 本地 PWA host 只绑定 loopback，并将 `/v1/*` 代理到 control-plane Unix socket。
 

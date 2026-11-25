@@ -22,6 +22,13 @@ const socketPath = process.env.SHE_CONTROL_SOCKET?.trim()
   || join(process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.local', 'run'), 'she', 'control.sock')
 const tokenFile = process.env.SHE_TOKEN_FILE?.trim()
   || join(process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config'), 'she', 'token')
+const allowedOrigins = new Set(
+  (process.env.SHE_ALLOWED_ORIGINS
+    ?? 'https://pancong0711.github.io,http://127.0.0.1:8787,http://localhost:8787,http://127.0.0.1:5173,http://localhost:5173')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean),
+)
 
 const mime = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -56,7 +63,36 @@ function securityHeaders(response, contentType) {
   if (contentType !== undefined) response.setHeader('content-type', contentType)
 }
 
+function corsHeaders(request) {
+  const origin = request.headers.origin
+  if (origin === undefined) return {}
+  if (!allowedOrigins.has(origin)) return undefined
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
+    'access-control-allow-headers': 'authorization, content-type, accept',
+    'access-control-expose-headers': 'content-type',
+    'access-control-max-age': '600',
+    'access-control-allow-private-network': 'true',
+    vary: 'Origin',
+  }
+}
+
 async function proxyApi(request, response) {
+  const cors = corsHeaders(request)
+  if (cors === undefined) {
+    response.writeHead(403, { 'content-type': 'application/json; charset=utf-8' })
+    response.end(JSON.stringify({
+      ok: false,
+      error: { code: 'forbidden', message: 'origin is not allowed to access the SHE companion', retryable: false },
+    }))
+    return
+  }
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204, cors)
+    response.end()
+    return
+  }
   const token = await readToken()
   const headers = { ...request.headers }
   if (token !== undefined) headers.authorization = `Bearer ${token}`
@@ -68,7 +104,7 @@ async function proxyApi(request, response) {
     method: request.method,
     headers,
   }, upstream => {
-    response.writeHead(upstream.statusCode ?? 502, upstream.headers)
+    response.writeHead(upstream.statusCode ?? 502, { ...upstream.headers, ...cors })
     upstream.pipe(response)
   })
   proxy.on('error', error => {
@@ -154,6 +190,7 @@ server.listen(port, host, () => {
   process.stdout.write(`she-pwa listening on http://${host}:${String(port)}\n`)
   process.stdout.write(`control-plane socket: ${socketPath}\n`)
   process.stdout.write(`serving: ${distDir}\n`)
+  process.stdout.write(`allowed browser origins: ${[...allowedOrigins].join(', ')}\n`)
 })
 
 const shutdown = () => server.close(() => process.exit(0))

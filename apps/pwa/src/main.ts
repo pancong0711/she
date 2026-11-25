@@ -4,7 +4,8 @@ import './style.css'
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+    const swUrl = new URL('sw.js', document.baseURI).pathname
+    void navigator.serviceWorker.register(swUrl).catch(() => undefined)
   })
 }
 

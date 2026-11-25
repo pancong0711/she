@@ -1,7 +1,7 @@
 # SHE PWA 本地控制台
 
 > 日期：2026-11-25
-> 状态：T6.1–T6.2 完成，T6.3 首屏只读面板完成
+> 状态：T6.1–T6.2 完成，GitHub Pages 部署完成，T6.3 首屏只读面板完成
 > 代码：
 > - `apps/pwa/`
 > - `apps/pwa/server.mjs`
@@ -36,6 +36,69 @@ PWA 不直接访问 Docker、broker socket、飞书 secret 或 SHE SQLite。
 - 无云后端。
 
 参考 `2609-assignment-assistant` 的“本地引擎 + PWA 前端”模式。
+
+## 2.1 双模式：GitHub Pages + 本地 companion
+
+### GitHub Pages 静态 PWA
+
+地址：
+
+```text
+https://pancong0711.github.io/she/
+```
+
+这一层是：
+
+- 可直接安装到桌面/主屏的 PWA；
+- 首次使用向导/安装说明；
+- 连接本机 SHE companion 的入口；
+- 连接成功后复用同一个 Dashboard/Tasks 等控制面 UI。
+
+GitHub Pages 本身不能执行安装命令、不能访问 Docker、不能读取本地文件。它只负责 UI 和引导；真正的控制面在用户电脑上。
+
+### 本地同源模式
+
+```text
+http://127.0.0.1:8787
+```
+
+本地 PWA host 同时提供：
+
+- 静态 PWA；
+- `/v1/*` 反向代理；
+- 可选的 bearer token 注入。
+
+这是完整的推荐使用方式：浏览器与 companion 同源，不需要跨域。
+
+### 远程静态 PWA → 本地 companion
+
+GitHub Pages 页面会检测：
+
+```text
+http://127.0.0.1:8787
+```
+
+连接流程：
+
+```text
+GitHub Pages PWA
+  → fetch http://127.0.0.1:8787/v1/health
+  → companion 校验 Origin
+  → CORS 预检
+  → 成功则显示 Dashboard/Tasks
+```
+
+companion 默认允许：
+
+```text
+https://pancong0711.github.io
+http://127.0.0.1:8787
+http://localhost:8787
+http://127.0.0.1:5173
+http://localhost:5173
+```
+
+可由 `SHE_ALLOWED_ORIGINS` 覆盖。浏览器仍不应直接接触 token；token 由 companion 侧读取并注入。
 
 ## 3. 启动
 
@@ -78,6 +141,11 @@ SHE_TOKEN_FILE
 
 已完成：
 
+- 首次使用向导：
+  - 安装/启动说明；
+  - 复制本机启动命令；
+  - 连接本地 companion；
+  - companion URL 配置；
 - Dashboard：
   - control plane health；
   - gateway protocol；
@@ -87,17 +155,21 @@ SHE_TOKEN_FILE
 - Tasks：
   - 只读任务表；
   - 状态、摘要、priority、更新时间；
+- Settings：
+  - companion URL；
+  - 连接状态；
 - 占位页：
   - Sandboxes；
   - Packages；
-  - Gateway；
-  - Settings。
+  - Gateway。
 
 ## 5. 安全边界
 
 PWA host：
 
 - 只绑定 `127.0.0.1`；
+- 只允许明确的 browser origin 访问 `/v1/*`；
+- 支持 CORS 预检和 Private Network Access 提示；
 - 不监听 LAN；
 - 提供 CSP：`default-src 'self'`；
 - 拒绝路径逃逸；
@@ -151,16 +223,57 @@ PWA host：
 - capability 展示；
 - 不向 agent 暴露 secret。
 
-## 7. 当前验证
+## 7. GitHub Pages 部署
+
+工作流：
+
+```text
+.github/workflows/pages.yml
+```
+
+流程：
+
+```text
+push main
+  → pnpm install
+  → pnpm pwa:build
+  → upload apps/pwa/dist
+  → deploy GitHub Pages
+```
+
+Vite 使用相对 base：
+
+```ts
+base: './'
+```
+
+因此同一份 `dist` 同时适配：
+
+```text
+https://pancong0711.github.io/she/
+http://127.0.0.1:8787/
+```
+
+GitHub Pages 的 Source 必须设置为 **GitHub Actions**。
+
+## 8. 当前验证
 
 ```text
 pnpm pwa:build  ✓
 ```
 
-smoke test：
+本地 smoke test：
 
 ```text
 GET http://127.0.0.1:8787/v1/health   ✓
 GET http://127.0.0.1:8787/v1/snapshot ✓
 GET http://127.0.0.1:8787/            ✓
+```
+
+CORS smoke test：
+
+```text
+Origin: https://pancong0711.github.io
+OPTIONS /v1/health → 204 + CORS headers
+GET /v1/health → 200 + Access-Control-Allow-Origin
 ```
