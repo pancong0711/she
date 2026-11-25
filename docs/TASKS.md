@@ -54,7 +54,8 @@
 |---|---|---|---|---|
 | T4.0 | feishu4dsh 评审回执与 canonical capability 对齐 | T0.8 | [x] | 13 个 v1 channel capability 锁定；评审回复文档 |
 | T4.1 | `@she/client` handshake/health/command/interaction/events 实现 | T1.6 | [x] | fake Unix-socket server 契约测试通过 |
-| T4.1a | `@she/protocol` / `@she/client` 打包发布、版本矩阵与 golden fixtures | T4.1 | [x] | 生成可安装 tarball；两仓库可引用同一 fixture 版本 |
+| T4.1a | `@she/protocol` / `@she/client` 打包发布、版本矩阵与 golden fixtures | T4.1 | [x] |
+| T4.1c | GitHub Release tarball 发布（protocol/client/gateway-sdk）与消费说明 | T4.1a | [x] | Release 资产、SHA、pnpm overrides 示例 | 生成可安装 tarball；两仓库可引用同一 fixture 版本 |
 | T4.1b | control-plane `/v1/*` server、事件重放窗口与 snapshot 入口 | T1.6/T4.1 | [x] | fake client 契约测试；cursor_expired 负例 |
 | T4.2 | feishu4dsh 依赖 `@she/client` 的接入模块设计落地（SHE 侧参考 bridge + guide） | T4.1 | [x] | 无 SHE 内部 import |
 | T4.3 | `/she` 命令透传与只读 RenderIntent 映射（契约/参考桥测试） | T4.2 | [x] | bridge/adapter 测试 |
@@ -105,4 +106,5 @@
 - 2026-11-25：完成 M6 T6.1–T6.2：Vue 3 + Vite PWA、manifest/service worker、本地 127.0.0.1 host、/v1 反向代理、health/snapshot 只读 Dashboard 与 Tasks 表；新增 `docs/PWA.md`。
 - 2026-11-25：完成 T6.2a：GitHub Pages PWA 部署工作流、相对 base、首次使用向导、companion URL 配置、CORS/PNA 支持。Pages 静态页面可安装并可连接本地 `127.0.0.1:8787` companion。
 - 2026-11-25：完成 T6.3a：PWA 增加 `/broker/v1/*` 代理、Sandboxes 只读列表/status/按需 stats、broker 离线提示；补充 PNG 192/512 安装图标。
-- 2026-11-25：完成 T6.4a：PWA Install & Doctor 页面、companion `/api/jobs` 白名单任务、环境检查/依赖安装/构建/测试和实时 NDJSON 日志；修复离线状态下导航看起来无响应的问题。下一步继续软件包目录/系统级安装与 T6.3b。
+- 2026-11-25：完成 T6.4a：PWA Install & Doctor 页面、companion `/api/jobs` 白名单任务、环境检查/依赖安装/构建/测试和实时 NDJSON 日志；修复离线状态下导航看起来无响应的问题。
+- 2026-11-25：响应 feishu4dsh integration 建议：`@she/gateway-sdk` 纳入公开包；发布 GitHub Release tarball `v0.1.0-packages.1`；补充 tarball + pnpm overrides 消费说明与 SHA。

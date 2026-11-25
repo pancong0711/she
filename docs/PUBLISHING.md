@@ -11,7 +11,10 @@ gateway adapter（首期 feishu4dsh）只应依赖：
 ```text
 @she/protocol
 @she/client
+@she/gateway-sdk   # 可选参考 bridge
 ```
+
+`@she/gateway-sdk` 是可选包：提供 `GatewayAdapter` 与 `SheGatewayBridge`，不包含平台 SDK，不依赖 SHE 内部状态。
 
 不应依赖：
 
@@ -37,7 +40,8 @@ pnpm pack:public /tmp/she-packages
 1. `pnpm build`；
 2. `pnpm --filter @she/protocol pack`；
 3. `pnpm --filter @she/client pack`；
-4. 输出 tarball 列表和 SHA-256。
+4. `pnpm --filter @she/gateway-sdk pack`；
+5. 输出 tarball 列表和 SHA-256。
 
 默认输出目录：
 
@@ -54,7 +58,11 @@ feishu4dsh 侧可以使用：
 ```sh
 pnpm add /tmp/she-packages/she-protocol-0.1.0.tgz
 pnpm add /tmp/she-packages/she-client-0.1.0.tgz
+# 可选
+pnpm add /tmp/she-packages/she-gateway-sdk-0.1.0.tgz
 ```
+
+如果只安装 `she-client` 的 tarball，其传递依赖 `@she/protocol` 仍会按 semver 查找 registry；因此没有 registry 时，必须同时显式安装 `she-protocol` tarball 或在 pnpm overrides 中指向 tarball URL。
 
 约束：
 
@@ -63,6 +71,22 @@ pnpm add /tmp/she-packages/she-client-0.1.0.tgz
 - 不提交包含本机路径的 `pnpm-lock.yaml`/`node_modules` 变更；
 - 正式 PR 前改为 registry semver；
 - 主分支锁定首期 `~0.1.x`。
+
+## 3.1 GitHub Release tarball
+
+在 npm registry 发布前，使用 GitHub Release 固定 tarball：
+
+```text
+https://github.com/pancong0711/she/releases/tag/v0.1.0-packages.1
+```
+
+消费说明见：
+
+```text
+docs/RELEASE-0.1.0-PACKAGES.md
+```
+
+注意：tarball 的传递依赖需要同时配置 pnpm overrides，否则 `@she/protocol` / `@she/client` 会去找 registry。
 
 ## 4. 发布版本策略
 

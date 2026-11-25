@@ -74,6 +74,7 @@ pnpm pwa:serve
 - [SQLite 持久化存储](docs/STORE-SQLITE.md)
 - [任务执行器与 fake agent 闭环](docs/TASK-RUNNER.md)
 - [公开包打包与发布](docs/PUBLISHING.md)
+- [0.1.0 公开包 Release](docs/RELEASE-0.1.0-PACKAGES.md)
 - [Control-plane gateway.v1 server](docs/CONTROL-PLANE-SERVER.md)
 - [OpenCode agent adapter](docs/OPENCODE-ADAPTER.md)
 - [Sandbox Broker 与 Docker provider](docs/SANDBOX-BROKER.md)

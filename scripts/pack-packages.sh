@@ -17,6 +17,7 @@ mkdir -p "$OUT_DIR"
 
 pnpm --filter @she/protocol pack --pack-destination "$OUT_DIR"
 pnpm --filter @she/client pack --pack-destination "$OUT_DIR"
+pnpm --filter @she/gateway-sdk pack --pack-destination "$OUT_DIR"
 
 echo
 echo "Packed public packages:"
