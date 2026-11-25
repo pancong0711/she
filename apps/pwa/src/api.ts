@@ -94,3 +94,84 @@ export const BROKER_COMMANDS = [
 ]
 
 export const REPO_URL = 'https://github.com/pancong0711/she'
+
+export interface CompanionHealth {
+  readonly status: 'ok'
+  readonly pid: number
+  readonly repoRoot: string
+  readonly distDir: string
+  readonly controlSocketPath: string
+  readonly brokerSocketPath: string
+  readonly activeJobId: string | null
+  readonly version: string
+}
+
+export interface JobSummary {
+  readonly id: string
+  readonly kind: string
+  readonly status: 'queued' | 'running' | 'succeeded' | 'failed'
+  readonly createdAt: number
+  readonly startedAt: number | null
+  readonly finishedAt: number | null
+  readonly exitCode: number | null
+}
+
+export type JobEvent =
+  | { readonly at: number; readonly type: 'log'; readonly stream: 'stdout' | 'stderr'; readonly text: string }
+  | { readonly at: number; readonly type: 'system'; readonly text: string }
+  | { readonly at: number; readonly type: 'check'; readonly status: 'ok' | 'warn'; readonly label: string; readonly detail: string }
+  | { readonly at: number; readonly type: 'status'; readonly status: JobSummary['status'] }
+  | { readonly at: number; readonly type: 'done'; readonly status: JobSummary['status']; readonly exitCode: number }
+
+export async function loadCompanionHealth(signal?: AbortSignal): Promise<CompanionHealth> {
+  const payload = await getJson<{ ok: boolean; value?: CompanionHealth; error?: { message?: string } }>('/api/health', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'companion unavailable')
+  return payload.value
+}
+
+export async function startJob(kind: string): Promise<JobSummary> {
+  const response = await fetch(`${apiBase()}/api/jobs`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      'x-she-local-action': '1',
+    },
+    body: JSON.stringify({ kind }),
+  })
+  const payload = await response.json() as { ok: boolean; value?: JobSummary; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `job start failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
+export async function* streamJobEvents(jobId: string, signal?: AbortSignal): AsyncIterable<JobEvent> {
+  const response = await fetch(`${apiBase()}/api/jobs/${encodeURIComponent(jobId)}/events`, {
+    headers: { accept: 'application/x-ndjson' },
+    ...(signal === undefined ? {} : { signal }),
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+  if (response.body === null) return
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let newline = buffer.indexOf('\n')
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim()
+        buffer = buffer.slice(newline + 1)
+        if (line !== '') yield JSON.parse(line) as JobEvent
+        newline = buffer.indexOf('\n')
+      }
+    }
+    const tail = buffer.trim()
+    if (tail !== '') yield JSON.parse(tail) as JobEvent
+  } finally {
+    reader.releaseLock()
+  }
+}

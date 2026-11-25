@@ -81,7 +81,8 @@
 | T6.3 | Dashboard/agents/sandboxes/tasks 只读页面 | T6.2/M3 | [~] |
 | T6.3a | Sandboxes 只读页面与 broker `/broker/v1/*` 代理 | T6.3 | [x] | list/status/stats；broker 离线提示 |
 | T6.3b | Agent/OpenCode health 与 workspace 授权只读列表 | T6.3 | [ ] | 只读 health/授权来源 | 信息来自 control plane，无重复状态源 |
-| T6.4 | 软件包目录、下载、校验、显式确认安装/更新 | T6.3/T3.6 | [ ] | 校验、权限确认、日志、回滚入口 |
+| T6.4 | 软件包目录、下载、校验、显式确认安装/更新 | T6.3/T3.6 | [~] |
+| T6.4a | Companion Install & Doctor：白名单 job runner、环境检查、依赖/构建/测试、实时日志 | T6.2a | [x] | PWA 点击触发并实时显示 stdout/stderr | 校验、权限确认、日志、回滚入口 |
 | T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [ ] | 只允许叶子目录；不可绕过 broker |
 | T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [ ] | 与 CLI/gateway 共用同一控制面会话 |
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
@@ -103,4 +104,5 @@
 - 2026-11-25：完成 M4 SHE 侧：`SheGatewayBridge`、命令/交互/RenderIntent/task event 转发、approval/file intent 契约测试、feishu4dsh 接入指南与 secretary 迁移/回滚文档。`pnpm test` 54/54 通过。feishu4dsh 仓库实际 patch 与真机验收列为 T4.6。
 - 2026-11-25：完成 M6 T6.1–T6.2：Vue 3 + Vite PWA、manifest/service worker、本地 127.0.0.1 host、/v1 反向代理、health/snapshot 只读 Dashboard 与 Tasks 表；新增 `docs/PWA.md`。
 - 2026-11-25：完成 T6.2a：GitHub Pages PWA 部署工作流、相对 base、首次使用向导、companion URL 配置、CORS/PNA 支持。Pages 静态页面可安装并可连接本地 `127.0.0.1:8787` companion。
-- 2026-11-25：完成 T6.3a：PWA 增加 `/broker/v1/*` 代理、Sandboxes 只读列表/status/按需 stats、broker 离线提示；补充 PNG 192/512 安装图标。下一步 T6.3b agent health/workspace 列表。
+- 2026-11-25：完成 T6.3a：PWA 增加 `/broker/v1/*` 代理、Sandboxes 只读列表/status/按需 stats、broker 离线提示；补充 PNG 192/512 安装图标。
+- 2026-11-25：完成 T6.4a：PWA Install & Doctor 页面、companion `/api/jobs` 白名单任务、环境检查/依赖安装/构建/测试和实时 NDJSON 日志；修复离线状态下导航看起来无响应的问题。下一步继续软件包目录/系统级安装与 T6.3b。

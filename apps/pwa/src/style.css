@@ -110,3 +110,24 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .pill.stopped { background: #3f3f46; color: #e4e4e7; }
 .pill.unknown { background: #422006; color: #fde68a; }
 @media (max-width: 860px) { .sandbox-grid { grid-template-columns: 1fr; } }
+
+.offline-card { max-width: 980px; }
+.offline-card.compact { border: 0; padding: 8px 0; box-shadow: none; background: transparent; }
+.dashboard-page, .setup-page { display: grid; gap: 16px; }
+.setup-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
+.wide-card { grid-column: 1 / -1; }
+.companion-card { align-self: start; }
+.health-grid { display: grid; gap: 8px; margin: 18px 0; }
+.health-grid div { display: grid; grid-template-columns: 120px 1fr; gap: 12px; font-size: 12px; }
+.health-grid span { color: #64748b; text-transform: uppercase; letter-spacing: .08em; }
+.health-grid b { color: #cbd5e1; font-weight: 500; overflow-wrap: anywhere; }
+.job-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.console-card { min-height: 360px; }
+.console-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.job-console { min-height: 260px; max-height: 520px; overflow: auto; white-space: pre-wrap; }
+.job-line { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.65; }
+.job-line.stderr { color: #fca5a5; }
+.job-line.system { color: #38bdf8; }
+.job-line.check { color: #86efac; }
+.job-line.done { color: #fde68a; }
+@media (max-width: 1000px) { .setup-grid { grid-template-columns: 1fr; } .wide-card { grid-column: auto; } }

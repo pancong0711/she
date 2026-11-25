@@ -204,6 +204,15 @@ PWA host：
 
 ### T6.4 软件包与安装/更新
 
+已完成首版：
+
+- 本地 Install & Doctor 页面；
+- allowlisted job runner；
+- 实时 NDJSON 日志；
+- 环境检查/依赖安装/构建/测试。
+
+后续：
+
 - 包目录；
 - 版本/来源/checksum；
 - 显式确认；
@@ -230,6 +239,17 @@ PWA host：
 - 连接状态；
 - capability 展示；
 - 不向 agent 暴露 secret。
+
+## 6.1 导航行为
+
+左侧导航始终会切换 active tab。控制面/companion 离线时：
+
+- Dashboard 显示连接/启动引导；
+- Tasks/Sandboxes 显示该模块需要先启动对应服务的说明；
+- Install & Doctor 仍可用（只要 PWA companion 在线）；
+- Settings 始终可配置 companion URL。
+
+如果点击后没有任何视觉变化，通常是浏览器仍在运行旧 service worker 缓存；刷新或重新安装 PWA 可更新到新版本。
 
 ## 7. GitHub Pages 部署
 

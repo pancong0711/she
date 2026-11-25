@@ -16,3 +16,4 @@ All notable changes to SHE are documented here.
 - Reference gateway bridge and feishu4dsh integration/migration docs.
 - CI workflow and public repository hygiene files.
 - Vue 3/Vite PWA shell, local loopback host, control-plane/broker API proxy, manifest, service worker, read-only Dashboard/Tasks/Sandboxes pages, onboarding/companion connection, PNG install icons, and GitHub Pages deployment.
+- PWA Install & Doctor page with allowlisted local jobs, environment checks, dependency/build/test actions, and live NDJSON logs.

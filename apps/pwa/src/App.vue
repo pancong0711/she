@@ -2,23 +2,30 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { GatewayHealth, GatewaySnapshot, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
+  BROKER_COMMANDS,
   INSTALL_COMMANDS,
   REPO_URL,
-  BROKER_COMMANDS,
   getCompanionUrl,
   isLocalOrigin,
+  loadCompanionHealth,
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
   setCompanionUrl,
+  startJob,
+  streamJobEvents,
+  type CompanionHealth,
+  type JobEvent,
+  type JobSummary,
 } from './api'
 
-type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'packages' | 'gateway' | 'settings'
+type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'setup' | 'packages' | 'gateway' | 'settings'
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'sandboxes', label: 'Sandboxes' },
+  { id: 'setup', label: 'Install & Doctor' },
   { id: 'packages', label: 'Packages' },
   { id: 'gateway', label: 'Gateway' },
   { id: 'settings', label: 'Settings' },
@@ -34,22 +41,32 @@ const sandboxError = ref('')
 const loadingStats = ref('')
 const error = ref('')
 const loading = ref(false)
+const companion = ref<CompanionHealth | null>(null)
+const companionError = ref('')
 const remoteMode = !isLocalOrigin()
-const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
 const companionUrl = ref(getCompanionUrl())
 const copied = ref(false)
+const job = ref<JobSummary | null>(null)
+const jobEvents = ref<JobEvent[]>([])
+const jobRunning = ref(false)
+const jobError = ref('')
+const jobKind = ref('')
 let timer: ReturnType<typeof setInterval> | undefined
 
+const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
 const tasks = computed(() => [...(snapshot.value?.tasks ?? [])].reverse())
 const runningTasks = computed(() => tasks.value.filter(task => ['dispatching', 'submitted', 'running'].includes(task.status)).length)
 const failedTasks = computed(() => tasks.value.filter(task => ['failed', 'needs_attention'].includes(task.status)).length)
 const online = computed(() => health.value?.status === 'ok')
+const brokerOnline = computed(() => brokerHealth.value?.status === 'ok')
+const companionOnline = computed(() => companion.value !== null)
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
+    loadCompanionHealth(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -69,27 +86,14 @@ async function refresh(): Promise<void> {
     sandboxes.value = []
     sandboxError.value = sandboxResult.reason instanceof Error ? sandboxResult.reason.message : String(sandboxResult.reason)
   }
-  loading.value = false
-}
-
-async function loadStats(name: string): Promise<void> {
-  loadingStats.value = name
-  try {
-    const stats = await loadSandboxStats(name)
-    if (stats !== undefined) sandboxStats.value = { ...sandboxStats.value, [name]: stats }
-  } catch (cause) {
-    sandboxError.value = cause instanceof Error ? cause.message : String(cause)
-  } finally {
-    loadingStats.value = ''
+  if (companionResult.status === 'fulfilled') {
+    companion.value = companionResult.value
+    companionError.value = ''
+  } else {
+    companion.value = null
+    companionError.value = companionResult.reason instanceof Error ? companionResult.reason.message : String(companionResult.reason)
   }
-}
-
-function formatBytes(bytes?: number): string {
-  if (bytes === undefined) return '-'
-  if (bytes < 1024) return `${String(bytes)} B`
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KiB`
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`
-  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`
+  loading.value = false
 }
 
 async function connectCompanion(): Promise<void> {
@@ -107,12 +111,62 @@ async function copyInstallCommands(): Promise<void> {
   }
 }
 
+async function loadStats(name: string): Promise<void> {
+  loadingStats.value = name
+  try {
+    const stats = await loadSandboxStats(name)
+    if (stats !== undefined) sandboxStats.value = { ...sandboxStats.value, [name]: stats }
+  } catch (cause) {
+    sandboxError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    loadingStats.value = ''
+  }
+}
+
+async function runJob(kind: string): Promise<void> {
+  if (jobRunning.value) return
+  jobRunning.value = true
+  jobKind.value = kind
+  jobError.value = ''
+  jobEvents.value = []
+  try {
+    const started = await startJob(kind)
+    job.value = started
+    for await (const event of streamJobEvents(started.id)) {
+      jobEvents.value.push(event)
+      if (event.type === 'done') break
+    }
+    await refresh()
+  } catch (cause) {
+    jobError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    jobRunning.value = false
+    jobKind.value = ''
+  }
+}
+
+function jobEventText(event: JobEvent): string {
+  if (event.type === 'log') return event.text
+  if (event.type === 'system') return event.text
+  if (event.type === 'check') return `[${event.status}] ${event.label}: ${event.detail}`
+  if (event.type === 'status') return `status: ${event.status}`
+  return `done: ${event.status} (exit ${String(event.exitCode)})`
+}
+
 function relativeTime(at?: number): string {
   if (at === undefined) return '-'
   const seconds = Math.max(0, Math.round((Date.now() - at) / 1000))
   if (seconds < 60) return `${String(seconds)}s ago`
   if (seconds < 3600) return `${String(Math.round(seconds / 60))}m ago`
   return `${String(Math.round(seconds / 3600))}h ago`
+}
+
+function formatBytes(bytes?: number): string {
+  if (bytes === undefined) return '-'
+  if (bytes < 1024) return `${String(bytes)} B`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KiB`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`
+  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`
 }
 
 onMounted(() => {
@@ -145,12 +199,16 @@ onBeforeUnmount(() => {
         </button>
       </nav>
       <div class="sidebar-foot">
-        <span :class="['dot', online ? 'ok' : 'bad']"></span>
-        control {{ online ? 'online' : 'offline' }}
+        <span :class="['dot', companionOnline ? 'ok' : 'bad']"></span>
+        companion {{ companionOnline ? 'online' : 'offline' }}
       </div>
       <div class="sidebar-foot broker-foot">
-        <span :class="['dot', brokerHealth?.status === 'ok' ? 'ok' : 'bad']"></span>
-        broker {{ brokerHealth?.status === 'ok' ? 'online' : 'offline' }}
+        <span :class="['dot', brokerOnline ? 'ok' : 'bad']"></span>
+        broker {{ brokerOnline ? 'online' : 'offline' }}
+      </div>
+      <div class="sidebar-foot broker-foot">
+        <span :class="['dot', online ? 'ok' : 'bad']"></span>
+        control {{ online ? 'online' : 'offline' }}
       </div>
       <a class="repo-link" :href="REPO_URL" target="_blank" rel="noreferrer">GitHub 仓库 ↗</a>
     </aside>
@@ -169,76 +227,23 @@ onBeforeUnmount(() => {
         </button>
       </header>
 
-      <section v-if="!health" class="onboarding">
-        <div class="hero card">
-          <div class="hero-icon">S</div>
-          <div>
-            <p class="eyebrow">LOCAL-FIRST AGENT CONTROL PLANE</p>
-            <h2>先把 SHE companion 跑起来</h2>
-            <p class="muted">
-              GitHub Pages 上的是静态 PWA。安装、sandbox、agent、软件包和本地控制面都在你的电脑上运行；
-              浏览器通过 <code>127.0.0.1</code> 连接本机 companion。
-            </p>
-            <div class="hero-actions">
-              <a class="primary" :href="REPO_URL" target="_blank" rel="noreferrer">打开 GitHub 仓库</a>
-              <a class="secondary" href="https://github.com/pancong0711/she#readme" target="_blank" rel="noreferrer">查看安装说明</a>
-            </div>
-          </div>
-        </div>
-
-        <div class="steps">
-          <article class="card step">
-            <span class="step-no">01</span>
-            <h3>获取 SHE</h3>
-            <p>克隆仓库或下载 GitHub Release。</p>
-          </article>
-          <article class="card step">
-            <span class="step-no">02</span>
-            <h3>启动本地 companion</h3>
-            <p>运行 PWA host，它会把本地控制面 API 暴露给这个页面。</p>
-          </article>
-          <article class="card step">
-            <span class="step-no">03</span>
-            <h3>连接并开始使用</h3>
-            <p>保持 companion 运行，在设置页确认地址后即可管理 agent。</p>
-          </article>
-        </div>
-
-        <div class="card install-card">
-          <div class="install-head">
-            <div>
-              <h3>本机启动命令</h3>
-              <p class="muted">需要 Node.js 22.19+ 与 pnpm 11.22+。</p>
-            </div>
-            <button class="secondary" @click="copyInstallCommands">{{ copied ? '已复制' : '复制命令' }}</button>
-          </div>
-          <pre><code>{{ INSTALL_COMMANDS.join('\n') }}</code></pre>
+      <section v-if="active === 'dashboard'" class="dashboard-page">
+        <div v-if="!health" class="card offline-card">
+          <p class="eyebrow">CONTROL PLANE OFFLINE</p>
+          <h2>{{ companionOnline ? 'Companion 在线，但控制面还没启动' : '先启动 SHE companion' }}</h2>
           <p class="muted">
-            启动后打开 <code>http://127.0.0.1:8787</code> 即为同源完整模式。
-            当前页面也可以通过下面的 companion 地址连接。
+            {{ companionOnline
+              ? '可以进入 Install & Doctor 检查环境并启动/修复服务。'
+              : 'GitHub Pages 只是静态 PWA。安装、sandbox、agent 和本地控制面都在你的电脑上运行。' }}
           </p>
-        </div>
-
-        <div class="card connect-card">
-          <h3>连接本地 companion</h3>
-          <div class="connect-row">
-            <input v-model="companionUrl" placeholder="http://127.0.0.1:8787" />
-            <button class="primary" :disabled="loading" @click="connectCompanion">连接</button>
+          <div class="hero-actions">
+            <button class="primary" @click="active = 'setup'">打开 Install & Doctor</button>
+            <a class="secondary" :href="REPO_URL" target="_blank" rel="noreferrer">打开 GitHub 仓库</a>
           </div>
-          <p v-if="error" class="error-text">连接失败：{{ error }}</p>
-          <p class="muted">
-            如果浏览器阻止访问本地地址，请确认 companion 正在运行，并允许此站点访问本地网络。
-          </p>
-        </div>
-      </section>
-
-      <template v-else>
-        <div v-if="error" class="alert">
-          <strong>无法连接 SHE companion</strong>
-          <p>{{ error }}</p>
+          <p v-if="error" class="error-text">错误：{{ error }}</p>
         </div>
 
-        <section v-if="active === 'dashboard'" class="grid">
+        <div v-else class="grid">
           <article class="card metric">
             <span>Tasks</span>
             <strong>{{ tasks.length }}</strong>
@@ -272,9 +277,16 @@ onBeforeUnmount(() => {
               </li>
             </ul>
           </article>
-        </section>
+        </div>
+      </section>
 
-        <section v-else-if="active === 'tasks'" class="card">
+      <section v-else-if="active === 'tasks'" class="card">
+        <div v-if="!health" class="offline-card compact">
+          <h2>Tasks 需要控制面</h2>
+          <p class="muted">先连接 companion 并启动 control plane。</p>
+          <button class="primary" @click="active = 'setup'">打开 Install & Doctor</button>
+        </div>
+        <template v-else>
           <h2>Task snapshot</h2>
           <p class="muted">Read-only snapshot. Live task events are available through the control-plane event stream.</p>
           <table>
@@ -288,79 +300,183 @@ onBeforeUnmount(() => {
               </tr>
             </tbody>
           </table>
-        </section>
+        </template>
+      </section>
 
-        <section v-else-if="active === 'sandboxes'" class="sandbox-page">
-          <div v-if="sandboxError" class="alert">
-            <strong>Sandbox broker 不可用</strong>
-            <p>{{ sandboxError }}</p>
+      <section v-else-if="active === 'sandboxes'" class="sandbox-page">
+        <div v-if="sandboxError" class="alert">
+          <strong>Sandbox broker 不可用</strong>
+          <p>{{ sandboxError }}</p>
+          <pre><code>{{ BROKER_COMMANDS.join('\n') }}</code></pre>
+          <button class="primary" @click="active = 'setup'">打开 Install & Doctor</button>
+        </div>
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>Sandboxes</h2>
+              <p class="muted">
+                {{ brokerHealth ? `broker ${brokerHealth.status} · ${brokerHealth.version}` : 'broker offline' }}
+              </p>
+            </div>
+            <button class="secondary" :disabled="loading" @click="refresh">Refresh</button>
+          </div>
+          <p v-if="sandboxes.length === 0" class="muted">还没有 sandbox。后续将从安装向导或 Sandboxes 页面创建 main sandbox。</p>
+          <div v-else class="sandbox-grid">
+            <article v-for="sandbox in sandboxes" :key="sandbox.name" class="sandbox-card">
+              <div class="sandbox-head">
+                <div>
+                  <strong>{{ sandbox.name }}</strong>
+                  <small>{{ sandbox.agentId }} · {{ sandbox.role }}</small>
+                </div>
+                <span :class="['pill', sandbox.status]">{{ sandbox.status }}</span>
+              </div>
+              <div class="sandbox-meta">
+                <span>health <b>{{ sandbox.health ?? 'unknown' }}</b></span>
+                <span>image <b>{{ sandbox.image ?? '-' }}</b></span>
+                <span>started <b>{{ relativeTime(sandbox.startedAt) }}</b></span>
+              </div>
+              <div v-if="sandboxStats[sandbox.name]" class="sandbox-stats">
+                <span>CPU <b>{{ sandboxStats[sandbox.name]?.cpuPercent?.toFixed(1) ?? '-' }}%</b></span>
+                <span>MEM <b>{{ formatBytes(sandboxStats[sandbox.name]?.memoryBytes) }}</b></span>
+                <span>PIDs <b>{{ sandboxStats[sandbox.name]?.pids ?? '-' }}</b></span>
+              </div>
+              <button class="secondary stats-button" :disabled="loadingStats === sandbox.name" @click="loadStats(sandbox.name)">
+                {{ loadingStats === sandbox.name ? 'Loading…' : 'Load stats' }}
+              </button>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="active === 'setup'" class="setup-page">
+        <div v-if="!companion" class="onboarding">
+          <div class="hero card">
+            <div class="hero-icon">S</div>
+            <div>
+              <p class="eyebrow">LOCAL-FIRST AGENT CONTROL PLANE</p>
+              <h2>先把 SHE companion 跑起来</h2>
+              <p class="muted">
+                GitHub Pages 上的是静态 PWA。安装、sandbox、agent、软件包和本地控制面都在你的电脑上运行；
+                浏览器通过 <code>127.0.0.1</code> 连接本机 companion。
+              </p>
+              <div class="hero-actions">
+                <a class="primary" :href="REPO_URL" target="_blank" rel="noreferrer">打开 GitHub 仓库</a>
+                <a class="secondary" href="https://github.com/pancong0711/she#readme" target="_blank" rel="noreferrer">查看安装说明</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="steps">
+            <article class="card step">
+              <span class="step-no">01</span>
+              <h3>获取 SHE</h3>
+              <p>克隆仓库或下载 GitHub Release。</p>
+            </article>
+            <article class="card step">
+              <span class="step-no">02</span>
+              <h3>启动本地 companion</h3>
+              <p>运行 PWA host，它会把控制面和 broker API 暴露给这个页面。</p>
+            </article>
+            <article class="card step">
+              <span class="step-no">03</span>
+              <h3>连接并开始使用</h3>
+              <p>保持 companion 运行，然后点击环境检查、安装依赖、构建 PWA。</p>
+            </article>
+          </div>
+
+          <div class="card install-card">
+            <div class="install-head">
+              <div>
+                <h3>本机启动命令</h3>
+                <p class="muted">需要 Node.js 22.19+ 与 pnpm 11.22+。首次启动仍需要一次本机操作。</p>
+              </div>
+              <button class="secondary" @click="copyInstallCommands">{{ copied ? '已复制' : '复制命令' }}</button>
+            </div>
+            <pre><code>{{ INSTALL_COMMANDS.join('\n') }}</code></pre>
+          </div>
+
+          <div class="card connect-card">
+            <h3>连接本地 companion</h3>
+            <div class="connect-row">
+              <input v-model="companionUrl" placeholder="http://127.0.0.1:8787" />
+              <button class="primary" :disabled="loading" @click="connectCompanion">连接</button>
+            </div>
+            <p v-if="companionError" class="error-text">连接失败：{{ companionError }}</p>
+          </div>
+        </div>
+
+        <div v-else class="setup-grid">
+          <div class="card companion-card">
+            <p class="eyebrow">COMPANION ONLINE</p>
+            <h2>安装、调试与环境检查</h2>
+            <div class="health-grid">
+              <div><span>PID</span><b>{{ companion.pid }}</b></div>
+              <div><span>版本</span><b>{{ companion.version }}</b></div>
+              <div><span>repo</span><b>{{ companion.repoRoot }}</b></div>
+              <div><span>control socket</span><b>{{ companion.controlSocketPath }}</b></div>
+              <div><span>broker socket</span><b>{{ companion.brokerSocketPath }}</b></div>
+            </div>
+            <div class="job-actions">
+              <button class="primary" :disabled="jobRunning" @click="runJob('doctor')">环境检查</button>
+              <button class="secondary" :disabled="jobRunning" @click="runJob('install')">安装依赖</button>
+              <button class="secondary" :disabled="jobRunning" @click="runJob('build')">构建 PWA</button>
+              <button class="secondary" :disabled="jobRunning" @click="runJob('build-all')">构建全部</button>
+              <button class="secondary" :disabled="jobRunning" @click="runJob('test')">运行测试</button>
+            </div>
+            <p v-if="jobError" class="error-text">{{ jobError }}</p>
+            <p v-if="job" class="muted">last job: {{ job.kind }} · {{ job.status }} · {{ job.id }}</p>
+          </div>
+
+          <div class="card console-card">
+            <div class="console-head">
+              <h2>实时安装/调试日志</h2>
+              <span :class="['pill', jobRunning ? 'running' : job?.status ?? 'stopped']">
+                {{ jobRunning ? `${jobKind} running` : job?.status ?? 'idle' }}
+              </span>
+            </div>
+            <p v-if="jobEvents.length === 0" class="muted">点击左侧按钮后，命令输出会实时显示在这里。</p>
+            <pre v-else class="job-console"><code><div v-for="(event, index) in jobEvents" :key="index" :class="['job-line', event.type]">{{ jobEventText(event) }}</div></code></pre>
+          </div>
+
+          <div class="card wide-card">
+            <h3>当前限制</h3>
+            <p class="muted">
+              当前 PWA 可以触发已白名单化的本地检查、依赖安装、构建和测试，并实时显示日志。
+              软件包目录、系统级安装/更新、启动/停止 systemd 服务与回滚将在 T6.4 继续接入。
+            </p>
             <pre><code>{{ BROKER_COMMANDS.join('\n') }}</code></pre>
           </div>
-          <div class="card">
-            <div class="section-head">
-              <div>
-                <h2>Sandboxes</h2>
-                <p class="muted">
-                  {{ brokerHealth ? `broker ${brokerHealth.status} · ${brokerHealth.version}` : 'broker offline' }}
-                </p>
-              </div>
-              <button class="secondary" :disabled="loading" @click="refresh">Refresh</button>
-            </div>
-            <p v-if="sandboxes.length === 0" class="muted">还没有 sandbox。后续将从安装向导或 Sandboxes 页面创建 main sandbox。</p>
-            <div v-else class="sandbox-grid">
-              <article v-for="sandbox in sandboxes" :key="sandbox.name" class="sandbox-card">
-                <div class="sandbox-head">
-                  <div>
-                    <strong>{{ sandbox.name }}</strong>
-                    <small>{{ sandbox.agentId }} · {{ sandbox.role }}</small>
-                  </div>
-                  <span :class="['pill', sandbox.status]">{{ sandbox.status }}</span>
-                </div>
-                <div class="sandbox-meta">
-                  <span>health <b>{{ sandbox.health ?? 'unknown' }}</b></span>
-                  <span>image <b>{{ sandbox.image ?? '-' }}</b></span>
-                  <span>started <b>{{ relativeTime(sandbox.startedAt) }}</b></span>
-                </div>
-                <div v-if="sandboxStats[sandbox.name]" class="sandbox-stats">
-                  <span>CPU <b>{{ sandboxStats[sandbox.name]?.cpuPercent?.toFixed(1) ?? '-' }}%</b></span>
-                  <span>MEM <b>{{ formatBytes(sandboxStats[sandbox.name]?.memoryBytes) }}</b></span>
-                  <span>PIDs <b>{{ sandboxStats[sandbox.name]?.pids ?? '-' }}</b></span>
-                </div>
-                <button class="secondary stats-button" :disabled="loadingStats === sandbox.name" @click="loadStats(sandbox.name)">
-                  {{ loadingStats === sandbox.name ? 'Loading…' : 'Load stats' }}
-                </button>
-              </article>
-            </div>
-          </div>
-        </section>
+        </div>
+      </section>
 
-        <section v-else-if="active === 'settings'" class="card settings-card">
-          <h2>本地 companion</h2>
-          <p class="muted">当前页面通过 companion 访问本机 SHE control plane。</p>
-          <label for="companion">Companion URL</label>
-          <div class="connect-row">
-            <input id="companion" v-model="companionUrl" placeholder="http://127.0.0.1:8787" />
-            <button class="primary" :disabled="loading" @click="connectCompanion">保存并测试</button>
-          </div>
-          <div class="status-box">
-            <span :class="['dot', online ? 'ok' : 'bad']"></span>
-            <span>control {{ online ? '已连接' : '未连接' }}</span>
-            <span :class="['dot', brokerHealth?.status === 'ok' ? 'ok' : 'bad']"></span>
-            <span>broker {{ brokerHealth?.status === 'ok' ? '已连接' : '未连接' }}</span>
-            <span class="muted">{{ remoteMode ? 'GitHub Pages → local companion' : '本地同源模式' }}</span>
-          </div>
-          <p class="muted">
-            普通用户应优先直接打开 <code>http://127.0.0.1:8787</code>，同源模式无需额外配置 CORS。
-          </p>
-        </section>
+      <section v-else-if="active === 'settings'" class="card settings-card">
+        <h2>本地 companion</h2>
+        <p class="muted">当前页面通过 companion 访问本机 SHE control plane 和 sandbox broker。</p>
+        <label for="companion">Companion URL</label>
+        <div class="connect-row">
+          <input id="companion" v-model="companionUrl" placeholder="http://127.0.0.1:8787" />
+          <button class="primary" :disabled="loading" @click="connectCompanion">保存并测试</button>
+        </div>
+        <div class="status-box">
+          <span :class="['dot', companionOnline ? 'ok' : 'bad']"></span>
+          <span>companion {{ companionOnline ? '已连接' : '未连接' }}</span>
+          <span :class="['dot', online ? 'ok' : 'bad']"></span>
+          <span>control {{ online ? '已连接' : '未连接' }}</span>
+          <span :class="['dot', brokerOnline ? 'ok' : 'bad']"></span>
+          <span>broker {{ brokerOnline ? '已连接' : '未连接' }}</span>
+        </div>
+        <p v-if="companionError" class="error-text">{{ companionError }}</p>
+        <p class="muted">
+          普通用户应优先直接打开 <code>http://127.0.0.1:8787</code>，同源模式无需额外配置 CORS。
+        </p>
+      </section>
 
-        <section v-else class="placeholder card">
-          <div class="placeholder-icon">◌</div>
-          <h2>{{ tabs.find(tab => tab.id === active)?.label }} 页面待接入</h2>
-          <p>该模块已纳入 M6；当前先完成本地 PWA、只读控制面状态和任务面板。</p>
-          <p class="muted">后续将接入 sandbox broker、软件包安装/更新、workspace 权限和 agent 对话。</p>
-        </section>
-      </template>
+      <section v-else class="placeholder card">
+        <div class="placeholder-icon">◌</div>
+        <h2>{{ tabs.find(tab => tab.id === active)?.label }} 页面待接入</h2>
+        <p>该模块已纳入 M6；后续将接入软件包目录、workspace 权限和 agent 对话。</p>
+        <p class="muted">当前可使用 Install & Doctor 检查环境、安装依赖、构建并查看实时日志。</p>
+      </section>
     </main>
   </div>
 </template>
