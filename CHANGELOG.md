@@ -29,3 +29,4 @@ All notable changes to SHE are documented here.
 - Added checksum-verified companion bundle/installer, PWA download links, and an explicit no-online-self-update boundary for companion.
 - Added assignment-assistant-style one-click launchers (`start.bat`, `start.ps1`, `start.command`, `start.sh`) that download, verify, install, start companion, and open the PWA without root.
 - Added companion package inventory API and PWA Packages page for companion/core/runtime status, launcher downloads, core updates, and user-level pnpm bootstrap.
+- Added control-plane OpenCode worker, persisted agent events, gateway agent.delta mapping, and PWA Chat for task submission and live agent output.

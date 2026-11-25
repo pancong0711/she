@@ -270,3 +270,65 @@ export async function loadPackages(signal?: AbortSignal): Promise<readonly Packa
   if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'package catalog unavailable')
   return payload.value
 }
+
+import type {
+  GatewayCommandInvocation,
+  GatewayCommandRequest,
+  GatewayCommandResult,
+  GatewayServerEvent,
+} from '@she/protocol'
+import { GATEWAY_PROTOCOL_VERSION } from '@she/protocol'
+
+export const PWA_CONVERSATION_ID = 'pwa:local'
+
+export async function sendTaskToShe(text: string): Promise<GatewayCommandResult> {
+  const command: GatewayCommandInvocation = {
+    kind: 'command',
+    requestId: crypto.randomUUID(),
+    actor: { id: 'pwa:local-user', kind: 'user' },
+    conversation: { id: PWA_CONVERSATION_ID, kind: 'api' },
+    workspaceKey: 'pwa',
+    rawCommand: `/she submit ${text}`,
+  }
+  const body: GatewayCommandRequest = { protocolVersion: GATEWAY_PROTOCOL_VERSION, command }
+  const response = await fetch(`${apiBase()}/v1/commands`, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const payload = await response.json() as { ok: boolean; value?: GatewayCommandResult; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `command failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
+export async function* subscribeGatewayEvents(signal?: AbortSignal): AsyncIterable<GatewayServerEvent> {
+  const response = await fetch(`${apiBase()}/v1/events`, {
+    headers: { accept: 'application/x-ndjson' },
+    ...(signal === undefined ? {} : { signal }),
+  })
+  if (!response.ok) throw new Error(`event stream HTTP ${response.status}: ${await response.text()}`)
+  if (response.body === null) return
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let newline = buffer.indexOf('\n')
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim()
+        buffer = buffer.slice(newline + 1)
+        if (line !== '') yield JSON.parse(line) as GatewayServerEvent
+        newline = buffer.indexOf('\n')
+      }
+    }
+    const tail = buffer.trim()
+    if (tail !== '') yield JSON.parse(tail) as GatewayServerEvent
+  } finally {
+    reader.releaseLock()
+  }
+}

@@ -317,6 +317,14 @@ export interface GatewayApi {
   subscribe(input: { readonly cursor?: string; readonly signal?: AbortSignal }): AsyncIterable<GatewayServerEvent>
 }
 
+export interface GatewayWorkerHealth {
+  readonly enabled: boolean
+  readonly state: 'disabled' | 'idle' | 'running' | 'stopped' | 'error'
+  readonly lastTaskId?: string
+  readonly lastError?: string
+  readonly updatedAt: number
+}
+
 export interface GatewayHealth {
   readonly status: 'ok' | 'degraded'
   readonly service: 'she-control-plane'
@@ -324,6 +332,7 @@ export interface GatewayHealth {
   readonly protocolVersion: GatewayProtocolVersion
   readonly capabilities: CapabilitySet
   readonly checkedAt: number
+  readonly worker?: GatewayWorkerHealth
 }
 
 export interface GatewayCommandRequest {

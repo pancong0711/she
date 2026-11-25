@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import HelpPanel from './components/HelpPanel.vue'
-import type { GatewayHealth, GatewaySnapshot, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
+import type { GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
   COMPANION_BUNDLE_URL,
@@ -21,9 +21,11 @@ import {
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
+  sendTaskToShe,
   setCompanionUrl,
   startJob,
   streamJobEvents,
+  subscribeGatewayEvents,
   type CompanionHealth,
   type CoreStatus,
   type CoreUpdateCheck,
@@ -32,12 +34,13 @@ import {
   type PackageInfo,
 } from './api'
 
-type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
+type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'chat' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'sandboxes', label: 'Sandboxes' },
+  { id: 'chat', label: 'Chat' },
   { id: 'setup', label: 'Install & Doctor' },
   { id: 'packages', label: 'Packages' },
   { id: 'gateway', label: 'Gateway' },
@@ -65,6 +68,16 @@ const jobEvents = ref<JobEvent[]>([])
 const jobRunning = ref(false)
 const jobError = ref('')
 const jobKind = ref('')
+
+interface ChatMessage { id: string; role: 'user' | 'assistant' | 'system'; text: string; at: number }
+const chatMessages = ref<ChatMessage[]>([])
+const chatInput = ref('')
+const chatSending = ref(false)
+const chatError = ref('')
+const chatTaskId = ref<string | null>(null)
+const chatStreamMessageId = ref<string | null>(null)
+const seenGatewayEvents = new Set<string>()
+let chatAbortController: AbortController | undefined
 const coreStatus = ref<CoreStatus | null>(null)
 const coreError = ref('')
 const coreActionRunning = ref('')
@@ -237,12 +250,119 @@ function formatBytes(bytes?: number): string {
   return `${(bytes / 1024 ** 3).toFixed(1)} GiB`
 }
 
+function renderIntentText(intents: readonly RenderIntent[] | undefined): string {
+  if (intents === undefined || intents.length === 0) return ''
+  return intents.map(intent => {
+    if (intent.kind === 'text') return intent.text
+    if (intent.kind === 'progress') return intent.label ?? intent.stage
+    if (intent.kind === 'status') return intent.label
+    if (intent.kind === 'card') return intent.title ?? 'SHE card'
+    if (intent.kind === 'approval') return intent.title
+    if (intent.kind === 'form') return intent.title
+    if (intent.kind === 'file') return `file: ${intent.artifact.fileName}`
+    return ''
+  }).filter(Boolean).join('\n')
+}
+
+function appendChat(role: ChatMessage['role'], text: string): string {
+  const id = crypto.randomUUID()
+  chatMessages.value.push({ id, role, text, at: Date.now() })
+  return id
+}
+
+function appendChatDelta(text: string): void {
+  if (text === '') return
+  let id = chatStreamMessageId.value
+  if (id === null) {
+    id = appendChat('assistant', text)
+    chatStreamMessageId.value = id
+    return
+  }
+  const message = chatMessages.value.find(item => item.id === id)
+  if (message === undefined) {
+    chatStreamMessageId.value = appendChat('assistant', text)
+    return
+  }
+  message.text += text
+}
+
+function handleGatewayEvent(event: GatewayServerEvent): void {
+  if (event.type === 'render') {
+    const key = `render:${event.render.renderId}:${String(event.render.sequence)}`
+    if (seenGatewayEvents.has(key)) return
+    seenGatewayEvents.add(key)
+    const text = renderIntentText([event.render])
+    if (text !== '') appendChatDelta(text)
+    return
+  }
+  if (event.type !== 'task') return
+  const taskEvent = event.event
+  if (seenGatewayEvents.has(`event:${taskEvent.eventId}`)) return
+  seenGatewayEvents.add(`event:${taskEvent.eventId}`)
+  if (chatTaskId.value !== null && taskEvent.taskId !== chatTaskId.value) return
+  if (taskEvent.type === 'agent.delta') {
+    appendChatDelta(taskEvent.text)
+    return
+  }
+  if (taskEvent.type === 'tool.call') {
+    appendChat('system', `tool ${taskEvent.toolName}: ${taskEvent.status}`)
+    return
+  }
+  if (taskEvent.type === 'task.completed') {
+    chatStreamMessageId.value = null
+    appendChat('system', '任务完成')
+    chatTaskId.value = null
+    return
+  }
+  if (taskEvent.type === 'task.failed') {
+    chatStreamMessageId.value = null
+    appendChat('system', `任务失败：${taskEvent.error.message}`)
+    chatTaskId.value = null
+  }
+}
+
+async function submitChat(): Promise<void> {
+  const text = chatInput.value.trim()
+  if (text === '' || chatSending.value) return
+  chatSending.value = true
+  chatError.value = ''
+  chatInput.value = ''
+  appendChat('user', text)
+  chatStreamMessageId.value = null
+  try {
+    const result = await sendTaskToShe(text)
+    if (result.taskId !== undefined) chatTaskId.value = result.taskId
+    const rendered = renderIntentText(result.commandResult?.renderIntents)
+    appendChat('assistant', rendered || (result.accepted ? 'Task accepted.' : 'Task was not accepted.'))
+  } catch (cause) {
+    chatError.value = cause instanceof Error ? cause.message : String(cause)
+    appendChat('system', `发送失败：${chatError.value}`)
+  } finally {
+    chatSending.value = false
+  }
+}
+
+async function chatEventLoop(signal: AbortSignal): Promise<void> {
+  while (!signal.aborted) {
+    try {
+      for await (const event of subscribeGatewayEvents(signal)) handleGatewayEvent(event)
+    } catch (cause) {
+      if (signal.aborted) return
+      chatError.value = cause instanceof Error ? cause.message : String(cause)
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 2_000))
+    }
+  }
+}
+
 onMounted(() => {
   void refresh()
   timer = setInterval(() => void refresh(), 5000)
+  chatAbortController = new AbortController()
+  void chatEventLoop(chatAbortController.signal)
 })
 onBeforeUnmount(() => {
   if (timer !== undefined) clearInterval(timer)
+  chatAbortController?.abort()
 })
 </script>
 
@@ -413,6 +533,53 @@ onBeforeUnmount(() => {
               </button>
             </article>
           </div>
+        </div>
+      </section>
+
+      <section v-else-if="active === 'chat'" class="chat-page">
+        <div class="card chat-card">
+          <div class="section-head">
+            <div>
+              <h2>Agent Chat</h2>
+              <p class="muted">
+                conversation: <code>pwa:local</code> ·
+                worker: {{ health?.worker?.state ?? 'unknown' }}
+              </p>
+            </div>
+            <span :class="['pill', health?.worker?.state === 'running' ? 'running' : health?.worker?.state === 'idle' ? 'succeeded' : 'failed']">
+              {{ health?.worker?.enabled ? health.worker.state : 'worker disabled' }}
+            </span>
+          </div>
+          <div v-if="!health" class="alert">
+            <strong>需要先启动 control plane</strong>
+            <p>Chat 通过 control plane 提交任务并订阅 agent 事件。</p>
+            <button class="primary" @click="active = 'setup'">打开 Install &amp; Doctor</button>
+          </div>
+          <div v-else-if="!health.worker?.enabled" class="alert">
+            <strong>Worker 未启用</strong>
+            <p>
+              任务可以提交并排队，但不会执行。请用 OpenCode 配置启动 control plane worker：
+              <code>SHE_WORKER_ENABLED=1</code>、<code>SHE_OPENCODE_URL</code>、<code>SHE_OPENCODE_PASSWORD_FILE</code>、
+              <code>SHE_WORKSPACE_PATH</code>。
+            </p>
+          </div>
+          <div class="chat-messages">
+            <p v-if="chatMessages.length === 0" class="muted">
+              在下方输入任务。SHE 会通过 <code>/she submit</code> 入队，并实时显示 agent text delta、工具状态和完成/失败事件。
+            </p>
+            <div v-for="message in chatMessages" :key="message.id" :class="['chat-message', message.role]">
+              <span>{{ message.role }}</span>
+              <p>{{ message.text }}</p>
+            </div>
+          </div>
+          <p v-if="chatError" class="error-text">{{ chatError }}</p>
+          <div class="chat-compose">
+            <textarea v-model="chatInput" rows="4" placeholder="描述要交给 agent 的工作…" @keydown.ctrl.enter.prevent="submitChat"></textarea>
+            <button class="primary" :disabled="chatSending || chatInput.trim() === ''" @click="submitChat">
+              {{ chatSending ? 'Sending…' : '布置任务' }}
+            </button>
+          </div>
+          <p class="muted small-note">Ctrl/Cmd + Enter 发送。agent 输出来自 task.agent_event → gateway event 流。</p>
         </div>
       </section>
 

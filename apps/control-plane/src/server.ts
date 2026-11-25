@@ -16,6 +16,7 @@ import type {
   GatewayServerEvent,
   GatewaySnapshot,
   GatewayWelcome,
+  GatewayWorkerHealth,
   SheError,
 } from '@she/protocol'
 import {
@@ -46,6 +47,7 @@ export interface ControlPlaneServerOptions {
   readonly eventBatchSize?: number
   readonly clock?: Clock
   readonly maxBodyBytes?: number
+  readonly workerStatus?: () => Promise<GatewayWorkerHealth> | GatewayWorkerHealth
 }
 
 export class ControlPlaneHttpError extends Error {
@@ -181,6 +183,59 @@ export function mapDomainEventToGateway(stored: StoredEvent<SheDomainEvent>): Ga
       },
     }
   }
+  if (event.aggregateType === 'task' && event.type === 'task.agent_event') {
+    const payload = event.payload as {
+      taskId: string
+      topicId: string
+      event:
+        | { kind: 'text-delta'; text: string }
+        | { kind: 'reasoning-delta'; text: string }
+        | { kind: 'tool-call'; toolName: string; status: 'started' | 'completed' | 'failed'; detail?: string }
+        | { kind: 'usage'; inputTokens?: number; outputTokens?: number; totalTokens?: number }
+    }
+    const agentEvent = payload.event
+    if (agentEvent.kind === 'text-delta') {
+      return {
+        type: 'task',
+        event: {
+          ...base,
+          type: 'agent.delta',
+          taskId: payload.taskId,
+          topicId: payload.topicId,
+          text: agentEvent.text,
+          channel: 'text',
+        },
+      }
+    }
+    if (agentEvent.kind === 'reasoning-delta') {
+      return {
+        type: 'task',
+        event: {
+          ...base,
+          type: 'agent.delta',
+          taskId: payload.taskId,
+          topicId: payload.topicId,
+          text: agentEvent.text,
+          channel: 'reasoning',
+        },
+      }
+    }
+    if (agentEvent.kind === 'tool-call') {
+      return {
+        type: 'task',
+        event: {
+          ...base,
+          type: 'tool.call',
+          taskId: payload.taskId,
+          topicId: payload.topicId,
+          toolName: agentEvent.toolName,
+          status: agentEvent.status,
+          ...(agentEvent.detail === undefined ? {} : { detail: agentEvent.detail }),
+        },
+      }
+    }
+    return undefined
+  }
   if (event.aggregateType === 'artifact' && event.type === 'artifact.created') {
     const payload = event.payload as {
       artifactId: string
@@ -228,6 +283,7 @@ export class ControlPlaneServer {
   private readonly eventBatchSize: number
   private readonly clock: Clock
   private readonly maxBodyBytes: number
+  private readonly workerStatus: (() => Promise<GatewayWorkerHealth> | GatewayWorkerHealth) | undefined
   private httpServer: Server | undefined
   private readonly streams = new Set<ServerResponse>()
 
@@ -245,6 +301,7 @@ export class ControlPlaneServer {
     this.eventBatchSize = options.eventBatchSize ?? 100
     this.clock = options.clock ?? SYSTEM_CLOCK
     this.maxBodyBytes = options.maxBodyBytes ?? 1_048_576
+    this.workerStatus = options.workerStatus
     if (this.eventPollIntervalMs < 1) throw new Error('eventPollIntervalMs must be positive')
     if (this.eventBatchSize < 1) throw new Error('eventBatchSize must be positive')
   }
@@ -284,6 +341,7 @@ export class ControlPlaneServer {
       }
       const url = new URL(request.url ?? '/', 'http://localhost')
       if (request.method === 'GET' && url.pathname === '/v1/health') {
+        const worker = this.workerStatus === undefined ? undefined : await this.workerStatus()
         const health: GatewayHealth = {
           status: 'ok',
           service: 'she-control-plane',
@@ -291,6 +349,7 @@ export class ControlPlaneServer {
           protocolVersion: GATEWAY_PROTOCOL_VERSION,
           capabilities: this.capabilities,
           checkedAt: this.clock.now(),
+          ...(worker === undefined ? {} : { worker }),
         }
         jsonWrite(response, 200, health)
         return

@@ -188,6 +188,10 @@ SHE_TOKEN_FILE
 - Tasks：
   - 只读任务表；
   - 状态、摘要、priority、更新时间；
+- Chat：
+  - 通过 `/she submit` 布置任务；
+  - 实时显示 agent text delta、tool call、完成/失败；
+  - worker 状态和 disabled 提示；
 - Sandboxes：
   - 通过 `/broker/v1/*` 代理访问 sandbox broker；
   - list/status/role/agent/image；

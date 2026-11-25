@@ -37,6 +37,10 @@ export class InMemoryTopicRepository implements TopicRepository {
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 
+  async listAll(): Promise<readonly Topic[]> {
+    return [...this.topics.values()].sort((left, right) => left.createdAt - right.createdAt)
+  }
+
   async nextDisplayNo(conversationKey: string): Promise<string> {
     const topics = await this.listByConversation(conversationKey)
     const max = topics.reduce((current, topic) => {

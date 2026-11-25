@@ -22,7 +22,8 @@
     "@she/core": "workspace:*",
     "@she/control": "workspace:*",
     "@she/client": "workspace:*",
-    "@she/store-sqlite": "workspace:*"
+    "@she/store-sqlite": "workspace:*",
+    "@she/agent-opencode": "workspace:*"
   },
   "bin": {
     "she-control-plane": "./dist/main.js"

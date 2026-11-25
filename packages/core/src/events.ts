@@ -1,6 +1,7 @@
 /** Durable control-plane event model with monotonic cursor semantics. */
 
 import type { TaskPriority, TaskStatus } from './domain.js'
+import type { AgentEvent } from '@she/protocol'
 
 export type DomainAggregateType = 'topic' | 'task' | 'artifact'
 
@@ -51,9 +52,16 @@ export interface ArtifactCreatedPayload {
   readonly bytes: number
 }
 
+export interface TaskAgentEventPayload {
+  readonly taskId: string
+  readonly topicId: string
+  readonly event: AgentEvent
+}
+
 export type TaskEvent =
   | DomainEvent<'task.enqueued', TaskEnqueuedPayload>
   | DomainEvent<'task.status_changed', TaskStatusChangedPayload>
+  | DomainEvent<'task.agent_event', TaskAgentEventPayload>
 
 export type TopicEvent = DomainEvent<'topic.created', TopicCreatedPayload>
 export type ArtifactEvent = DomainEvent<'artifact.created', ArtifactCreatedPayload>

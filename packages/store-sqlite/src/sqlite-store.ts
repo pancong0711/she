@@ -232,6 +232,11 @@ class SqliteTopicRepository implements TopicRepository {
     return rows.map(topicOf)
   }
 
+  async listAll(): Promise<readonly Topic[]> {
+    const rows = this.db.prepare('SELECT * FROM topics ORDER BY created_at ASC').all() as unknown as TopicRow[]
+    return rows.map(topicOf)
+  }
+
   async nextDisplayNo(conversationKey: string): Promise<string> {
     const row = this.db.prepare(
       'SELECT COALESCE(MAX(CAST(display_no AS INTEGER)), 0) + 1 AS next FROM topics WHERE conversation_key = ?',

@@ -106,6 +106,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-
 - [ADR-0001：稳定 companion + 可更新 core](docs/ADR-0001-companion-core-split.md)
 - [Companion ↔ Core 契约 v1](docs/COMPANION-CORE-CONTRACT.md)
 - [环境检查与安装边界](docs/ENVIRONMENT-BOOTSTRAP.md)
+- [Agent Worker 与 PWA Chat](docs/AGENT-WORKER.md)
 - [ADR-0002：不请求、不执行 root](docs/ADR-0002-no-root-privilege-policy.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)

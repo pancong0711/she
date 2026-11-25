@@ -148,3 +148,16 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .package-card { border: 1px solid #1e293b; border-radius: 14px; padding: 16px; background: #02061788; }
 .package-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 @media (max-width: 860px) { .package-grid { grid-template-columns: 1fr; } }
+
+.chat-page { max-width: 980px; }
+.chat-card { display: grid; gap: 16px; }
+.chat-messages { min-height: 260px; max-height: 520px; overflow: auto; display: grid; gap: 10px; align-content: start; padding: 12px; border: 1px solid #1e293b; border-radius: 12px; background: #02061788; }
+.chat-message { display: grid; grid-template-columns: 80px 1fr; gap: 12px; padding: 10px; border-radius: 10px; background: #0f172a; }
+.chat-message > span { color: #64748b; text-transform: uppercase; font-size: 10px; letter-spacing: .1em; }
+.chat-message p { margin: 0; white-space: pre-wrap; line-height: 1.7; color: #cbd5e1; }
+.chat-message.user { background: #0c4a6e55; }
+.chat-message.system p { color: #fde68a; font-size: 13px; }
+.chat-compose { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+.chat-compose textarea { width: 100%; resize: vertical; border: 1px solid #334155; border-radius: 12px; background: #020617; color: #e2e8f0; padding: 12px; font: inherit; }
+.chat-compose textarea:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
+@media (max-width: 860px) { .chat-compose { grid-template-columns: 1fr; } }

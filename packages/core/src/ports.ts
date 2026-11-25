@@ -15,6 +15,7 @@ export interface TopicRepository {
   get(id: TopicId): Promise<Topic | undefined>
   findActiveByConversation(conversationKey: string): Promise<Topic | undefined>
   listByConversation(conversationKey: string): Promise<readonly Topic[]>
+  listAll(): Promise<readonly Topic[]>
   nextDisplayNo(conversationKey: string): Promise<string>
   save(topic: Topic): Promise<void>
 }

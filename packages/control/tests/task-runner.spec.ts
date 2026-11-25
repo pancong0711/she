@@ -128,6 +128,7 @@ function createHarness(behavior: FakeBehavior = 'success') {
     tasks,
     requests,
     leases,
+    events,
     service: new TaskService(deps),
     runner: new TaskRunner({ ...deps, agent: new FakeAgent(clock, behavior) }, { defaultLeaseTtlMs: 100 }),
   }
@@ -135,7 +136,7 @@ function createHarness(behavior: FakeBehavior = 'success') {
 
 describe('TaskRunner', () => {
   it('runs a queued task through a fake agent to succeeded', async () => {
-    const { service, runner, tasks, requests, leases } = createHarness('success')
+    const { service, runner, tasks, requests, leases, events } = createHarness('success')
     const submitted = await service.submit({
       conversationKey: 'chat-1',
       workspaceKey: 'workspace-1',
@@ -150,6 +151,8 @@ describe('TaskRunner', () => {
     expect((await tasks.get(submitted.task.id))?.status).toBe('succeeded')
     expect(await requests.get(submitted.task.id)).toBeUndefined()
     expect(await leases.findByTaskId(submitted.task.id)).toBeUndefined()
+    const page = await events.readAfter(null)
+    expect(page.events.some(item => item.event.type === 'task.agent_event')).toBe(true)
   })
 
   it('marks the task failed and releases its lease when the adapter throws', async () => {

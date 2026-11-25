@@ -38,6 +38,9 @@ importers:
 
   apps/control-plane:
     dependencies:
+      '@she/agent-opencode':
+        specifier: workspace:*
+        version: link:../../packages/adapters/agent-opencode
       '@she/client':
         specifier: workspace:*
         version: link:../../packages/client

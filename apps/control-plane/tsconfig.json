@@ -22,6 +22,9 @@
     },
     {
       "path": "../../packages/store-sqlite"
+    },
+    {
+      "path": "../../packages/adapters/agent-opencode"
     }
   ]
 }

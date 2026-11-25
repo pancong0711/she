@@ -123,6 +123,17 @@ defineProps<{
     </article>
 
     <article class="card">
+      <h2>Agent Chat 与 Worker</h2>
+      <p>
+        Chat 页面通过 control plane 的 `/she submit` 入队任务。要真正执行，需要以
+        `SHE_WORKER_ENABLED=1` 启动 control plane，并配置 OpenCode URL、凭据文件和工作区。
+        如果 worker 未启用，任务会保持 queued，页面会明确显示。
+      </p>
+      <p>
+        agent 输出通过 `task.agent_event → gateway event → /v1/events` 实时返回。
+        Chat 不是第二状态源；它与 CLI、飞书 gateway 共用同一个 control plane。
+      </p>
+
       <h2>Sandbox 模型</h2>
       <ul>
         <li>所有 sandbox 数据位于当前用户可管理的 <code>$XDG_DATA_HOME/she/sandboxes</code>。</li>
@@ -139,7 +150,8 @@ defineProps<{
         <thead><tr><th>页面</th><th>当前能力</th></tr></thead>
         <tbody>
           <tr><td>Dashboard</td><td>control plane health、task/sandbox 计数、最近任务。</td></tr>
-          <tr><td>Tasks</td><td>只读 task snapshot；写任务后续接入。</td></tr>
+          <tr><td>Tasks</td><td>只读 task snapshot；Chat 提交后的任务也在这里显示。</td></tr>
+          <tr><td>Chat</td><td>通过 `/she submit` 布置任务，实时显示 agent text delta、工具状态和完成/失败。</td></tr>
           <tr><td>Sandboxes</td><td>broker 列表、状态、角色、image、按需 CPU/内存/PIDs。</td></tr>
           <tr><td>Packages</td><td>Companion/Core/Node/pnpm/Docker 运行时清单；companion launcher、core 更新和用户级 pnpm 准备已接入。</td></tr>
           <tr><td>Gateway</td><td>飞书等 channel adapter 配置：开发中，feishu4dsh 为第一个目标。</td></tr>

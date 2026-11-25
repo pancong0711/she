@@ -219,6 +219,21 @@ export class TaskRunner {
         ...(promptMetadata === undefined ? {} : { metadata: promptMetadata }),
       })) {
         events.push(envelope)
+        if (
+          envelope.event.kind === 'text-delta'
+          || envelope.event.kind === 'reasoning-delta'
+          || envelope.event.kind === 'tool-call'
+          || envelope.event.kind === 'usage'
+        ) {
+          await this.deps.events.append([{
+            eventId: this.deps.ids.next('event'),
+            aggregateType: 'task',
+            aggregateId: task.id,
+            type: 'task.agent_event',
+            occurredAt: this.deps.clock.now(),
+            payload: { taskId: task.id, topicId: task.topicId, event: envelope.event },
+          }])
+        }
         if (envelope.event.kind === 'error') {
           failure = sheErrorToDomainError(envelope.event.error)
           break
