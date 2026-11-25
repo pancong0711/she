@@ -33,6 +33,7 @@ const runtimeHome = process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.loc
 const configHome = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config')
 const dataHome = process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share')
 const coreRoot = process.env.SHE_CORE_ROOT?.trim() || join(dataHome, 'she', 'core')
+const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
 const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
@@ -148,7 +149,7 @@ function runCommand(job, command, args, { allowFailure = false } = {}) {
 }
 
 function captureCommand(job, command, args) {
-  appendJobEvent(job, { type: 'system', text: `$ ${[command, ...args].join(' ')}` })
+  if (job !== undefined) appendJobEvent(job, { type: 'system', text: `$ ${[command, ...args].join(' ')}` })
   return new Promise(resolvePromise => {
     let settled = false
     const stdout = []
@@ -166,15 +167,15 @@ function captureCommand(job, command, args) {
     child.stdout.on('data', chunk => {
       const text = chunk.toString('utf8')
       stdout.push(text)
-      appendLog(job, 'stdout', text)
+      if (job !== undefined) appendLog(job, 'stdout', text)
     })
     child.stderr.on('data', chunk => {
       const text = chunk.toString('utf8')
       stderr.push(text)
-      appendLog(job, 'stderr', text)
+      if (job !== undefined) appendLog(job, 'stderr', text)
     })
     child.on('error', error => {
-      appendJobEvent(job, { type: 'system', text: `spawn failed: ${error.message}` })
+      if (job !== undefined) appendJobEvent(job, { type: 'system', text: `spawn failed: ${error.message}` })
       finish({ code: 127, ok: false, stdout: '', stderr: error.message })
     })
     child.on('close', code => finish({
@@ -311,6 +312,69 @@ async function coreStatus() {
     broker,
     lastUpdate,
   }
+}
+
+async function packageCatalog() {
+  const current = await readCurrentCoreVersion()
+  const previous = await readPreviousCoreVersion()
+  const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+  const [pnpmResult, dockerVersion, dockerSecurity] = await Promise.all([
+    captureCommand(undefined, pnpmCommand, ['--version']),
+    captureCommand(undefined, 'docker', ['version', '--format', '{{.Server.Version}}']),
+    captureCommand(undefined, 'docker', ['info', '--format', '{{json .SecurityOptions}}']),
+  ])
+  const dockerRootless = dockerVersion.ok && dockerSecurity.ok && dockerSecurity.stdout.includes('rootless')
+  return [
+    {
+      id: 'she-companion',
+      name: 'SHE Companion',
+      kind: 'component',
+      installedVersion: companionVersion,
+      state: 'installed',
+      management: 'launcher',
+      note: 'Upgrade via checksum-verified companion launcher; PWA never replaces the running companion.',
+    },
+    {
+      id: 'she-core',
+      name: 'SHE Core (control-plane + broker)',
+      kind: 'core',
+      installedVersion: current?.version ?? null,
+      previousVersion: previous?.version ?? null,
+      state: current === undefined ? 'not-installed' : 'installed',
+      management: 'core-update',
+      manifestUrl: defaultCoreManifestUrl,
+      note: 'Supports check/update with staging, SHA-256 verification, health check, and rollback.',
+    },
+    {
+      id: 'node-runtime',
+      name: 'Node.js runtime',
+      kind: 'runtime',
+      installedVersion: process.versions.node,
+      state: 'ready',
+      management: 'instructions-only',
+      note: 'Required ^22.19.0 || >=24.0.0. SHE does not install Node or request root.',
+    },
+    {
+      id: 'pnpm-runtime',
+      name: 'pnpm',
+      kind: 'runtime',
+      installedVersion: pnpmResult.ok ? pnpmResult.stdout : null,
+      state: pnpmResult.ok ? 'ready' : 'missing',
+      management: 'bootstrap',
+      note: 'Can be prepared user-locally via the bootstrap job without sudo.',
+    },
+    {
+      id: 'docker-runtime',
+      name: 'Docker / sandbox runtime',
+      kind: 'runtime',
+      installedVersion: dockerVersion.ok ? dockerVersion.stdout : null,
+      state: dockerVersion.ok ? (dockerRootless ? 'ready-rootless' : 'ready-root-equivalent-risk') : 'missing',
+      management: 'instructions-only',
+      note: dockerRootless
+        ? 'Rootless Docker detected.'
+        : 'Docker is not rootless or unavailable. SHE does not install Docker or request root; follow user-provided platform instructions.',
+    },
+  ]
 }
 
 async function startCore(job) {
@@ -686,7 +750,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'packages'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -738,6 +802,10 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: lastPreflight ?? { at: null, ok: null, checks: [] },
     })
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/packages') {
+    sendJsonWithCors(request, response, 200, { ok: true, value: await packageCatalog() })
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/jobs') {

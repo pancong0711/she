@@ -193,6 +193,11 @@ SHE_TOKEN_FILE
   - list/status/role/agent/image；
   - 按需加载 CPU/memory/PIDs stats；
   - broker 离线时显示启动提示；
+- Packages：
+  - companion/core/runtime 清单；
+  - companion 一键 launcher 下载；
+  - core 更新入口；
+  - Node/pnpm/Docker 状态与 instructions-only 边界；
 - Settings：
   - companion URL；
   - 连接状态；

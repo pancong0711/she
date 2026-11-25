@@ -142,3 +142,9 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .small-note { font-size: 12px; line-height: 1.6; }
 .update-check { margin-top: 12px; padding: 12px; border-radius: 10px; background: #0f172a; }
 .update-check p { margin: 0 0 10px; color: #cbd5e1; }
+
+.packages-page { display: grid; gap: 16px; }
+.package-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.package-card { border: 1px solid #1e293b; border-radius: 14px; padding: 16px; background: #02061788; }
+.package-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+@media (max-width: 860px) { .package-grid { grid-template-columns: 1fr; } }

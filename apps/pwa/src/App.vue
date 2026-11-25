@@ -17,6 +17,7 @@ import {
   isLocalOrigin,
   loadCompanionHealth,
   loadCoreStatus,
+  loadPackages,
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
@@ -28,6 +29,7 @@ import {
   type CoreUpdateCheck,
   type JobEvent,
   type JobSummary,
+  type PackageInfo,
 } from './api'
 
 type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
@@ -69,6 +71,8 @@ const coreActionRunning = ref('')
 const coreManifestUrl = ref(DEFAULT_CORE_MANIFEST_URL)
 const coreUpdateCheck = ref<CoreUpdateCheck | null>(null)
 const coreUpdateError = ref('')
+const packages = ref<readonly PackageInfo[]>([])
+const packageError = ref('')
 let timer: ReturnType<typeof setInterval> | undefined
 
 const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
@@ -81,11 +85,12 @@ const companionOnline = computed(() => companion.value !== null)
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult, coreStatusResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
     loadCoreStatus(),
+    loadPackages(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -118,6 +123,13 @@ async function refresh(): Promise<void> {
   } else {
     coreStatus.value = null
     coreError.value = coreStatusResult.reason instanceof Error ? coreStatusResult.reason.message : String(coreStatusResult.reason)
+  }
+  if (packageResult.status === 'fulfilled') {
+    packages.value = packageResult.value
+    packageError.value = ''
+  } else {
+    packages.value = []
+    packageError.value = packageResult.reason instanceof Error ? packageResult.reason.message : String(packageResult.reason)
   }
   loading.value = false
 }
@@ -573,6 +585,52 @@ onBeforeUnmount(() => {
               软件包目录、系统级安装/更新、启动/停止 systemd 服务与回滚将在 T6.4 继续接入。
             </p>
             <pre><code>{{ BROKER_COMMANDS.join('\n') }}</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="active === 'packages'" class="packages-page">
+        <div v-if="packageError" class="alert">
+          <strong>Package catalog 不可用</strong>
+          <p>{{ packageError }}</p>
+        </div>
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>软件包与运行时</h2>
+              <p class="muted">只读清单 + 已支持的用户级操作。系统级安装只提供方法，不请求 root。</p>
+            </div>
+            <button class="secondary" :disabled="loading" @click="refresh">Refresh</button>
+          </div>
+          <div class="package-grid">
+            <article v-for="item in packages" :key="item.id" class="package-card">
+              <div class="sandbox-head">
+                <div>
+                  <strong>{{ item.name }}</strong>
+                  <small>{{ item.kind }} · {{ item.management }}</small>
+                </div>
+                <span class="pill">{{ item.state }}</span>
+              </div>
+              <div class="sandbox-meta">
+                <span>installed <b>{{ item.installedVersion ?? 'not installed' }}</b></span>
+                <span v-if="item.previousVersion">previous <b>{{ item.previousVersion }}</b></span>
+              </div>
+              <p class="muted small-note">{{ item.note }}</p>
+              <div v-if="item.management === 'launcher'" class="package-actions">
+                <a class="secondary" href="./start.bat" download>Windows launcher</a>
+                <a class="secondary" href="./start.command" download>macOS launcher</a>
+                <a class="secondary" href="./start.sh" download>Linux launcher</a>
+              </div>
+              <div v-else-if="item.management === 'core-update'" class="package-actions">
+                <button class="primary" @click="active = 'setup'">打开 Core 更新</button>
+              </div>
+              <div v-else-if="item.management === 'bootstrap'" class="package-actions">
+                <button class="primary" :disabled="jobRunning" @click="runJob('bootstrap')">用户级准备 pnpm</button>
+              </div>
+              <div v-else class="package-actions">
+                <span class="muted small-note">需要管理员权限的安装步骤由用户本人完成；SHE 不执行 sudo。</span>
+              </div>
+            </article>
           </div>
         </div>
       </section>

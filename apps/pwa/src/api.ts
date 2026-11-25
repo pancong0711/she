@@ -252,3 +252,21 @@ export async function checkCoreUpdate(manifestUrl: string): Promise<CoreUpdateCh
   }
   return payload.value
 }
+
+export interface PackageInfo {
+  readonly id: string
+  readonly name: string
+  readonly kind: 'component' | 'core' | 'runtime' | string
+  readonly installedVersion: string | null
+  readonly previousVersion?: string | null
+  readonly state: string
+  readonly management: 'launcher' | 'core-update' | 'bootstrap' | 'instructions-only' | string
+  readonly manifestUrl?: string
+  readonly note: string
+}
+
+export async function loadPackages(signal?: AbortSignal): Promise<readonly PackageInfo[]> {
+  const payload = await getJson<{ ok: boolean; value?: readonly PackageInfo[]; error?: { message?: string } }>('/api/packages', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'package catalog unavailable')
+  return payload.value
+}

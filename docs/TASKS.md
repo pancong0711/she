@@ -83,6 +83,7 @@
 | T6.3a | Sandboxes 只读页面与 broker `/broker/v1/*` 代理 | T6.3 | [x] | list/status/stats；broker 离线提示 |
 | T6.3b | Agent/OpenCode health 与 workspace 授权只读列表 | T6.3 | [ ] | 只读 health/授权来源 | 信息来自 control plane，无重复状态源 |
 | T6.4 | 软件包目录、下载、校验、显式确认安装/更新 | T6.3/T3.6 | [~] |
+| T6.4e | Packages 页面：companion/core/runtime 清单与操作入口 | T6.4c3/T7.6 | [x] | `/api/packages` + PWA 卡片；不伪造安装状态 |
 | T6.4a | Companion Install & Doctor：白名单 job runner、环境检查、依赖/构建/测试、实时日志 | T6.2a | [x] |
 | T6.4b | 安装前 preflight 硬门禁与环境结果 API | T6.4a | [x] | Node/pnpm fail 阻断 install；PWA 实时显示 |
 | T6.4c1 | 用户级 Node/pnpm bootstrap（不请求 root） | T6.4b | [x] | `bootstrap-user.sh`/`.ps1`；companion `bootstrap` job |
@@ -135,3 +136,4 @@
 - 2026-11-25：发布 core bundle `v0.1.0-core.1`，提供 `release-manifest.json` 与 `she-core-0.1.0.tar.gz`；PWA 默认 manifest URL 指向该 Release。
 - 2026-11-25：完成 T6.4c2/T7.7：companion bundle 构建、checksum-verified 用户级安装器、manifest、PWA 下载入口与 companion 自身升级边界；安装后 companion 实际启动和 PWA 静态/API smoke test 通过。
 - 2026-11-25：完成 T6.4c3：PWA 增加 `start.bat`/`start.ps1`/`start.command`/`start.sh` 一键 launcher；从 Release 下载 manifest/bundle、校验 SHA、安装 companion、启动并打开页面；实测 start.sh 完整链路通过。
+- 2026-11-25：完成 T6.4e：companion `/api/packages` 与 PWA Packages 页面，展示 companion/core/Node/pnpm/Docker 状态，并接入 launcher、core 更新和用户级 pnpm 准备入口。
