@@ -85,6 +85,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-
 - [公开包打包与发布](docs/PUBLISHING.md)
 - [0.1.0 公开包 Release](docs/RELEASE-0.1.0-PACKAGES.md)
 - [对 feishu4dsh 下一步建议的回复](docs/20261125-feishu4dsh-next-steps-response.md)
+- [SHE core bundle 0.1.0](docs/RELEASE-0.1.0-CORE.md)
 - [Control-plane gateway.v1 server](docs/CONTROL-PLANE-SERVER.md)
 - [OpenCode agent adapter](docs/OPENCODE-ADAPTER.md)
 - [Sandbox Broker 与 Docker provider](docs/SANDBOX-BROKER.md)

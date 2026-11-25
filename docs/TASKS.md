@@ -131,3 +131,4 @@
 - 2026-11-25：完成 T6.4c1：新增用户级 `bootstrap-user.sh`/`.ps1` 与 companion `bootstrap` job；仅用户目录安装 pnpm，不执行 sudo，不安装 Docker；PWA 增加“用户级环境准备”按钮并复跑 preflight。
 - 2026-11-25：完成 T7.4：esbuild core bundle、`run-core` 双服务启动、release manifest、`install-core-bundle.sh` 用户级版本目录与 current/previous；bundle 实际启动与 socket health 验证通过。
 - 2026-11-25：完成 T7.5/T7.6：companion core supervisor、manifest 检查、staging/SHA 校验、停止/切换/启动/health check/自动回滚；PWA 增加 core 启停、版本、更新检查和实时更新日志。成功更新与失败回滚均已实测。
+- 2026-11-25：发布 core bundle `v0.1.0-core.1`，提供 `release-manifest.json` 与 `she-core-0.1.0.tar.gz`；PWA 默认 manifest URL 指向该 Release。
