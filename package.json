@@ -9,13 +9,16 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "tsc -b --pretty false && pnpm --filter @she/pwa typecheck",
     "test": "pnpm build && vitest run",
     "test:watch": "vitest",
     "clean": "tsc -b --clean",
     "pack:public": "bash scripts/pack-packages.sh",
     "control-plane": "pnpm --filter @she/control-plane start",
-    "broker": "pnpm --filter @she/broker start"
+    "broker": "pnpm --filter @she/broker start",
+    "pwa:build": "pnpm build && pnpm --filter @she/pwa build",
+    "pwa:serve": "pnpm --filter @she/pwa serve",
+    "pwa:dev": "pnpm --filter @she/pwa dev"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

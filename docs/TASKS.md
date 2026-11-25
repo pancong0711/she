@@ -75,9 +75,9 @@
 
 | ID | 任务 | 依赖 | 状态 | 验收 |
 |---|---|---|---|---|
-| T6.1 | PWA 产品/信息架构与本地 API 契约 | M1 | [ ] | 页面、数据源、权限边界文档 |
-| T6.2 | 本地 HTTP/SSE 服务与 PWA 静态骨架（manifest/service worker） | T6.1 | [ ] | localhost 可打开/可安装；health 可达 |
-| T6.3 | Dashboard/agents/sandboxes/tasks 只读页面 | T6.2/M3 | [ ] | 信息来自 control plane，无重复状态源 |
+| T6.1 | PWA 产品/信息架构与本地 API 契约 | M1 | [x] | 页面、数据源、权限边界文档 |
+| T6.2 | 本地 HTTP/SSE 服务与 PWA 静态骨架（manifest/service worker） | T6.1 | [x] | localhost 可打开/可安装；health 可达 |
+| T6.3 | Dashboard/agents/sandboxes/tasks 只读页面 | T6.2/M3 | [~] | 信息来自 control plane，无重复状态源 |
 | T6.4 | 软件包目录、下载、校验、显式确认安装/更新 | T6.3/T3.6 | [ ] | 校验、权限确认、日志、回滚入口 |
 | T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [ ] | 只允许叶子目录；不可绕过 broker |
 | T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [ ] | 与 CLI/gateway 共用同一控制面会话 |
@@ -98,3 +98,4 @@
 - 2026-11-25：完成 M2 T2.1–T2.4：OpenCode HttpApi client、AgentAdapter、permission 基线、async prompt 事件映射、报告校验、TaskRunner 组合测试；新增 `docs/OPENCODE-ADAPTER.md`。`pnpm test` 49/49 通过。
 - 2026-11-25：完成 M3 T3.1–T3.5：broker daemon、DockerRuntime/CLI、固定 sandbox 路径、registry/audit、inbox/outbox 路由与 symlink 防护、SandboxBrokerClient 与 Unix-socket 集成测试；新增 `docs/SANDBOX-BROKER.md`。`pnpm test` 52/52 通过。
 - 2026-11-25：完成 M4 SHE 侧：`SheGatewayBridge`、命令/交互/RenderIntent/task event 转发、approval/file intent 契约测试、feishu4dsh 接入指南与 secretary 迁移/回滚文档。`pnpm test` 54/54 通过。feishu4dsh 仓库实际 patch 与真机验收列为 T4.6。
+- 2026-11-25：完成 M6 T6.1–T6.2：Vue 3 + Vite PWA、manifest/service worker、本地 127.0.0.1 host、/v1 反向代理、health/snapshot 只读 Dashboard 与 Tasks 表；新增 `docs/PWA.md`。下一步 T6.3 接 broker sandbox 只读面板与 agent health。

@@ -40,5 +40,8 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Build PWA
+        run: pnpm pwa:build
+
       - name: Pack public packages
         run: pnpm pack:public

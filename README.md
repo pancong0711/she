@@ -44,6 +44,16 @@ pnpm test
 
 当前进度：M0 基线完成；M1 完成（core/control、队列与租约、SQLite 持久化、TaskRunner + fake agent 闭环）；T4.0–T4.1 完成（feishu4dsh 对齐、`@she/client`）。
 
+## PWA 本地控制台
+
+```sh
+pnpm pwa:build
+pnpm pwa:serve
+# http://127.0.0.1:8787
+```
+
+本地 PWA host 只绑定 loopback，并将 `/v1/*` 代理到 control-plane Unix socket。
+
 ## 文档
 
 - [初始架构评审](docs/architecture-review.md)
@@ -63,6 +73,7 @@ pnpm test
 - [Sandbox Broker 与 Docker provider](docs/SANDBOX-BROKER.md)
 - [M4 feishu4dsh 薄接入设计](docs/M4-FEISHU4DSH-THIN-ADAPTER.md)
 - [从 secretary 迁移](docs/MIGRATION-FROM-SECRETARY.md)
+- [PWA 本地控制台](docs/PWA.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)
 
@@ -70,4 +81,4 @@ pnpm test
 
 > 开发中基线：接口、协议、sandbox/broker 安全边界仍在迭代，暂不建议用于生产环境。
 
-M0–M3 完成；M4 SHE 侧参考 bridge/契约/迁移文档完成；下一步 feishu4dsh 仓库实际接入（T4.6）与 PWA（M6）。
+M0–M3 完成；M4 SHE 侧完成；M6 PWA 骨架与只读 Dashboard/Tasks 完成；下一步 T6.3 sandbox/agent 只读面板与 feishu4dsh 实际接入（T4.6）。
