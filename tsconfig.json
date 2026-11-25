@@ -1,0 +1,18 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/protocol" },
+    { "path": "packages/core" },
+    { "path": "packages/gateway-sdk" },
+    { "path": "packages/agent-sdk" },
+    { "path": "packages/sandbox-sdk" },
+    { "path": "packages/client" },
+    { "path": "packages/control" },
+    { "path": "packages/store-sqlite" },
+    { "path": "packages/adapters/agent-opencode" },
+    { "path": "packages/adapters/sandbox-docker" },
+    { "path": "packages/cli" },
+    { "path": "apps/control-plane" },
+    { "path": "apps/broker" }
+  ]
+}
