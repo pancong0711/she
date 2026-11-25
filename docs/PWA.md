@@ -100,6 +100,38 @@ http://localhost:5173
 
 可由 `SHE_ALLOWED_ORIGINS` 覆盖。浏览器仍不应直接接触 token；token 由 companion 侧读取并注入。
 
+## 2.2 一键启动 launcher（对齐 assignment-assistant）
+
+PWA 静态资源内直接提供：
+
+```text
+/start.bat       # Windows：下载并运行 start.ps1
+/start.ps1       # Windows：下载、校验、安装 companion、启动并打开浏览器
+/start.command   # macOS：下载并运行 start.sh
+/start.sh        # macOS/Linux：下载、校验、安装 companion、启动并打开浏览器
+```
+
+用户从 PWA 点击下载后：
+
+- Windows：双击 `start.bat`；
+- macOS：双击 `start.command`；
+- Linux/macOS：`bash start.sh`。
+
+launcher 会：
+
+1. 检查当前用户与 Node.js；
+2. 从固定 GitHub Release 下载 companion manifest；
+3. 下载 companion bundle；
+4. 校验 SHA-256；
+5. 安装到用户目录；
+6. 创建 versioned `current` 和 `~/.local/bin/she-companion`；
+7. 启动 companion；
+8. 自动打开 `http://127.0.0.1:8787`。
+
+launcher 不请求 root、不执行 sudo、不安装 Node/Docker。
+
+> 浏览器安全模型不允许网页静默执行下载的程序。所谓“一键安装”仍是“网页点击下载 launcher → 用户双击/运行一次”，与 assignment-assistant 的模式一致。
+
 ## 3. 启动
 
 构建：

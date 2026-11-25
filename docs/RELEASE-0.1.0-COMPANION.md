@@ -1,7 +1,7 @@
 # SHE companion bundle 0.1.0
 
 > 日期：2026-11-25
-> Release：`v0.1.0-companion.1`
+> Release：`v0.1.0-companion.2`
 
 ## 1. 资产
 
@@ -15,26 +15,26 @@ install-companion.ps1
 Release URL：
 
 ```text
-https://github.com/pancong0711/she/releases/tag/v0.1.0-companion.1
+https://github.com/pancong0711/she/releases/tag/v0.1.0-companion.2
 ```
 
 Manifest：
 
 ```text
-https://github.com/pancong0711/she/releases/download/v0.1.0-companion.1/companion-release-manifest.json
+https://github.com/pancong0711/she/releases/download/v0.1.0-companion.2/companion-release-manifest.json
 ```
 
 Bundle SHA-256：
 
 ```text
-b614aeceb03fa9cf751e9cd50bba05304c8bfe45bf7eb6e856808702c2c60fe8  she-companion-0.1.0.tar.gz
+7dd4d7a4fbfaa35c08d34988f637c29d86895593ecc3d5e111bbe6a9539ed520  she-companion-0.1.0.tar.gz
 ```
 
 ## 2. 安装
 
 ```sh
 bash install-companion.sh she-companion-0.1.0.tar.gz \
-  --sha256 b614aeceb03fa9cf751e9cd50bba05304c8bfe45bf7eb6e856808702c2c60fe8
+  --sha256 7dd4d7a4fbfaa35c08d34988f637c29d86895593ecc3d5e111bbe6a9539ed520
 ```
 
 安装位置：

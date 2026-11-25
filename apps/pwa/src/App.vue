@@ -444,10 +444,16 @@ onBeforeUnmount(() => {
             <h3>下载安装包</h3>
             <p class="muted">首次使用需要在电脑上运行一次安装脚本。安装器和 bundle 均可校验 SHA-256，且不请求 root。</p>
             <div class="hero-actions">
-              <a class="primary" :href="COMPANION_INSTALLER_URL" target="_blank" rel="noreferrer">下载 install-companion.sh</a>
-              <a class="secondary" :href="COMPANION_BUNDLE_URL" target="_blank" rel="noreferrer">下载 companion bundle</a>
-              <a class="secondary" :href="COMPANION_MANIFEST_URL" target="_blank" rel="noreferrer">查看 SHA/manifest</a>
+              <a class="primary" href="./start.bat" download>Windows 一键启动 start.bat</a>
+              <a class="primary" href="./start.command" download>macOS 一键启动 start.command</a>
+              <a class="secondary" href="./start.sh" download>macOS/Linux start.sh</a>
+              <a class="secondary" :href="COMPANION_INSTALLER_URL" target="_blank" rel="noreferrer">高级：install-companion.sh</a>
             </div>
+            <p class="muted small-note">
+              <a :href="COMPANION_BUNDLE_URL" target="_blank" rel="noreferrer">bundle</a> ·
+              <a :href="COMPANION_MANIFEST_URL" target="_blank" rel="noreferrer">SHA/manifest</a> ·
+              <a :href="COMPANION_RELEASE_URL" target="_blank" rel="noreferrer">Release</a>
+            </p>
             <p class="muted small-note">
               安装命令（示例，具体 SHA 以 manifest 为准）：<br />
               <code>bash install-companion.sh she-companion-0.1.0.tar.gz --sha256 &lt;hash&gt;</code>

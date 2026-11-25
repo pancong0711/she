@@ -27,3 +27,4 @@ All notable changes to SHE are documented here.
 - Added companion core supervisor and two-phase update flow with staged download, SHA verification, stop/switch/start, health checks, automatic rollback, and PWA update UI.
 - Published core bundle `v0.1.0-core.1` with release manifest and SHA-256-verifiable bundle.
 - Added checksum-verified companion bundle/installer, PWA download links, and an explicit no-online-self-update boundary for companion.
+- Added assignment-assistant-style one-click launchers (`start.bat`, `start.ps1`, `start.command`, `start.sh`) that download, verify, install, start companion, and open the PWA without root.

@@ -48,8 +48,18 @@ pnpm test
 
 ## PWA 本地控制台
 
+也可以直接在 PWA 中下载：
+
+```text
+start.bat       # Windows
+start.command   # macOS
+start.sh        # macOS/Linux
+```
+
+这些 launcher 会下载 checksum-verified companion bundle、安装到用户目录并启动本地页面。
+
 ```sh
-# 可选：用户级检查/安装 pnpm（不请求 root）
+# 可选：开发态用户级检查/安装 pnpm（不请求 root）
 bash scripts/bootstrap-user.sh --check
 bash scripts/bootstrap-user.sh --install-pnpm
 

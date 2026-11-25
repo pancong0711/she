@@ -168,7 +168,18 @@ bootstrap
 - Docker Desktop 需显式安装/授权；
 - 路径、named pipe、权限差异由平台 adapter 处理。
 
-## 7. 首次启动仍需一次本机操作
+## 7. 一键 launcher
+
+PWA 直接提供 `start.bat` / `start.sh` / `start.command` 下载：
+
+- `start.bat`：Windows 双击后自动下载并运行 PowerShell launcher；
+- `start.ps1`：校验 manifest/bundle SHA-256，安装 companion 到 `%LOCALAPPDATA%`，启动并打开浏览器；
+- `start.command` / `start.sh`：macOS/Linux 下载并运行 shell launcher；
+- companion 安装到用户目录，不请求 root。
+
+浏览器不能静默执行下载的文件，因此仍需用户下载后双击/运行一次；这是浏览器安全边界，而不是 SHE 缺失的功能。
+
+## 8. 首次启动仍需一次本机操作
 
 目前 GitHub Pages PWA 不能自行拉起 companion。首次使用需要：
 
@@ -187,7 +198,7 @@ pnpm companion
 - companion 自动下载/更新 core bundle；
 - PWA 只负责 UI 和确认流程。
 
-## 8. 发布与安全要求
+## 9. 发布与安全要求
 
 - installer/checksum 必须可验证；
 - 不执行任意用户命令；
@@ -199,7 +210,7 @@ pnpm companion
 - 失败保留旧版本和日志；
 - 更新过程不得静默进行。
 
-## 9. 验收
+## 10. 验收
 
 - [x] 安装前 preflight 硬门禁；
 - [x] Node/pnpm 版本检查；

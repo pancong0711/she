@@ -95,6 +95,12 @@ defineProps<{
         安装器不请求 root、不安装 Node/Docker、不修改系统服务；旧版本目录可保留用于回滚。
       </p>
       <p>
+        <a href="./start.bat" download>Windows start.bat</a> ·
+        <a href="./start.command" download>macOS start.command</a> ·
+        <a href="./start.sh" download>macOS/Linux start.sh</a>
+      </p>
+      <p>
+        高级入口：
         <a :href="COMPANION_INSTALLER_URL" target="_blank" rel="noreferrer">安装脚本</a> ·
         <a :href="COMPANION_BUNDLE_URL" target="_blank" rel="noreferrer">Companion bundle</a> ·
         <a :href="COMPANION_MANIFEST_URL" target="_blank" rel="noreferrer">SHA/manifest</a> ·
