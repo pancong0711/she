@@ -18,6 +18,7 @@ import {
   REPO_URL,
   applyCompanionUpdate,
   artifactDownloadUrl,
+  createSandbox,
   checkCompanionUpdate,
   checkCoreUpdate,
   coreAction,
@@ -91,6 +92,20 @@ const agentRuntime = ref<AgentRuntimeStatus | null>(null)
 const agentRuntimeError = ref('')
 const sandboxStats = ref<Record<string, SandboxStats>>({})
 const sandboxError = ref('')
+const sandboxCreateOpen = ref(false)
+const sandboxCreating = ref(false)
+const sandboxCreateError = ref('')
+const sandboxDraft = ref({
+  name: `sbx-${crypto.randomUUID().slice(0, 8)}`,
+  role: 'utility',
+  agentId: 'opencode',
+  image: 'node:22-bookworm-slim',
+  networkMode: 'egress',
+  cpus: 1,
+  memoryMb: 1024,
+  pids: 256,
+  command: 'sleep infinity',
+})
 const loadingStats = ref('')
 const error = ref('')
 const loading = ref(false)
@@ -531,6 +546,35 @@ async function applyCoreUpdate(): Promise<void> {
   coreUpdateError.value = ''
   await runJob('core-update', { manifestUrl: coreManifestUrl.value })
   await refresh()
+}
+
+async function submitSandbox(): Promise<void> {
+  if (sandboxCreating.value) return
+  const draft = sandboxDraft.value
+  if (!/^sbx-[a-z0-9][a-z0-9-]{0,59}$/.test(draft.name)) {
+    sandboxCreateError.value = 'Sandbox 名称必须匹配 sbx-[a-z0-9-]，例如 sbx-main。'
+    return
+  }
+  sandboxCreating.value = true
+  sandboxCreateError.value = ''
+  try {
+    await createSandbox({
+      name: draft.name,
+      role: draft.role as 'standalone' | 'main' | 'worker' | 'observer' | 'utility',
+      agentId: draft.agentId.trim() || 'agent',
+      image: draft.image.trim(),
+      networkMode: draft.networkMode as 'none' | 'egress',
+      resources: { cpus: draft.cpus, memoryMb: draft.memoryMb, pids: draft.pids },
+      allowedCallers: ['main'],
+      ...(draft.command.trim() === '' ? {} : { command: draft.command.trim().split(/\s+/) }),
+    })
+    sandboxCreateOpen.value = false
+    await refresh()
+  } catch (cause) {
+    sandboxCreateError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    sandboxCreating.value = false
+  }
 }
 
 async function loadStats(name: string): Promise<void> {
@@ -1025,9 +1069,50 @@ onBeforeUnmount(() => {
                 {{ brokerHealth ? `broker ${brokerHealth.status} · ${brokerHealth.version}` : 'broker offline' }}
               </p>
             </div>
-            <button class="secondary" :disabled="loading" @click="refresh">Refresh</button>
+            <div class="job-actions">
+              <button class="primary" @click="sandboxCreateOpen = !sandboxCreateOpen">{{ sandboxCreateOpen ? '取消创建' : '新建 Sandbox' }}</button>
+              <button class="secondary" :disabled="loading" @click="refresh">Refresh</button>
+            </div>
           </div>
-          <p v-if="sandboxes.length === 0" class="muted">还没有 sandbox。后续将从安装向导或 Sandboxes 页面创建 main sandbox。</p>
+          <div v-if="sandboxCreateOpen" class="sandbox-create-form">
+            <p class="muted">创建会调用 broker 的 `POST /v1/sandboxes`，需要 Docker/rootless Docker 可用。镜像必须包含你要运行的 agent/runtime；默认 `sleep infinity` 只用于验证挂载和保持容器运行。</p>
+            <div class="settings-grid">
+              <label>名称<input v-model="sandboxDraft.name" placeholder="sbx-main" /></label>
+              <label>角色
+                <select v-model="sandboxDraft.role">
+                  <option value="utility">utility</option>
+                  <option value="main">main</option>
+                  <option value="worker">worker</option>
+                  <option value="observer">observer</option>
+                  <option value="standalone">standalone</option>
+                </select>
+              </label>
+              <label>Agent ID<input v-model="sandboxDraft.agentId" placeholder="opencode" /></label>
+              <label>镜像预设
+                <select v-model="sandboxDraft.image">
+                  <option v-for="preset in sandboxPreferences?.catalog ?? []" :key="preset.id" :value="preset.image">{{ preset.label }} — {{ preset.image }}</option>
+                  <option v-if="sandboxPreferences && !sandboxPreferences.catalog.some(preset => preset.image === sandboxDraft.image)" :value="sandboxDraft.image">自定义：{{ sandboxDraft.image }}</option>
+                </select>
+              </label>
+              <label>自定义镜像<input v-model="sandboxDraft.image" placeholder="node:22-bookworm-slim" /></label>
+              <label>网络
+                <select v-model="sandboxDraft.networkMode">
+                  <option value="egress">egress（访问模型/API）</option>
+                  <option value="none">none（离线）</option>
+                </select>
+              </label>
+              <label>启动命令<input v-model="sandboxDraft.command" placeholder="sleep infinity 或 sh -lc '...'" /></label>
+              <label>CPUs<input v-model.number="sandboxDraft.cpus" type="number" min="0.1" max="64" step="0.1" /></label>
+              <label>Memory MB<input v-model.number="sandboxDraft.memoryMb" type="number" min="128" max="131072" /></label>
+              <label>PIDs<input v-model.number="sandboxDraft.pids" type="number" min="16" max="16384" /></label>
+            </div>
+            <p v-if="sandboxCreateError" class="error-text">{{ sandboxCreateError }}</p>
+            <div class="job-actions">
+              <button class="primary" :disabled="sandboxCreating || !brokerOnline" @click="submitSandbox">{{ sandboxCreating ? '创建中…' : '创建 Sandbox' }}</button>
+            </div>
+            <p v-if="!brokerOnline" class="warn-text">broker 离线，无法创建 Sandbox。</p>
+          </div>
+          <p v-if="sandboxes.length === 0" class="muted">还没有 sandbox。点击上方“新建 Sandbox”创建第一个容器。</p>
           <div v-else class="sandbox-grid">
             <article v-for="sandbox in sandboxes" :key="sandbox.name" class="sandbox-card">
               <div class="sandbox-head">

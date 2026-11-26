@@ -208,6 +208,7 @@ SHE_TOKEN_FILE
   - 勾选服务，配置 new/reuse workspace、`/legacy` 只读和凭据目录只读挂载；
   - dry-run 计划、根目录阻断、实时迁移 job 与历史记录；
 - Sandboxes：
+  - 新建 sandbox 表单（名称/角色/镜像/网络/命令/资源）；
   - 通过 `/broker/v1/*` 代理访问 sandbox broker；
   - list/status/role/agent/image；
   - 按需加载 CPU/memory/PIDs stats；

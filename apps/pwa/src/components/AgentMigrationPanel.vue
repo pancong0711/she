@@ -16,6 +16,7 @@ import {
   type JobSummary,
   type MigrationAgentInput,
   type MigrationRequest,
+  type SandboxImagePreset,
   type SandboxPreferences,
   type WorkspaceAuthorization,
 } from '../api'
@@ -53,6 +54,7 @@ const recordsError = ref('')
 const workspaces = ref<readonly WorkspaceAuthorization[]>([])
 const workspaceError = ref('')
 const sandboxPreferences = ref<SandboxPreferences | null>(null)
+const sandboxImageCatalog = ref<readonly SandboxImagePreset[]>([])
 
 const selectedServices = computed(() => (discovery.value?.services ?? []).filter(service => selected.value[service.id] === true))
 const diagnostics = computed(() => jobEvents.value.filter((event): event is Extract<JobEvent, { type: 'log' | 'system' }> => event.type === 'log' || event.type === 'system'))
@@ -102,7 +104,9 @@ function selectWorkspace(service: DiscoveredAgentService, id: string): void {
 
 async function loadSandboxDefaults(): Promise<void> {
   try {
-    sandboxPreferences.value = (await loadSandboxPreferences()).config
+    const response = await loadSandboxPreferences()
+    sandboxPreferences.value = response.config
+    sandboxImageCatalog.value = response.catalog
     image.value = sandboxPreferences.value.defaultImage
     networkMode.value = sandboxPreferences.value.networkMode
     cpus.value = sandboxPreferences.value.resources.cpus
@@ -336,7 +340,14 @@ onMounted(async () => {
       <h2>容器设置</h2>
       <p v-if="sandboxPreferences" class="muted small-note">默认值来自 Packages → Sandbox 镜像与默认资源；可在此覆盖。</p>
       <div class="settings-grid migration-grid">
-        <label>镜像<input v-model="image" placeholder="node:22-bookworm-slim" /></label>
+        <label>
+          镜像预设
+          <select v-model="image">
+            <option v-for="preset in sandboxImageCatalog" :key="preset.id" :value="preset.image">{{ preset.label }} — {{ preset.image }}</option>
+            <option v-if="!sandboxImageCatalog.some(preset => preset.image === image)" :value="image">自定义：{{ image }}</option>
+          </select>
+        </label>
+        <label>自定义镜像<input v-model="image" placeholder="node:22-bookworm-slim" /></label>
         <label>容器启动命令<input v-model="commandText" placeholder="sleep infinity" /></label>
         <label>
           网络

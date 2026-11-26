@@ -4,6 +4,7 @@ import type {
   GatewayHealth,
   GatewaySnapshot,
   SandboxBrokerHealth,
+  SandboxSpec,
   SandboxStats,
   SandboxView,
 } from '@she/protocol'
@@ -85,6 +86,19 @@ export async function loadSandboxes(signal?: AbortSignal): Promise<SandboxResult
     getResult<readonly SandboxView[]>(`${brokerBase()}/v1/sandboxes`, signal),
   ])
   return { health, sandboxes }
+}
+
+export async function createSandbox(spec: SandboxSpec): Promise<SandboxView> {
+  const response = await fetch(`${apiBase()}${brokerBase()}/v1/sandboxes`, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify(spec),
+  })
+  const payload = await response.json() as { ok: boolean; value?: SandboxView; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `sandbox create failed: HTTP ${response.status}`)
+  }
+  return payload.value
 }
 
 export async function loadSandboxStats(name: string, signal?: AbortSignal): Promise<SandboxStats | undefined> {
@@ -533,9 +547,9 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.2-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.4.6'
+export const COMPANION_RELEASE_VERSION = '0.4.7'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.4.6'
+export const COMPANION_MIN_VERSION = '0.4.7'
 export const COMPANION_RELEASE_TAG = 'v0.3.5-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`

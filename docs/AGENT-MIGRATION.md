@@ -241,3 +241,59 @@ agent-migrate job + fake broker         ✓
 migration record write/read             ✓
 broker host mount policy tests          ✓
 ```
+
+
+## 10. UI 设置详细解释
+
+### 镜像
+
+镜像决定容器启动前已经包含哪些软件。默认基础镜像不一定包含 OpenCode/Claude/Codex 等 agent runtime。Packages 的 Sandbox 镜像预设会作为默认值，但仍可覆盖。
+
+### 启动命令
+
+`command` 是 Docker 启动容器后执行的 argv 数组，不是 shell 字符串。默认 `sleep infinity` 只用于保持容器运行和验证挂载。
+
+如果要自动安装 agent，可填写类似：
+
+```text
+sh -lc 'npm install -g <package> && exec <agent-command>'
+```
+
+但 SHE 当前不会猜测包名、版本和启动参数。
+
+### 网络
+
+- `egress`：Docker bridge，只允许容器主动访问外部模型/API；不是 host network；
+- `none`：完全无网络，无法访问云端模型 API；
+- 首版没有 host network 选项，避免 agent 暴露宿主机网络。
+
+### 资源
+
+建议：
+
+```text
+CPUs:       1–2
+Memory:     2048–4096 MB
+PIDs:       512–1024
+```
+
+Node/Python agent 在 1024 MB 或 256 PIDs 下可能因依赖/并发启动失败。
+
+### 只读旧目录 `/legacy`
+
+原工作目录以只读 bind mount 挂到 `/legacy`，agent 可以读取旧文件，但不能修改宿主旧目录。
+
+### 只读凭据目录
+
+用户勾选的配置目录会镜像映射到容器 `/home/agent/...`，只读。SHE 不读取、不复制凭据内容。
+
+### 自动安装 agent 的边界
+
+技术上，如果镜像里有 npm/pip 且网络可用，可以在容器启动命令中安装 agent。但 SHE 首版不会自动执行，因为：
+
+- 不同 agent 的包名/版本/启动参数不同；
+- 需要校验来源和版本；
+- 需要明确网络与凭据权限；
+- 需要失败回滚和审计。
+
+后续应通过受约束的 Agent Runtime Recipe 实现，而不是任意 shell。
