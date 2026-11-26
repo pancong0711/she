@@ -53,6 +53,7 @@ export interface ControlPlaneServerOptions {
   readonly agentStatus?: () => Promise<AgentRuntimeStatus> | AgentRuntimeStatus
   readonly artifacts?: ArtifactRepository
   readonly artifactRoot?: string
+  readonly requestShutdown?: () => void
 }
 
 export class ControlPlaneHttpError extends Error {
@@ -292,6 +293,7 @@ export class ControlPlaneServer {
   private readonly agentStatus: (() => Promise<AgentRuntimeStatus> | AgentRuntimeStatus) | undefined
   private readonly artifacts: ArtifactRepository | undefined
   private readonly artifactRoot: string | undefined
+  private readonly requestShutdown: (() => void) | undefined
   private httpServer: Server | undefined
   private readonly streams = new Set<ServerResponse>()
 
@@ -313,6 +315,7 @@ export class ControlPlaneServer {
     this.agentStatus = options.agentStatus
     this.artifacts = options.artifacts
     this.artifactRoot = options.artifactRoot
+    this.requestShutdown = options.requestShutdown
     if (this.eventPollIntervalMs < 1) throw new Error('eventPollIntervalMs must be positive')
     if (this.eventBatchSize < 1) throw new Error('eventBatchSize must be positive')
   }
@@ -371,6 +374,15 @@ export class ControlPlaneServer {
           return
         }
         jsonWrite(response, 200, resultOk(await this.agentStatus()))
+        return
+      }
+      if (request.method === 'POST' && url.pathname === '/v1/admin/shutdown') {
+        if (this.requestShutdown === undefined) {
+          jsonWrite(response, 503, resultErr(sheError('unavailable', 'shutdown callback is not configured')))
+          return
+        }
+        jsonWrite(response, 200, resultOk({ shuttingDown: true }))
+        this.requestShutdown()
         return
       }
       if (request.method === 'GET' && url.pathname === '/v1/artifacts') {

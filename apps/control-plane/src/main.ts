@@ -223,6 +223,9 @@ async function main(): Promise<void> {
     agentStatus,
     artifacts: store.artifacts,
     artifactRoot: workspacePath,
+    requestShutdown: () => {
+      setTimeout(() => process.kill(process.pid, 'SIGTERM'), 250).unref()
+    },
   })
   await server.start()
   process.stdout.write(`she-control-plane listening on ${config.socketPath}\n`)

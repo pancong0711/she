@@ -6,6 +6,8 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Fixed core updates to force-reinstall an existing target version and roll back on installer failure.
+- Added authenticated control-plane admin shutdown so companion can recover external/orphaned core processes.
 - Docker installation guidance is now rootless-first and provides per-command explanations; do not add the user to the root docker group by default.
 - Added separate PWA build / companion API version display and a one-click local service-worker/cache reset for version-mismatch diagnosis.
 - Added task report artifacts: successful tasks persist Markdown reports, emit artifact events, and expose list/download APIs with Chat download links.

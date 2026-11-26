@@ -164,6 +164,11 @@ export class SheClient {
     }
   }
 
+  async shutdown(): Promise<{ readonly shuttingDown: boolean }> {
+    const response = await this.requestJson<unknown>('POST', '/v1/admin/shutdown', {})
+    return unwrapResult<{ shuttingDown: boolean }>(response, 'shutdown failed')
+  }
+
   async artifacts(taskId: string, signal?: AbortSignal): Promise<readonly ArtifactListItem[]> {
     const response = await this.requestJson<unknown>('GET', `/v1/artifacts?taskId=${encodeURIComponent(taskId)}`, undefined, signal)
     return unwrapResult<readonly ArtifactListItem[]>(response, 'artifact list failed')

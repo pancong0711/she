@@ -38,6 +38,7 @@ async function harness() {
   const dir = await mkdtemp(join(tmpdir(), 'she-server-'))
   const socketPath = join(dir, 'control.sock')
   const eventStore = new InMemoryEventStore()
+  let shutdownCalls = 0
   const artifacts = new InMemoryArtifactRepository()
   const artifactRoot = join(dir, 'workspace')
   await mkdir(join(artifactRoot, '.she', 'reports'), { recursive: true })
@@ -100,6 +101,7 @@ async function harness() {
     agentStatus: () => agentStatus,
     artifacts,
     artifactRoot,
+    requestShutdown: () => { shutdownCalls += 1 },
     eventPollIntervalMs: 5,
     heartbeatIntervalMs: 10_000,
     clock: { now: () => 1_700_000_000_000 },
@@ -109,7 +111,7 @@ async function harness() {
     await server.close()
     await rm(dir, { recursive: true, force: true })
   })
-  return { socketPath, eventStore, artifacts, artifactRoot, client: new SheClient({ socketPath, token: 'test-token', timeoutMs: 1_000 }) }
+  return { socketPath, eventStore, artifacts, artifactRoot, get shutdownCalls() { return shutdownCalls }, client: new SheClient({ socketPath, token: 'test-token', timeoutMs: 1_000 }) }
 }
 
 afterEach(async () => {
@@ -164,6 +166,13 @@ describe('control-plane gateway.v1 server', () => {
     const download = await client.downloadArtifact('artifact-1')
     expect(Buffer.from(download.bytes).toString('utf8')).toContain('# SHE report')
     expect(download.contentType).toContain('text/markdown')
+  })
+
+  it('serves an authenticated admin shutdown request for supervised core recovery', async () => {
+    const h = await harness()
+    const result = await h.client.shutdown()
+    expect(result.shuttingDown).toBe(true)
+    expect(h.shutdownCalls).toBe(1)
   })
 
   it('returns structured errors for authentication failures', async () => {

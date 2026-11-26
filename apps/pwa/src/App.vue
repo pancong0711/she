@@ -113,6 +113,7 @@ let chatAbortController: AbortController | undefined
 const coreStatus = ref<CoreStatus | null>(null)
 const coreError = ref('')
 const coreActionRunning = ref('')
+const coreActionMessage = ref('')
 const coreManifestUrl = ref(DEFAULT_CORE_MANIFEST_URL)
 const coreUpdateCheck = ref<CoreUpdateCheck | null>(null)
 const coreUpdateError = ref('')
@@ -402,9 +403,17 @@ async function runCoreAction(action: 'start' | 'stop' | 'restart'): Promise<void
   if (coreActionRunning.value !== '') return
   coreActionRunning.value = action
   coreError.value = ''
+  coreActionMessage.value = ''
   try {
     coreStatus.value = await coreAction(action)
     await refresh()
+    coreActionMessage.value = action === 'stop'
+      ? '已发送停止请求。'
+      : action === 'restart'
+        ? '已发送重启请求；如果检测到外部 core，会先通过 admin shutdown 停止它再由 companion 接管。'
+        : coreStatus.value?.supervisor.external
+          ? '检测到 core 已在运行，但当前 companion 未监管它；点击重启可重新接管。'
+          : '已发送启动请求。'
   } catch (cause) {
     coreError.value = cause instanceof Error ? cause.message : String(cause)
   } finally {
@@ -1230,6 +1239,11 @@ onBeforeUnmount(() => {
             <p class="eyebrow">CORE RUNTIME</p>
             <h2>Core 安装、版本与更新</h2>
             <p v-if="coreError" class="error-text">{{ coreError }}</p>
+            <p v-if="coreActionMessage" class="success-text">{{ coreActionMessage }}</p>
+            <div v-if="coreStatus?.supervisor.external" class="alert environment-warning">
+              <strong>检测到外部运行的 Core</strong>
+              <p>当前 control socket 可达，但 core 不是由这个 companion 进程作为子进程启动的。启动/停止/重启会通过受认证的 admin shutdown 让它退出并重新接管。</p>
+            </div>
             <div v-if="coreStatus && coreStatus.installed.current === null" class="alert core-install-alert">
               <strong>Core 尚未安装</strong>
               <p>Companion 只是本地宿主。Tasks、Chat、control-plane 和 broker 需要 Core bundle；首次使用请先安装 Core。</p>

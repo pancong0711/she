@@ -51,7 +51,7 @@ const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
 const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
 const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
 const COMPANION_RESTART_EXIT_CODE = 75
-const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.2.0-core.1/release-manifest.json'
+const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.2.1-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
 const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
@@ -508,6 +508,7 @@ async function coreStatus() {
   return {
     supervisor: {
       state: coreChild === null ? 'stopped' : 'running',
+      external: coreChild === null && controlPlane.reachable,
       pid: coreChild?.pid ?? null,
       startedAt: coreStartedAt,
       lastError: coreLastError,
@@ -981,7 +982,9 @@ async function platformStatus() {
 }
 
 async function startCore(job) {
-  if (coreChild !== null) return { alreadyRunning: true }
+  if (coreChild !== null) return { alreadyRunning: true, external: false }
+  const existing = await probeSocket(controlSocketPath, controlTokenFile)
+  if (existing.reachable) return { alreadyRunning: true, external: true }
   const entry = process.platform === 'win32'
     ? join(coreRoot, 'current', 'run-core.cmd')
     : join(coreRoot, 'current', 'run-core.sh')
@@ -1015,7 +1018,14 @@ async function startCore(job) {
 
 async function stopCore(job) {
   const child = coreChild
-  if (child === null) return { stopped: false }
+  if (child === null) {
+    const existing = await probeSocket(controlSocketPath, controlTokenFile)
+    if (!existing.reachable) return { stopped: false, external: false }
+    if (job !== undefined) appendJobEvent(job, { type: 'system', text: 'stopping external core process via control-plane admin shutdown' })
+    await requestControlJson('POST', '/v1/admin/shutdown', {})
+    const stopped = await waitForControlSocketDown()
+    return { stopped, external: true }
+  }
   if (job !== undefined) appendJobEvent(job, { type: 'system', text: 'stopping core' })
   const exited = new Promise(resolvePromise => child.once('exit', () => resolvePromise(true)))
   child.kill('SIGTERM')
@@ -1119,8 +1129,13 @@ async function executeCoreUpdate(job) {
   lastUpdate.status = 'stopping'
   await stopCore(job)
   const installScript = join(repoRoot, 'scripts/install-core-bundle.sh')
-  const install = await runCommand(job, 'bash', [installScript, download.path, '--sha256', download.sha256, '--core-root', coreRoot])
-  if (!install.ok) throw new Error('core bundle installation failed')
+  const install = await runCommand(job, 'bash', [installScript, download.path, '--sha256', download.sha256, '--core-root', coreRoot, '--force'])
+  if (!install.ok) {
+    lastUpdate.status = 'rolling-back'
+    const rolled = await rollbackCore(job)
+    lastUpdate.status = rolled.ok ? 'rolled-back' : 'failed'
+    throw new Error(`core bundle installation failed; rollback ${rolled.ok ? 'succeeded' : 'failed'}`)
+  }
   lastUpdate.status = 'starting'
   await startCore(job)
   const health = await waitForCoreHealthy()
@@ -1351,6 +1366,62 @@ function requestBrokerJson(method, requestPath, payload) {
   })
 }
 
+function requestControlJson(method, requestPath, payload) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    let settled = false
+    const finish = (error, value) => {
+      if (settled) return
+      settled = true
+      if (error !== undefined) rejectPromise(error)
+      else resolvePromise(value)
+    }
+    readToken(controlTokenFile).then(token => {
+      const body = payload === undefined ? undefined : Buffer.from(JSON.stringify(payload), 'utf8')
+      const controlRequest = httpRequest({
+        socketPath: controlSocketPath,
+        path: requestPath,
+        method,
+        headers: {
+          accept: 'application/json',
+          ...(body === undefined ? {} : { 'content-type': 'application/json', 'content-length': String(body.byteLength) }),
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+        },
+        timeout: 10_000,
+      }, controlResponse => {
+        const chunks = []
+        controlResponse.on('data', chunk => chunks.push(Buffer.from(chunk)))
+        controlResponse.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8')
+          let parsed
+          try { parsed = text === '' ? null : JSON.parse(text) } catch { parsed = null }
+          if ((controlResponse.statusCode ?? 500) >= 400 || parsed?.ok === false) {
+            finish(new Error(parsed?.error?.message ?? `control plane HTTP ${controlResponse.statusCode ?? 500}`))
+            return
+          }
+          finish(undefined, parsed?.value ?? null)
+        })
+      })
+      controlRequest.on('timeout', () => {
+        controlRequest.destroy()
+        finish(new Error('control plane request timed out'))
+      })
+      controlRequest.on('error', error => finish(new Error(`control plane unavailable: ${error.message}`)))
+      if (body === undefined) controlRequest.end()
+      else controlRequest.end(body)
+    }).catch(error => finish(error))
+  })
+}
+
+async function waitForControlSocketDown(timeoutMs = 8_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const health = await probeSocket(controlSocketPath, controlTokenFile)
+    if (!health.reachable) return true
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 250))
+  }
+  return false
+}
+
 async function listMigrationRecords() {
   try {
     const entries = await import('node:fs/promises').then(fs => fs.readdir(migrationRecordRoot, { withFileTypes: true }))
@@ -1553,10 +1624,15 @@ async function handleCompanionApi(request, response) {
     }
     const action = url.pathname.split('/').pop()
     try {
-      if (action === 'start') await startCore()
+      let started
+      if (action === 'start') started = await startCore()
       else if (action === 'stop') await stopCore()
-      else { await stopCore(); await startCore() }
-      const health = action === 'stop' ? { ok: true } : await waitForCoreHealthy()
+      else { await stopCore(); started = await startCore() }
+      const health = action === 'stop'
+        ? { ok: true }
+        : started?.alreadyRunning
+          ? { ok: true, external: started.external === true, control: await probeSocket(controlSocketPath, controlTokenFile) }
+          : await waitForCoreHealthy()
       sendJsonWithCors(request, response, 200, { ok: true, value: { action, health, status: await coreStatus() } })
     } catch (error) {
       sendJsonWithCors(request, response, 409, { ok: false, error: { code: 'conflict', message: error.message, retryable: true } })

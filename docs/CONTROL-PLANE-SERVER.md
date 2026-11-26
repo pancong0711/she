@@ -67,6 +67,7 @@ SHE_VERSION
 | GET | `/v1/agents` | OpenCode health、worker 配置和 workspace 授权只读视图 |
 | GET | `/v1/artifacts?taskId=...` | 任务报告/产物元数据 |
 | GET | `/v1/artifacts/:id/download` | 下载任务报告/产物 |
+| POST | `/v1/admin/shutdown` | 受 bearer token 保护的优雅停止；供 companion 接管外部/遗留 core |
 | GET | `/v1/events?cursor=evt:N` | NDJSON 事件流 |
 
 认证：配置 token 时，所有请求都需要：
@@ -168,3 +169,7 @@ WantedBy=default.target
 - token 目前是静态 Bearer；后续补 peer credential；
 - 多 control-plane 实例写同一 SQLite 不支持；
 - SSE/WebSocket 暂不实现，v1 固定 NDJSON。
+
+## 8. 外部 Core 接管
+
+`POST /v1/admin/shutdown` 只用于本地 companion 停止外部启动或遗留的 control-plane。响应后 control-plane 触发 SIGTERM，run-core 会停止 control-plane/broker。companion 等待 socket 消失后再启动新的受监管 core。

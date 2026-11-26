@@ -173,3 +173,5 @@
 - 2026-11-26：T6.7 首版：新增 `/api/gateway` 与 PWA Gateway 页面；配置仅保存 loopback adapter health URL，显示 control-plane gateway.v1 状态与 adapter health；明确飞书 secret 由 feishu4dsh 持有。
 
 - 2026-11-26：T6.6 首版：TaskRunner 成功任务自动生成 Markdown report artifact（workspace/.she/reports），写 artifact repository 与 artifact.created 事件；control-plane 新增 artifact list/download API；PWA Chat 显示报告下载链接。
+
+- 2026-11-26：修复 core update `version already installed`：Core 更新安装增加 `--force`，安装失败自动回滚；新增 control-plane `/v1/admin/shutdown` 与 companion 外部 core 检测，停止/重启可重新接管遗留 core；core 升级 0.2.1，companion 升级 0.3.6。
