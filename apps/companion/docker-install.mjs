@@ -40,24 +40,31 @@ function rootlessSetupSteps() {
   return [
     {
       command: 'dockerd-rootless-setuptool.sh install',
-      explanation: '使用 docker-ce-rootless-extras 提供的官方工具创建当前用户的 rootless Docker service；root Docker daemon 不会被使用。',
+      explanation: '使用 docker-ce-rootless-extras 的官方安装工具，为当前用户创建 rootless dockerd 的 user systemd service，并准备 rootless Docker context。它不会启动或替换系统 root Docker daemon。',
+      note: '这一步需要前面安装的 uidmap、newuidmap/newgidmap、slirp4netns 和 fuse-overlayfs；如果提示 missing dependency，请回到第 8 步检查。',
     },
     {
       command: 'systemctl --user enable --now docker',
-      explanation: '启动并启用当前用户的 rootless Docker service。',
+      explanation: '操作当前用户的 systemd --user 实例，而不是 root systemd：--now 立即启动 rootless Docker，enable 让它在下次用户服务管理器启动时自动启动。',
     },
     {
       command: 'docker context use rootless',
-      explanation: '把 Docker CLI context 切换到当前用户的 rootless socket。',
+      explanation: 'Docker CLI 可以保存多个 endpoint context。rootless context 指向当前用户的 socket，通常是 unix:///run/user/<uid>/docker.sock；切换后 docker 命令不再默认连接 /var/run/docker.sock。',
     },
     {
       command: 'docker info --format \'{{json .SecurityOptions}}\'',
-      explanation: '验证输出包含 rootless；若没有，检查 user systemd、subuid/subgid 和 rootless 依赖。',
+      explanation: '验证 Docker CLI 实际连接到 rootless daemon。输出的 SecurityOptions 中应包含 rootless；如果缺少，请检查 docker context、systemctl --user status docker 和 subuid/subgid。',
     },
     {
       command: 'sudo loginctl enable-linger "$USER"',
-      explanation: '可选：让 rootless Docker 在用户未登录时继续运行。需要管理员权限，SHE 不代你执行。',
+      explanation: '让当前用户的 systemd --user manager 在该用户没有任何登录会话时仍保持运行，并在开机时启动。rootless Docker 是用户级服务，默认可能随最后一个登录会话退出；开启 linger 后，SSH/桌面退出后仍可继续运行。需要管理员/polkit 权限，但不会把 Docker 变成 root daemon。',
       requiresRoot: true,
+      note: '无桌面/远程部署且希望 Feishu → SHE 持续可用时建议启用。仅手动运行 start.sh 且关闭 SSH 就断开的情况，还需要把 companion/Feishu adapter 配置成 user systemd service。',
+      optional: true,
+    },
+    {
+      command: 'loginctl show-user "$USER" -p Linger',
+      explanation: '验证 linger 是否生效，期望输出 Linger=yes。若仍为 no，说明 enable-linger 没有成功。',
       optional: true,
     },
   ]

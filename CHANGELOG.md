@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Expanded Docker rootless steps 12–17 with systemd --user, Docker context, rootless verification, linger, and headless deployment guidance.
 - Fixed Docker install guide API to include mirror alternatives, enabling the Packages install-source dropdown.
 - Fixed service worker caching live /api responses; companion shutdown now shows offline and environment/package data refreshes correctly.
 - Added Docker install-source dropdown, direct environment recheck/result refresh, and clearer Core action wait states.

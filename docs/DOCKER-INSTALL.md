@@ -170,6 +170,60 @@ sudo loginctl enable-linger "$USER"
 
 需要管理员权限，SHE 不代你执行。
 
+### 3.5 loginctl、linger 与无登录运行
+
+`systemctl --user` 管理的是**当前用户的 systemd user manager**，不是 root systemd。
+
+rootless Docker 服务是用户级服务，默认行为是：
+
+- 用户登录后，systemd --user 启动；
+- rootless Docker 的 `docker.service` 启动；
+- 用户最后一个会话退出后，user manager 可能被停止；
+- rootless Docker 也随之停止。
+
+`loginctl enable-linger` 的作用：
+
+```text
+让 user@<uid>.service 在用户没有登录会话时仍然运行，
+并在系统启动时启动该用户的 user manager。
+```
+
+它**不是**把 Docker 变成 root daemon，只是让用户级服务管理器常驻。
+
+远程/无桌面部署机建议：
+
+```bash
+systemctl --user enable --now docker
+sudo loginctl enable-linger "$USER"
+loginctl show-user "$USER" -p Linger
+```
+
+期望：
+
+```text
+Linger=yes
+```
+
+如果没有 linger：
+
+- SSH 登录后 rootless Docker 可能可用；
+- 退出 SSH/关闭会话后可能停止；
+- 飞书 adapter/companion/core 若依赖本机 Docker 或用户服务，也可能中断。
+
+还需要注意：
+
+- `enable-linger` 只保证 user manager 常驻；
+- 手动在 SSH shell 里运行的 `start.sh` 仍可能随 shell 会话结束而退出；
+- 生产/远程部署应把 companion、core、Feishu adapter 配置成 user systemd services，或使用其他稳定 supervisor；
+- SHE 的 Settings → 登录自启动可生成 systemd --user service；
+- `enable-linger` 通常需要管理员/polkit 权限，但不会使 rootless Docker 以 root 运行。
+
+禁用 linger：
+
+```bash
+sudo loginctl disable-linger "$USER"
+```
+
 ## 4. Fedora / Arch
 
 Fedora 依赖：
