@@ -127,8 +127,10 @@ const packageError = ref('')
 const copiedPackageId = ref('')
 const copiedDockerGuide = ref(false)
 const copiedInstallAlternative = ref('')
+const selectedDockerSource = ref('official')
 const preflight = ref<PreflightResult | null>(null)
 const preflightError = ref('')
+const environmentChecking = ref(false)
 const platformStatus = ref<PlatformStatus | null>(null)
 const platformError = ref('')
 const workerConfigResponse = ref<Awaited<ReturnType<typeof loadWorkerConfig>> | null>(null)
@@ -312,6 +314,34 @@ async function forceReloadLocalPwa(): Promise<void> {
 async function connectCompanion(): Promise<void> {
   setCompanionUrl(companionUrl.value)
   await refresh()
+}
+
+async function recheckEnvironment(): Promise<void> {
+  if (environmentChecking.value) return
+  environmentChecking.value = true
+  preflightError.value = ''
+  try {
+    await runJob('doctor')
+    const next = await loadPreflight()
+    preflight.value = next
+    if (next.at === null) {
+      preflightError.value = jobError.value || 'companion 返回了空的环境检查结果。'
+    }
+  } catch (cause) {
+    preflightError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    environmentChecking.value = false
+  }
+}
+
+async function refreshPreflightOnly(): Promise<void> {
+  preflightError.value = ''
+  try {
+    preflight.value = await loadPreflight()
+    if (preflight.value.at === null) preflightError.value = '还没有可用的环境检查结果，请先重新检查环境。'
+  } catch (cause) {
+    preflightError.value = cause instanceof Error ? cause.message : String(cause)
+  }
 }
 
 async function copyInstallCommands(): Promise<void> {
@@ -551,6 +581,39 @@ function packageStateClass(item: PackageInfo): string {
   return 'warn'
 }
 
+interface DockerInstallSource {
+  readonly id: string
+  readonly label: string
+  readonly steps: readonly PackageInstallStep[]
+}
+
+function dockerInstallSources(install: PackageInstallInfo): readonly DockerInstallSource[] {
+  return [
+    { id: 'official', label: 'Docker 官方源（download.docker.com）', steps: install.steps ?? [] },
+    ...(install.alternatives ?? []).map((alternative, index) => ({
+      id: `mirror-${index}`,
+      label: alternative.label,
+      steps: alternative.steps,
+    })),
+  ]
+}
+
+function selectedDockerInstallSource(install: PackageInstallInfo): DockerInstallSource {
+  const sources = dockerInstallSources(install)
+  return sources.find(source => source.id === selectedDockerSource.value) ?? sources[0]!
+}
+
+function displayInstallSteps(item: PackageInfo): readonly PackageInstallStep[] {
+  const install = packageInstall(item)
+  if (item.id === 'docker-runtime') return selectedDockerInstallSource(install).steps
+  return install.steps ?? []
+}
+
+function selectedPlatformDockerSteps(): readonly PackageInstallStep[] {
+  const install = platformStatus.value?.docker.install
+  return install === undefined ? [] : selectedDockerInstallSource(install).steps
+}
+
 function packageInstall(item: PackageInfo): PackageInstallInfo {
   return item.install ?? {
     mode: item.management,
@@ -573,7 +636,8 @@ async function copyInstallAlternative(key: string, alternative: PackageInstallAl
 }
 
 async function copyDockerGuideCommands(): Promise<void> {
-  const commands = platformStatus.value?.docker.install?.commands ?? []
+  const steps = selectedPlatformDockerSteps()
+  const commands = steps.length > 0 ? steps.map(step => step.command) : (platformStatus.value?.docker.install?.commands ?? [])
   if (commands.length === 0) return
   try {
     await navigator.clipboard.writeText(commands.join('\n'))
@@ -586,7 +650,8 @@ async function copyDockerGuideCommands(): Promise<void> {
 
 async function copyPackageCommands(item: PackageInfo): Promise<void> {
   try {
-    await navigator.clipboard.writeText(packageInstall(item).commands.join('\n'))
+    const steps = displayInstallSteps(item)
+    await navigator.clipboard.writeText((steps.length > 0 ? steps.map(step => step.command) : packageInstall(item).commands).join('\n'))
     copiedPackageId.value = item.id
     setTimeout(() => {
       if (copiedPackageId.value === item.id) copiedPackageId.value = ''
@@ -1192,10 +1257,12 @@ onBeforeUnmount(() => {
               </span>
               <span v-else class="pill">not checked</span>
             </div>
+            <p v-if="preflight?.at" class="muted small-note">last checked: {{ new Date(preflight.at).toLocaleString() }}</p>
             <div v-if="!preflight?.at && !preflightError" class="alert">
               <strong>还没有环境检查结果</strong>
               <p>点击“重新检查环境”获取 Node/pnpm/Docker/socket 的逐项能力判断。</p>
-              <button class="primary" :disabled="jobRunning" @click="runJob('doctor')">{{ jobRunning ? '检查中…' : '重新检查环境' }}</button>
+              <button class="primary" :disabled="environmentChecking || jobRunning" @click="recheckEnvironment">{{ environmentChecking ? '检查中…' : '重新检查环境' }}</button>
+              <button class="secondary" :disabled="jobRunning" @click="refreshPreflightOnly">仅刷新结果</button>
             </div>
             <p v-if="preflightError" class="error-text">环境检查接口不可用：{{ preflightError }}</p>
             <template v-if="preflight?.at">
@@ -1206,7 +1273,8 @@ onBeforeUnmount(() => {
                 <div><span>failures</span><b>{{ preflight.summary?.failures ?? 0 }}</b></div>
               </div>
               <div class="job-actions environment-actions">
-                <button class="secondary" :disabled="jobRunning || !companionOnline" @click="runJob('doctor')">{{ jobRunning ? '检查中…' : '重新检查环境' }}</button>
+                <button class="secondary" :disabled="environmentChecking || jobRunning || !companionOnline" @click="recheckEnvironment">{{ environmentChecking ? '检查中…' : '重新检查环境' }}</button>
+                <button class="secondary" :disabled="jobRunning" @click="refreshPreflightOnly">仅刷新结果</button>
               </div>
               <div v-if="preflight.sandboxReady === false" class="alert environment-warning">
                 <strong>未检测到可用的 Docker sandbox runtime</strong>
@@ -1258,8 +1326,14 @@ onBeforeUnmount(() => {
               <details v-if="!platformStatus.docker.available && platformStatus.docker.install" class="docker-install-guide">
                 <summary>{{ platformStatus.docker.install.title }}</summary>
                 <p class="muted small-note">{{ platformStatus.docker.install.note }}</p>
-                <div v-if="platformStatus.docker.install.steps?.length" class="package-install-steps">
-                  <div v-for="(step, index) in platformStatus.docker.install.steps" :key="`docker-${index}`" class="package-install-step">
+                <label v-if="platformStatus.docker.install.alternatives?.length" class="install-source-select">
+                  Docker 安装源
+                  <select v-model="selectedDockerSource">
+                    <option v-for="source in dockerInstallSources(platformStatus.docker.install)" :key="source.id" :value="source.id">{{ source.label }}</option>
+                  </select>
+                </label>
+                <div v-if="selectedPlatformDockerSteps().length" class="package-install-steps">
+                  <div v-for="(step, index) in selectedPlatformDockerSteps()" :key="`docker-${index}`" class="package-install-step">
                     <div class="package-install-step-head">
                       <span class="step-number">{{ index + 1 }}</span>
                       <code>{{ step.command }}</code>
@@ -1273,31 +1347,6 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
                 <pre v-else class="package-commands"><code>{{ platformStatus.docker.install.commands.join('\n') }}</code></pre>
-                <details v-if="platformStatus.docker.install.alternatives?.length" class="install-alternatives">
-                  <summary>官方源下载失败？查看国内镜像备用方案</summary>
-                  <div v-for="(alternative, altIndex) in platformStatus.docker.install.alternatives" :key="`docker-alt-${altIndex}`" class="install-alternative">
-                    <div class="section-head">
-                      <h4>{{ alternative.label }}</h4>
-                      <button class="secondary" @click="copyInstallAlternative(`docker-${altIndex}`, alternative)">
-                        {{ copiedInstallAlternative === `docker-${altIndex}` ? '已复制' : '复制该镜像命令' }}
-                      </button>
-                    </div>
-                    <div class="package-install-steps">
-                      <div v-for="(step, index) in alternative.steps" :key="`docker-alt-${altIndex}-${index}`" class="package-install-step">
-                        <div class="package-install-step-head">
-                          <span class="step-number">{{ index + 1 }}</span>
-                          <code>{{ step.command }}</code>
-                        </div>
-                        <p>{{ step.explanation }}</p>
-                        <div class="install-step-badges">
-                          <span v-if="step.requiresRoot" class="pill warn">需要管理员权限</span>
-                          <span v-if="step.optional" class="pill">可选</span>
-                        </div>
-                        <p v-if="step.note" class="muted small-note">{{ step.note }}</p>
-                      </div>
-                    </div>
-                  </div>
-                </details>
                 <div class="package-actions">
                   <button class="secondary" @click="copyDockerGuideCommands">{{ copiedDockerGuide ? '已复制' : '复制 Docker 安装命令' }}</button>
                   <a class="secondary" :href="platformStatus.docker.install.url" target="_blank" rel="noreferrer">Docker 官方文档 ↗</a>
@@ -1462,8 +1511,14 @@ onBeforeUnmount(() => {
                   <span class="pill">{{ packageInstall(item).mode }}</span>
                 </div>
                 <p class="muted small-note">{{ packageInstall(item).note }}</p>
-                <div v-if="packageInstall(item).steps?.length" class="package-install-steps">
-                  <div v-for="(step, index) in packageInstall(item).steps" :key="`${item.id}-${index}`" class="package-install-step">
+                <label v-if="item.id === 'docker-runtime' && packageInstall(item).alternatives?.length" class="install-source-select">
+                  Docker 安装源
+                  <select v-model="selectedDockerSource">
+                    <option v-for="source in dockerInstallSources(packageInstall(item))" :key="source.id" :value="source.id">{{ source.label }}</option>
+                  </select>
+                </label>
+                <div v-if="displayInstallSteps(item).length" class="package-install-steps">
+                  <div v-for="(step, index) in displayInstallSteps(item)" :key="`${item.id}-${index}`" class="package-install-step">
                     <div class="package-install-step-head">
                       <span class="step-number">{{ index + 1 }}</span>
                       <code>{{ step.command }}</code>
@@ -1477,31 +1532,6 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
                 <pre v-else-if="packageInstall(item).commands.length > 0" class="package-commands"><code>{{ packageInstall(item).commands.join('\n') }}</code></pre>
-                <details v-if="packageInstall(item).alternatives?.length" class="install-alternatives">
-                  <summary>官方源下载失败？查看国内镜像备用方案</summary>
-                  <div v-for="(alternative, altIndex) in packageInstall(item).alternatives" :key="`${item.id}-alt-${altIndex}`" class="install-alternative">
-                    <div class="section-head">
-                      <h4>{{ alternative.label }}</h4>
-                      <button class="secondary" @click="copyInstallAlternative(`${item.id}-${altIndex}`, alternative)">
-                        {{ copiedInstallAlternative === `${item.id}-${altIndex}` ? '已复制' : '复制该镜像命令' }}
-                      </button>
-                    </div>
-                    <div class="package-install-steps">
-                      <div v-for="(step, index) in alternative.steps" :key="`${item.id}-alt-${altIndex}-${index}`" class="package-install-step">
-                        <div class="package-install-step-head">
-                          <span class="step-number">{{ index + 1 }}</span>
-                          <code>{{ step.command }}</code>
-                        </div>
-                        <p>{{ step.explanation }}</p>
-                        <div class="install-step-badges">
-                          <span v-if="step.requiresRoot" class="pill warn">需要管理员权限</span>
-                          <span v-if="step.optional" class="pill">可选</span>
-                        </div>
-                        <p v-if="step.note" class="muted small-note">{{ step.note }}</p>
-                      </div>
-                    </div>
-                  </div>
-                </details>
                 <div class="package-actions">
                   <button v-if="packageInstall(item).commands.length > 0" class="secondary" @click="copyPackageCommands(item)">
                     {{ copiedPackageId === item.id ? '已复制' : '复制安装命令' }}

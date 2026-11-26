@@ -220,6 +220,17 @@ Docker 卡片会显示：
 命令只展示，不自动执行。
 
 
+## 7.1 Packages 安装源下拉
+
+Docker 卡片提供安装源下拉：
+
+- Docker 官方源；
+- 阿里云 Docker CE 镜像；
+- 清华 TUNA Docker CE 镜像；
+- 中科大 USTC Docker CE 镜像。
+
+切换后步骤和复制命令会同步变化。
+
 ## 8. 国内网络备用镜像
 
 如果 `download.docker.com` 出现：
