@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Added China Docker CE apt mirror alternatives (Aliyun/TUNA/USTC) with official signing-key fingerprint verification.
 - Docker rootless guide now uses Docker's official apt packages (`docker-ce-rootless-extras` + uidmap/slirp4netns/fuse-overlayfs) instead of requiring the rootless curl script.
 - Clarified subordinate UID/GID: Ubuntu users often already have ranges; only add them when the explicit check is empty.
 - Fixed core startup SQLite parent-directory creation and DB file permissions; companion now pre-creates the default DB directory before launching core.

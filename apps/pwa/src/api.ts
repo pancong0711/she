@@ -490,9 +490,9 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.2-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.3.9'
+export const COMPANION_RELEASE_VERSION = '0.4.0'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.3.9'
+export const COMPANION_MIN_VERSION = '0.4.0'
 export const COMPANION_RELEASE_TAG = 'v0.3.5-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
@@ -542,11 +542,17 @@ export interface PackageInstallStep {
   readonly note?: string
 }
 
+export interface PackageInstallAlternative {
+  readonly label: string
+  readonly steps: readonly PackageInstallStep[]
+}
+
 export interface PackageInstallInfo {
   readonly mode: 'managed' | 'user-local' | 'instructions-only' | 'external' | string
   readonly title: string
   readonly commands: readonly string[]
   readonly steps?: readonly PackageInstallStep[]
+  readonly alternatives?: readonly PackageInstallAlternative[]
   readonly url?: string
   readonly note: string
 }

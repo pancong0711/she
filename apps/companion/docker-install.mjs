@@ -17,8 +17,8 @@ export async function readOsRelease(path = '/etc/os-release') {
   }
 }
 
-function guide(title, steps, url, note) {
-  return { title, steps, commands: steps.map(step => step.command), url, note }
+function guide(title, steps, url, note, alternatives = []) {
+  return { title, steps, commands: steps.map(step => step.command), url, note, ...(alternatives.length === 0 ? {} : { alternatives }) }
 }
 
 function subuidSteps() {
@@ -60,6 +60,22 @@ function rootlessSetupSteps() {
       requiresRoot: true,
       optional: true,
     },
+  ]
+}
+
+function aptMirrorSteps(project, mirrorBase, codenameExpression) {
+  return [
+    { command: 'sudo apt-get update', explanation: '刷新 apt 包索引。', requiresRoot: true },
+    { command: 'sudo apt-get install -y ca-certificates curl gnupg', explanation: '安装下载镜像密钥和配置仓库所需工具。', requiresRoot: true },
+    { command: 'sudo install -m 0755 -d /etc/apt/keyrings', explanation: '创建 apt 签名密钥目录。', requiresRoot: true },
+    { command: `sudo curl -fsSL ${mirrorBase}/gpg -o /etc/apt/keyrings/docker.asc`, explanation: '从国内镜像下载 Docker 官方签名密钥。镜像只改变下载地址，密钥指纹仍需匹配 Docker 官方值。', requiresRoot: true },
+    { command: 'sudo chmod a+r /etc/apt/keyrings/docker.asc', explanation: '允许 apt 读取签名密钥。', requiresRoot: true },
+    { command: 'gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc', explanation: '检查输出的 fpr 字段应为 9DC858229FC7DD38854AE2D88D81803C0EBFCD88；不匹配时不要继续。', note: 'Docker CE signing key fingerprint: 9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88' },
+    { command: `echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] ${mirrorBase} ${codenameExpression} stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null`, explanation: '把 apt 仓库地址切换为国内镜像；包仍会通过 Docker 官方密钥验证。', requiresRoot: true },
+    { command: 'sudo apt-get update', explanation: '刷新国内镜像仓库索引。', requiresRoot: true },
+    { command: 'sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras uidmap dbus-user-session fuse-overlayfs slirp4netns', explanation: '安装 Docker、官方 rootless extras 和 rootless 依赖。', requiresRoot: true },
+    ...subuidSteps(),
+    ...rootlessSetupSteps(),
   ]
 }
 
@@ -149,6 +165,11 @@ export function dockerInstallGuide(platform, osRelease = {}) {
       aptRootlessSteps('ubuntu', '$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")'),
       'https://docs.docker.com/engine/security/rootless/',
       '默认通过 apt 安装 rootless Docker；不要把当前用户加入 docker 组。许多 Ubuntu 用户已有 subordinate UID/GID，无需额外配置。',
+      [
+        { label: '阿里云 Docker CE 镜像（国内网络）', steps: aptMirrorSteps('ubuntu', 'https://mirrors.aliyun.com/docker-ce/linux/ubuntu', '$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")') },
+        { label: '清华 TUNA Docker CE 镜像（国内网络）', steps: aptMirrorSteps('ubuntu', 'https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/ubuntu', '$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")') },
+        { label: '中科大 USTC Docker CE 镜像（国内网络）', steps: aptMirrorSteps('ubuntu', 'https://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu', '$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")') },
+      ],
     )
   }
   if (id === 'debian' || like.includes('debian')) {
@@ -157,6 +178,10 @@ export function dockerInstallGuide(platform, osRelease = {}) {
       aptRootlessSteps('debian', '$(. /etc/os-release && echo "$VERSION_CODENAME")'),
       'https://docs.docker.com/engine/security/rootless/',
       '默认通过 apt 安装 rootless Docker；不要把当前用户加入 docker 组。许多 Debian/Ubuntu 用户已有 subordinate UID/GID，无需额外配置。',
+      [
+        { label: '阿里云 Docker CE 镜像（国内网络）', steps: aptMirrorSteps('debian', 'https://mirrors.aliyun.com/docker-ce/linux/debian', '$(. /etc/os-release && echo "$VERSION_CODENAME")') },
+        { label: '清华 TUNA Docker CE 镜像（国内网络）', steps: aptMirrorSteps('debian', 'https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/debian', '$(. /etc/os-release && echo "$VERSION_CODENAME")') },
+      ],
     )
   }
   if (id === 'fedora') {

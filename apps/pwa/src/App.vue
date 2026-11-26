@@ -53,6 +53,7 @@ import {
   type JobEvent,
   type JobSummary,
   type PackageInfo,
+  type PackageInstallAlternative,
   type PackageInstallInfo,
   type PackageInstallStep,
   type PlatformStatus,
@@ -121,6 +122,7 @@ const packages = ref<readonly PackageInfo[]>([])
 const packageError = ref('')
 const copiedPackageId = ref('')
 const copiedDockerGuide = ref(false)
+const copiedInstallAlternative = ref('')
 const preflight = ref<PreflightResult | null>(null)
 const platformStatus = ref<PlatformStatus | null>(null)
 const platformError = ref('')
@@ -509,6 +511,18 @@ function packageInstall(item: PackageInfo): PackageInstallInfo {
     title: '安装/修复说明',
     commands: [],
     note: `当前本地 companion ${companion.value?.version ?? 'unknown'} 低于 PWA 期望的 ${COMPANION_MIN_VERSION}，因此 /api/packages 没有返回 install 字段。旧进程仍在运行；升级文件并不会自动替换它。`,
+  }
+}
+
+async function copyInstallAlternative(key: string, alternative: PackageInstallAlternative): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(alternative.steps.map(step => step.command).join('\n'))
+    copiedInstallAlternative.value = key
+    setTimeout(() => {
+      if (copiedInstallAlternative.value === key) copiedInstallAlternative.value = ''
+    }, 1500)
+  } catch {
+    copiedInstallAlternative.value = ''
   }
 }
 
@@ -1207,6 +1221,31 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
                 <pre v-else class="package-commands"><code>{{ platformStatus.docker.install.commands.join('\n') }}</code></pre>
+                <details v-if="platformStatus.docker.install.alternatives?.length" class="install-alternatives">
+                  <summary>官方源下载失败？查看国内镜像备用方案</summary>
+                  <div v-for="(alternative, altIndex) in platformStatus.docker.install.alternatives" :key="`docker-alt-${altIndex}`" class="install-alternative">
+                    <div class="section-head">
+                      <h4>{{ alternative.label }}</h4>
+                      <button class="secondary" @click="copyInstallAlternative(`docker-${altIndex}`, alternative)">
+                        {{ copiedInstallAlternative === `docker-${altIndex}` ? '已复制' : '复制该镜像命令' }}
+                      </button>
+                    </div>
+                    <div class="package-install-steps">
+                      <div v-for="(step, index) in alternative.steps" :key="`docker-alt-${altIndex}-${index}`" class="package-install-step">
+                        <div class="package-install-step-head">
+                          <span class="step-number">{{ index + 1 }}</span>
+                          <code>{{ step.command }}</code>
+                        </div>
+                        <p>{{ step.explanation }}</p>
+                        <div class="install-step-badges">
+                          <span v-if="step.requiresRoot" class="pill warn">需要管理员权限</span>
+                          <span v-if="step.optional" class="pill">可选</span>
+                        </div>
+                        <p v-if="step.note" class="muted small-note">{{ step.note }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </details>
                 <div class="package-actions">
                   <button class="secondary" @click="copyDockerGuideCommands">{{ copiedDockerGuide ? '已复制' : '复制 Docker 安装命令' }}</button>
                   <a class="secondary" :href="platformStatus.docker.install.url" target="_blank" rel="noreferrer">Docker 官方文档 ↗</a>
@@ -1386,6 +1425,31 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
                 <pre v-else-if="packageInstall(item).commands.length > 0" class="package-commands"><code>{{ packageInstall(item).commands.join('\n') }}</code></pre>
+                <details v-if="packageInstall(item).alternatives?.length" class="install-alternatives">
+                  <summary>官方源下载失败？查看国内镜像备用方案</summary>
+                  <div v-for="(alternative, altIndex) in packageInstall(item).alternatives" :key="`${item.id}-alt-${altIndex}`" class="install-alternative">
+                    <div class="section-head">
+                      <h4>{{ alternative.label }}</h4>
+                      <button class="secondary" @click="copyInstallAlternative(`${item.id}-${altIndex}`, alternative)">
+                        {{ copiedInstallAlternative === `${item.id}-${altIndex}` ? '已复制' : '复制该镜像命令' }}
+                      </button>
+                    </div>
+                    <div class="package-install-steps">
+                      <div v-for="(step, index) in alternative.steps" :key="`${item.id}-alt-${altIndex}-${index}`" class="package-install-step">
+                        <div class="package-install-step-head">
+                          <span class="step-number">{{ index + 1 }}</span>
+                          <code>{{ step.command }}</code>
+                        </div>
+                        <p>{{ step.explanation }}</p>
+                        <div class="install-step-badges">
+                          <span v-if="step.requiresRoot" class="pill warn">需要管理员权限</span>
+                          <span v-if="step.optional" class="pill">可选</span>
+                        </div>
+                        <p v-if="step.note" class="muted small-note">{{ step.note }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </details>
                 <div class="package-actions">
                   <button v-if="packageInstall(item).commands.length > 0" class="secondary" @click="copyPackageCommands(item)">
                     {{ copiedPackageId === item.id ? '已复制' : '复制安装命令' }}

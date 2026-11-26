@@ -218,3 +218,44 @@ Docker 卡片会显示：
 - Docker 官方 rootless 文档链接。
 
 命令只展示，不自动执行。
+
+
+## 8. 国内网络备用镜像
+
+如果 `download.docker.com` 出现：
+
+```text
+Connection reset by peer
+```
+
+可以使用 Docker CE 的国内镜像。
+
+Packages 页面已内置以下备用方案：
+
+- 阿里云 Docker CE 镜像；
+- 清华 TUNA Docker CE 镜像；
+- 中科大 USTC Docker CE 镜像。
+
+只会替换 apt 仓库和 GPG 下载地址，仍然使用 Docker 官方签名密钥。请检查密钥指纹：
+
+```text
+9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88
+```
+
+示例：阿里云 Ubuntu 镜像
+
+```bash
+sudo curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras uidmap dbus-user-session fuse-overlayfs slirp4netns
+```
+
+注意：
+
+- 镜像只解决 apt/GPG 下载问题；
+- `docker pull` 拉取镜像仍可能受 Docker Hub 网络影响，需要单独配置 registry mirror；
+- 不要为了绕过下载问题加入 root docker 组；
+- 镜像源不可信时，必须通过官方密钥指纹校验确认。

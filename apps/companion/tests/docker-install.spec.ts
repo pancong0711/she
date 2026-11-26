@@ -15,6 +15,10 @@ describe('docker install guidance', () => {
     expect(commands).not.toContain('usermod -aG docker')
     expect(guide.steps.every(step => typeof step.explanation === 'string' && step.explanation.length > 0)).toBe(true)
     expect(guide.note).toContain('不要把当前用户加入 docker 组')
+    expect(guide.alternatives.length).toBeGreaterThanOrEqual(3)
+    const aliyun = guide.alternatives.find(item => item.label.includes('阿里云'))
+    expect(aliyun?.steps.map(step => step.command).join('\n')).toContain('mirrors.aliyun.com/docker-ce/linux/ubuntu')
+    expect(aliyun?.steps.map(step => step.explanation).join('\n')).toContain('9DC858229FC7DD38854AE2D88D81803C0EBFCD88')
   })
 
   it('provides Docker Desktop steps for macOS and Windows', () => {
