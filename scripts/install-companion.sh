@@ -45,7 +45,9 @@ mkdir -p "$BIN_DIR"
 cat > "$BIN_DIR/she-companion" <<LAUNCHER
 #!/usr/bin/env bash
 set -euo pipefail
-exec node "$INSTALL_ROOT/current/apps/companion/server.mjs" "\$@"
+export SHE_COMPANION_ROOT="$INSTALL_ROOT"
+export SHE_BIN_DIR="$BIN_DIR"
+exec node "$INSTALL_ROOT/current/apps/companion/supervisor.mjs" "\$@"
 LAUNCHER
 chmod 0755 "$BIN_DIR/she-companion"
 echo "✓ installed she-companion $VERSION"

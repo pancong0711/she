@@ -3,7 +3,7 @@
 # starts the local companion, and opens the PWA. Never elevates or requests admin.
 $ErrorActionPreference = 'Stop'
 
-$Tag = if ($env:SHE_COMPANION_RELEASE_TAG) { $env:SHE_COMPANION_RELEASE_TAG } else { 'v0.2.1-companion.1' }
+$Tag = if ($env:SHE_COMPANION_RELEASE_TAG) { $env:SHE_COMPANION_RELEASE_TAG } else { 'v0.3.0-companion.1' }
 $Base = if ($env:SHE_COMPANION_RELEASE_BASE) { $env:SHE_COMPANION_RELEASE_BASE } else { "https://github.com/pancong0711/she/releases/download/$Tag" }
 $InstallRoot = if ($env:SHE_COMPANION_ROOT) { $env:SHE_COMPANION_ROOT } else { Join-Path $env:LOCALAPPDATA 'she\companion' }
 $BinDir = if ($env:SHE_BIN_DIR) { $env:SHE_BIN_DIR } else { Join-Path $env:LOCALAPPDATA 'she\bin' }
@@ -61,7 +61,7 @@ try {
     if (Test-Path $current) { cmd /c rmdir "$current" }
     New-Item -ItemType Junction -Path $current -Target $dest | Out-Null
     $launcher = Join-Path $BinDir 'she-companion.cmd'
-    "@echo off`r`nnode `"$current\apps\companion\server.mjs`" %*`r`n" | Set-Content -Path $launcher -Encoding ASCII
+    "@echo off`r`nset SHE_COMPANION_ROOT=$InstallRoot`r`nset SHE_BIN_DIR=$BinDir`r`nnode `"$current\apps\companion\supervisor.mjs`" %*`r`n" | Set-Content -Path $launcher -Encoding ASCII
     Write-Host "SHE launcher: installed companion $version"
   }
   $existingVersion = $null
@@ -83,7 +83,9 @@ try {
   Write-Host "SHE launcher: starting http://127.0.0.1:$Port"
   Start-Process "http://127.0.0.1:$Port"
   $env:SHE_PWA_PORT = [string]$Port
-  & node (Join-Path $current 'apps\companion\server.mjs')
+  $env:SHE_COMPANION_ROOT = $InstallRoot
+  $env:SHE_BIN_DIR = $BinDir
+  & node (Join-Path $current 'apps\companion\supervisor.mjs')
 } finally {
   Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }

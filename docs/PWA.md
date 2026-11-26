@@ -219,6 +219,8 @@ SHE_TOKEN_FILE
 - Settings：
   - companion URL；
   - 连接状态；
+  - companion 当前版本/最低版本/supervisor 状态/install root；
+  - 页面内重启、停止、检查更新和安装并重启；
 - Install & Doctor 平台能力：
   - OS/arch/Node/shell/uid/WSL 与 Docker 模式；
   - Linux/macOS/Windows 支持矩阵，区分 verified / implemented-unverified / design-only / unsupported；

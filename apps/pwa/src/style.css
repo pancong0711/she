@@ -205,3 +205,6 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 /* Companion version mismatch */
 .companion-outdated-alert { border-color: #b45309; background: #451a0366; }
 .companion-outdated-alert p { color: #fde68a; }
+
+/* Companion lifecycle controls */
+.companion-lifecycle { margin: 18px 0; padding: 16px; border: 1px solid #1e293b; border-radius: 14px; background: #02061766; }

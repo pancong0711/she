@@ -4,7 +4,7 @@
 # starts the local companion, and opens the PWA. Never uses sudo or requests root.
 set -euo pipefail
 
-TAG="${SHE_COMPANION_RELEASE_TAG:-v0.2.1-companion.1}"
+TAG="${SHE_COMPANION_RELEASE_TAG:-v0.3.0-companion.1}"
 BASE="${SHE_COMPANION_RELEASE_BASE:-https://github.com/pancong0711/she/releases/download/$TAG}"
 INSTALL_ROOT="${SHE_COMPANION_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/she/companion}"
 BIN_DIR="${SHE_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
@@ -72,7 +72,9 @@ if [ "$CURRENT_VERSION" != "$SHE_VERSION" ]; then
   cat > "$BIN_DIR/she-companion" <<LAUNCHER
 #!/usr/bin/env bash
 set -euo pipefail
-exec node "$INSTALL_ROOT/current/apps/companion/server.mjs" "\$@"
+export SHE_COMPANION_ROOT="$INSTALL_ROOT"
+export SHE_BIN_DIR="$BIN_DIR"
+exec node "$INSTALL_ROOT/current/apps/companion/supervisor.mjs" "\$@"
 LAUNCHER
   chmod 0755 "$BIN_DIR/she-companion"
   echo "SHE launcher: installed companion $SHE_VERSION"
@@ -97,4 +99,4 @@ fi
 
 echo "SHE launcher: starting http://127.0.0.1:$PORT"
 (sleep 1.2; for opener in xdg-open open; do if command -v "$opener" >/dev/null 2>&1; then "$opener" "http://127.0.0.1:$PORT" >/dev/null 2>&1 || true; break; fi; done) &
-exec env SHE_PWA_PORT="$PORT" node "$INSTALL_ROOT/current/apps/companion/server.mjs"
+exec env SHE_PWA_PORT="$PORT" SHE_COMPANION_ROOT="$INSTALL_ROOT" SHE_BIN_DIR="$BIN_DIR" node "$INSTALL_ROOT/current/apps/companion/supervisor.mjs"

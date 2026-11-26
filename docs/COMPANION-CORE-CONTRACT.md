@@ -93,6 +93,8 @@ GET  /api/agents/migrations/:id
 
 `/api/workspaces`：叶子目录授权注册表；写操作要求 `X-SHE-Local-Action: 1`，不读取目录内容。
 
+`/api/companion/*`：仅在 launcher supervisor 模式下提供重启、停止、检查和安装 companion 更新；更新先校验 SHE release manifest 与 bundle SHA-256，再退出 75 交给 supervisor 重启。
+
 `/api/core/status`：
 
 - companion 主动探测 control-plane `/v1/health`；

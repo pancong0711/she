@@ -14,6 +14,8 @@ import {
   DEFAULT_CORE_MANIFEST_URL,
   INSTALL_COMMANDS,
   REPO_URL,
+  applyCompanionUpdate,
+  checkCompanionUpdate,
   checkCoreUpdate,
   coreAction,
   getCompanionUrl,
@@ -28,7 +30,9 @@ import {
   loadSandboxes,
   loadSnapshot,
   loadWorkerConfig,
+  restartCompanion,
   saveWorkerConfig,
+  shutdownCompanion,
   sendTaskToShe,
   setCompanionUrl,
   isVersionOlder,
@@ -37,6 +41,7 @@ import {
   subscribeGatewayEvents,
   type CompanionHealth,
   type CoreStatus,
+  type CompanionUpdateCheck,
   type CoreUpdateCheck,
   type JobEvent,
   type JobSummary,
@@ -113,6 +118,10 @@ const workerConfig = ref<WorkerConfig | null>(null)
 const workerConfigError = ref('')
 const workerConfigMessage = ref('')
 const workerConfigSaving = ref(false)
+const companionActionRunning = ref('')
+const companionUpdateCheck = ref<CompanionUpdateCheck | null>(null)
+const companionUpdateError = ref('')
+const companionMessage = ref('')
 let timer: ReturnType<typeof setInterval> | undefined
 
 const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
@@ -246,6 +255,94 @@ async function copyInstallCommands(): Promise<void> {
     setTimeout(() => { copied.value = false }, 1500)
   } catch {
     copied.value = false
+  }
+}
+
+async function waitForCompanion(timeoutMs = 30_000): Promise<CompanionHealth> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      return await loadCompanionHealth()
+    } catch {
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 500))
+    }
+  }
+  throw new Error('companion did not become reachable; run start.sh/start.command/start.bat to restart it')
+}
+
+async function restartCompanionFromPage(): Promise<void> {
+  if (companionActionRunning.value !== '') return
+  companionActionRunning.value = 'restart'
+  companionMessage.value = ''
+  companionUpdateError.value = ''
+  try {
+    await restartCompanion()
+    companion.value = null
+    const next = await waitForCompanion()
+    companion.value = next
+    await refresh()
+    companionMessage.value = `Companion 已重启，当前版本 ${next.version}。`
+  } catch (cause) {
+    companionUpdateError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    companionActionRunning.value = ''
+  }
+}
+
+async function shutdownCompanionFromPage(): Promise<void> {
+  if (companionActionRunning.value !== '') return
+  if (!window.confirm('停止 companion 后，本页面将无法再访问本地 API。你需要重新运行 start.sh 才能恢复。继续吗？')) return
+  companionActionRunning.value = 'shutdown'
+  companionMessage.value = ''
+  companionUpdateError.value = ''
+  try {
+    await shutdownCompanion()
+    companion.value = null
+    companionMessage.value = 'Companion 已停止。请关闭页面并重新运行 start.sh/start.command/start.bat。'
+  } catch (cause) {
+    companionUpdateError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    companionActionRunning.value = ''
+  }
+}
+
+async function checkCompanionUpdateFromPage(): Promise<void> {
+  if (companionActionRunning.value !== '') return
+  companionActionRunning.value = 'check-update'
+  companionUpdateError.value = ''
+  companionMessage.value = ''
+  companionUpdateCheck.value = null
+  try {
+    companionUpdateCheck.value = await checkCompanionUpdate(COMPANION_MANIFEST_URL)
+    if (!companionUpdateCheck.value.needsUpdate) companionMessage.value = `Companion 已是 ${companionUpdateCheck.value.current}。`
+  } catch (cause) {
+    companionUpdateError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    companionActionRunning.value = ''
+  }
+}
+
+async function installCompanionUpdateFromPage(): Promise<void> {
+  if (companionActionRunning.value !== '' || companionUpdateCheck.value === null) return
+  const target = companionUpdateCheck.value.available
+  if (!window.confirm(`安装 companion ${target} 并重启？安装使用 checksum 校验；新进程启动失败时 supervisor 会尝试回滚。`)) return
+  companionActionRunning.value = 'apply-update'
+  companionUpdateError.value = ''
+  companionMessage.value = `正在安装 companion ${target}…`
+  try {
+    const result = await applyCompanionUpdate(COMPANION_MANIFEST_URL)
+    companion.value = null
+    const next = await waitForCompanion(45_000)
+    companion.value = next
+    await refresh()
+    companionMessage.value = `Companion 已更新到 ${next.version}。`
+    companionUpdateCheck.value = null
+    if (result.from === next.version) companionUpdateError.value = '版本未变化，更新可能未生效。'
+  } catch (cause) {
+    companionUpdateError.value = cause instanceof Error ? cause.message : String(cause)
+    companionMessage.value = '更新未确认成功。请检查是否仍运行旧进程；必要时重新运行 launcher。'
+  } finally {
+    companionActionRunning.value = ''
   }
 }
 
@@ -520,7 +617,7 @@ onBeforeUnmount(() => {
       </nav>
       <div class="sidebar-foot">
         <span :class="['dot', companionOnline ? 'ok' : 'bad']"></span>
-        companion {{ companionOnline ? 'online' : 'offline' }}
+        companion {{ companionOnline ? `v${companion?.version ?? '?'} online` : 'offline' }}
       </div>
       <div class="sidebar-foot broker-foot">
         <span :class="['dot', brokerOnline ? 'ok' : 'bad']"></span>
@@ -539,7 +636,8 @@ onBeforeUnmount(() => {
           <h1>{{ tabs.find(tab => tab.id === active)?.label }}</h1>
           <p>
             {{ remoteMode ? 'GitHub Pages PWA' : 'Local companion' }} ·
-            gateway.v1 · {{ health?.version ?? 'offline' }}
+            gateway.v1 · {{ health?.version ?? 'offline' }} ·
+            companion v{{ companion?.version ?? 'offline' }}
           </p>
         </div>
         <button class="refresh" :disabled="loading" @click="refresh">
@@ -1174,6 +1272,51 @@ onBeforeUnmount(() => {
           <span>broker {{ brokerOnline ? '已连接' : '未连接' }}</span>
         </div>
         <p v-if="companionError" class="error-text">{{ companionError }}</p>
+        <div class="companion-lifecycle">
+          <div class="section-head">
+            <div>
+              <h2>Companion 版本与生命周期</h2>
+              <p class="muted">关闭、重启和更新由本地 supervisor 管理；PWA 不会直接杀死或覆盖运行中的进程。</p>
+            </div>
+            <span :class="['pill', companion?.supervised ? 'succeeded' : 'warn']">
+              {{ companion?.supervised ? 'supervised' : 'direct/dev mode' }}
+            </span>
+          </div>
+          <div class="health-grid">
+            <div><span>current</span><b>{{ companion?.version ?? 'offline' }}</b></div>
+            <div><span>minimum</span><b>{{ COMPANION_MIN_VERSION }}</b></div>
+            <div><span>install root</span><b><code>{{ companion?.installRoot ?? '-' }}</code></b></div>
+            <div><span>supervised</span><b>{{ companion?.supervised ? 'yes' : 'no' }}</b></div>
+          </div>
+          <p v-if="companionMessage" class="success-text">{{ companionMessage }}</p>
+          <p v-if="companionUpdateError" class="error-text">{{ companionUpdateError }}</p>
+          <p v-if="!companion?.supervised" class="warn-text">
+            当前 companion 不是由 start.sh/start.command/start.bat 的 supervisor 启动，页面内重启和更新不可用。
+            请通过 launcher 启动后再使用这些操作。
+          </p>
+          <div class="job-actions">
+            <button class="secondary" :disabled="companionActionRunning !== '' || !companion?.supervised" @click="restartCompanionFromPage">
+              {{ companionActionRunning === 'restart' ? '重启中…' : '重启 companion' }}
+            </button>
+            <button class="secondary" :disabled="companionActionRunning !== '' || !companion?.supervised" @click="shutdownCompanionFromPage">
+              {{ companionActionRunning === 'shutdown' ? '停止中…' : '停止 companion' }}
+            </button>
+            <button class="secondary" :disabled="companionActionRunning !== '' || !companion?.supervised" @click="checkCompanionUpdateFromPage">
+              {{ companionActionRunning === 'check-update' ? '检查中…' : '检查 companion 更新' }}
+            </button>
+            <button
+              v-if="companionUpdateCheck?.needsUpdate"
+              class="primary"
+              :disabled="companionActionRunning !== ''"
+              @click="installCompanionUpdateFromPage"
+            >
+              {{ companionActionRunning === 'apply-update' ? '安装并重启中…' : `安装 ${companionUpdateCheck.available} 并重启` }}
+            </button>
+          </div>
+          <p v-if="companionUpdateCheck && !companionUpdateCheck.needsUpdate" class="muted small-note">
+            当前 {{ companionUpdateCheck.current }} 已是最新版本。
+          </p>
+        </div>
         <p class="muted">
           普通用户应优先直接打开 <code>http://127.0.0.1:8787</code>，同源模式无需额外配置 CORS。
         </p>

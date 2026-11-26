@@ -109,6 +109,8 @@ export interface CompanionHealth {
   readonly brokerSocketPath: string
   readonly activeJobId: string | null
   readonly version: string
+  readonly supervised?: boolean
+  readonly installRoot?: string
 }
 
 export interface JobSummary {
@@ -140,6 +142,56 @@ export type JobEvent =
 export async function loadCompanionHealth(signal?: AbortSignal): Promise<CompanionHealth> {
   const payload = await getJson<{ ok: boolean; value?: CompanionHealth; error?: { message?: string } }>('/api/health', signal)
   if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'companion unavailable')
+  return payload.value
+}
+
+export interface CompanionUpdateCheck {
+  readonly current: string
+  readonly available: string
+  readonly needsUpdate: boolean
+  readonly manifest: unknown
+}
+
+async function companionAction(action: 'restart' | 'shutdown'): Promise<void> {
+  const response = await fetch(`${apiBase()}/api/companion/${action}`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+  })
+  const payload = await response.json() as { ok: boolean; error?: { message?: string } }
+  if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? `companion ${action} failed: HTTP ${response.status}`)
+}
+
+export async function restartCompanion(): Promise<void> {
+  await companionAction('restart')
+}
+
+export async function shutdownCompanion(): Promise<void> {
+  await companionAction('shutdown')
+}
+
+export async function checkCompanionUpdate(manifestUrl: string): Promise<CompanionUpdateCheck> {
+  const response = await fetch(`${apiBase()}/api/companion/update/check`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify({ manifestUrl }),
+  })
+  const payload = await response.json() as { ok: boolean; value?: CompanionUpdateCheck; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `companion update check failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
+export async function applyCompanionUpdate(manifestUrl: string): Promise<{ from: string; to: string; restarting: boolean }> {
+  const response = await fetch(`${apiBase()}/api/companion/update/apply`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify({ manifestUrl }),
+  })
+  const payload = await response.json() as { ok: boolean; value?: { from: string; to: string; restarting: boolean }; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `companion update failed: HTTP ${response.status}`)
+  }
   return payload.value
 }
 
@@ -348,9 +400,9 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.2.1'
-export const COMPANION_MIN_VERSION = '0.2.1'
-export const COMPANION_RELEASE_TAG = 'v0.2.1-companion.1'
+export const COMPANION_RELEASE_VERSION = '0.3.0'
+export const COMPANION_MIN_VERSION = '0.3.0'
+export const COMPANION_RELEASE_TAG = 'v0.3.0-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

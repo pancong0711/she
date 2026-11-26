@@ -53,6 +53,8 @@ defineProps<{
         <dd>检查当前用户、Node.js、pnpm、git、Docker、构建产物和 socket 状态。只读，不安装。</dd>
         <dt>用户级环境准备</dt>
         <dd>不请求 root，只在当前用户目录准备 pnpm 等无需管理员权限的组件；不会安装 Docker。若 Docker 缺失，job 仍可能成功，但 Sandbox / Agent Migration / broker 容器能力会标记为不可用，并显示安装指引。</dd>
+        <dt>Companion 生命周期</dt>
+        <dd>Settings 显示 companion 版本、最低版本和 supervisor 状态。通过 start.sh 启动时可在页面内重启、停止、检查更新和安装并重启；更新使用 checksum，supervisor 在新进程启动失败时回滚。</dd>
         <dt>Core 首次安装</dt>
         <dd>Companion 本身不含 Core。Core 未安装时，Dashboard、Install &amp; Doctor 和 Packages 会显示“安装 Core”按钮；首次安装后 control-plane 与 broker 才能启动。</dd>
         <dt>开发者工具</dt>

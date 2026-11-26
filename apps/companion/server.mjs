@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
 import { dockerGuidance, summarizePreflight } from './preflight.mjs'
 import { authorizeWorkspace, listWorkspaceAuthorizations, removeWorkspaceAuthorization } from './workspaces.mjs'
+import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -40,6 +41,10 @@ const workerConfigPath = process.env.SHE_WORKER_CONFIG_FILE?.trim() || join(conf
 const migrationRecordRoot = process.env.SHE_MIGRATION_RECORD_ROOT?.trim() || join(dataHome, 'she', 'migrations')
 const migrationWorkspaceRoot = process.env.SHE_MIGRATION_WORKSPACE_ROOT?.trim() || join(dataHome, 'she', 'workspaces')
 const workspaceRegistryPath = process.env.SHE_WORKSPACE_REGISTRY?.trim() || join(configHome, 'she', 'workspaces.json')
+const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
+const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
+const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
+const COMPANION_RESTART_EXIT_CODE = 75
 const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
@@ -809,6 +814,78 @@ async function packageCatalog() {
 }
 
 
+function scheduleCompanionExit(code, delayMs = 350) {
+  setTimeout(() => process.exit(code), delayMs).unref()
+}
+
+async function checkCompanionUpdate(manifestUrl) {
+  const validatedUrl = validateCompanionManifestUrl(manifestUrl)
+  const manifest = validateCompanionManifest(await readManifest(validatedUrl))
+  const comparison = compareVersions(manifest.version, companionVersion)
+  if (comparison === undefined) throw new Error('cannot compare companion versions')
+  return {
+    current: companionVersion,
+    available: manifest.version,
+    needsUpdate: comparison > 0,
+    manifest,
+  }
+}
+
+async function downloadCompanionBundle(manifestUrl, manifest) {
+  const file = basename(String(manifest.bundle.file))
+  const url = new URL(file, manifestUrl)
+  let bytes
+  if (url.protocol === 'file:') {
+    bytes = await readFile(url)
+  } else {
+    const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
+    if (!response.ok) throw new Error(`companion bundle HTTP ${response.status}`)
+    bytes = Buffer.from(await response.arrayBuffer())
+  }
+  const actual = createHash('sha256').update(bytes).digest('hex')
+  if (actual !== String(manifest.bundle.sha256).toLowerCase()) {
+    throw new Error(`companion bundle SHA-256 mismatch: expected ${String(manifest.bundle.sha256)} got ${actual}`)
+  }
+  if (companionInstallRoot === undefined) throw new Error('companion install root is unknown')
+  const staging = join(companionInstallRoot, 'staging')
+  await mkdir(staging, { recursive: true, mode: 0o700 })
+  const target = join(staging, file)
+  await writeFile(target, bytes, { mode: 0o600 })
+  return { path: target, sha256: actual, bytes: bytes.byteLength }
+}
+
+async function applyCompanionUpdate(manifestUrl) {
+  if (!companionSupervised || companionInstallRoot === undefined) {
+    throw new Error('companion is not running under the launcher supervisor; restart/update from the page is unavailable')
+  }
+  if (process.platform === 'win32') {
+    throw new Error('page-driven companion update is currently available on Linux/macOS only; use start.ps1 on Windows')
+  }
+  const checked = await checkCompanionUpdate(manifestUrl)
+  if (!checked.needsUpdate) throw new Error(`companion is already ${companionVersion}`)
+  const previousTarget = await readlink(join(companionInstallRoot, 'current')).catch(() => undefined)
+  if (previousTarget === undefined) throw new Error('cannot resolve companion current version')
+  const download = await downloadCompanionBundle(manifestUrl, checked.manifest)
+  const installScript = join(repoRoot, 'scripts/install-companion.sh')
+  const install = await captureCommand(undefined, 'bash', [
+    installScript,
+    download.path,
+    '--sha256', download.sha256,
+    '--install-root', companionInstallRoot,
+    '--bin-dir', companionBinDir,
+  ])
+  if (!install.ok) throw new Error(`companion installer failed: ${install.stderr || install.stdout || 'unknown error'}`)
+  await writeFile(join(companionInstallRoot, 'update-pending.json'), `${JSON.stringify({
+    schema: 1,
+    from: companionVersion,
+    to: checked.manifest.version,
+    previousTarget,
+    bundleSha256: download.sha256,
+    createdAt: Date.now(),
+  }, null, 2)}\n`, { mode: 0o600 })
+  return { from: companionVersion, to: checked.manifest.version, bundleSha256: download.sha256, restarting: true }
+}
+
 async function platformStatus() {
   const platform = process.platform
   const [dockerVersion, dockerSecurity] = await Promise.all([
@@ -1376,6 +1453,8 @@ async function handleCompanionApi(request, response) {
         brokerSocketPath,
         activeJobId,
         version: companionVersion,
+        supervised: companionSupervised,
+        ...(companionInstallRoot === undefined ? {} : { installRoot: companionInstallRoot }),
         privilege: {
           rootRequired: false,
           executesSudo: false,
@@ -1400,9 +1479,11 @@ async function handleCompanionApi(request, response) {
           sandbox: 'v1',
         },
         updateBoundary: {
-          selfUpdate: false,
-          method: 'checksum-verified companion installer',
-          note: 'PWA never replaces the running companion; upgrade via a new companion release/installer.',
+          selfUpdate: companionSupervised,
+          method: companionSupervised ? 'supervisor-managed checksum-verified update' : 'checksum-verified companion installer',
+          note: companionSupervised
+            ? 'PWA requests update; the stable supervisor restarts the companion from the new version directory and rolls back if the new process exits during startup.'
+            : 'Companion is not running under the launcher supervisor; restart/update from the page is unavailable.',
         },
       },
     })
@@ -1413,7 +1494,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1455,6 +1536,55 @@ async function handleCompanionApi(request, response) {
       const body = await readBodyJson(request)
       const result = await checkCoreUpdate(String(body.manifestUrl ?? '').trim())
       sendJsonWithCors(request, response, 200, { ok: true, value: result })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && /^\/api\/companion\/(restart|shutdown)$/.test(url.pathname)) {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    if (!companionSupervised) {
+      sendJsonWithCors(request, response, 409, {
+        ok: false,
+        error: {
+          code: 'conflict',
+          message: 'companion is not running under the launcher supervisor; use start.sh/start.command/start.bat to restart it',
+          retryable: false,
+        },
+      })
+      return
+    }
+    const action = url.pathname.split('/').pop()
+    sendJsonWithCors(request, response, 200, { ok: true, value: { action, restarting: action === 'restart', version: companionVersion } })
+    scheduleCompanionExit(action === 'restart' ? COMPANION_RESTART_EXIT_CODE : 0, 500)
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/companion/update/check') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      sendJsonWithCors(request, response, 200, { ok: true, value: await checkCompanionUpdate(String(body.manifestUrl ?? '').trim()) })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/companion/update/apply') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      const result = await applyCompanionUpdate(String(body.manifestUrl ?? '').trim())
+      sendJsonWithCors(request, response, 200, { ok: true, value: result })
+      scheduleCompanionExit(COMPANION_RESTART_EXIT_CODE, 500)
     } catch (error) {
       sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
     }

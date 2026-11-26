@@ -210,9 +210,9 @@ PWA 点击“检查更新”
 
 规则：
 
-- PWA 不替换 running core 文件；
-- PWA 不替换 companion 自己；
-- companion 更新需要单独、显式的升级路径；
+- PWA 不直接替换 running core 文件；
+- PWA 不直接替换/杀死 companion 进程；
+- companion 更新必须在 supervisor 下、经 checksum 校验和显式确认后由 companion 自己请求重启；
 - 旧版本至少保留一个；
 - 所有阶段在 PWA 实时显示；
 - 不允许静默失败或半安装状态。
@@ -311,7 +311,7 @@ scripts/release-manifest.mjs
 
 - 不让 SHE 直接复用 assignment-assistant 的 engine CLI/协议；
 - 不把 assignment-assistant 的代码变成 SHE 依赖；
-- 不让 PWA 在运行中改 companion 自身；
+- 不让 PWA 直接改 companion 文件或杀死 companion 进程；允许其请求 supervisor 管理的安全重启/更新（ADR-0003）；
 - 不让 companion import core 业务模块；
 - 不在 core 运行时覆盖 core 文件；
 - 不把系统级安装做成无确认静默执行。

@@ -110,6 +110,7 @@
 | T7.5 | staging/pending/停止/切换/健康检查/回滚 | T7.4 | [x] | 更新失败自动回滚 |
 | T7.6 | PWA 更新 UI 与实时阶段日志 | T7.5 | [x] | 下载/安装/重启/回滚进度可见 |
 | T7.7 | companion 自身升级边界 | T7.2 | [x] | PWA 不替换运行中的 companion |
+| T7.8 | supervisor 管理的 companion 页面内重启/停止/更新 | T7.7 | [x] | 版本可见；checksum；失败回滚；非 supervisor 模式禁用 |
 
 ## 当前执行记录
 
@@ -161,3 +162,5 @@
 - 2026-11-26：修复 companion 版本与 root/core 耦合导致的 launcher 不更新问题：companion bundle/manifest 改用 `apps/companion/package.json` 版本，升级到 0.2.0；launcher 默认 Release tag 更新为 `v0.2.0-companion.1`；PWA 增加最低 companion 版本提示；service worker 对导航和 start.* 改为 network-first，避免缓存旧 launcher。
 
 - 2026-11-26：发布 companion 0.2.1，修复 127.0.0.1 本地 PWA 与 Pages 版本割裂：start.* 和 manifest 使用 no-cache，service worker 对导航/launcher 使用 network-first；launcher 默认 tag 与最低 companion 版本同步更新。
+
+- 2026-11-26：完成 T7.8：新增 companion supervisor（退出码 75 重启、20 秒启动窗口、pending rollback）；PWA Settings 显示 companion 版本并支持页面内重启/停止/检查更新/安装并重启；更新仅接受 SHE GitHub Release manifest，校验 SHA-256，非 supervisor 模式禁用。实际验证 0.3.0→0.3.1 更新成功、故意启动失败回滚到 0.3.0。
