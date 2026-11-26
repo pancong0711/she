@@ -2,12 +2,16 @@
 import { computed, onMounted, ref } from 'vue'
 import {
   FEISHU4DSH_SOURCE_URL,
+  controlFeishuGateway,
   loadFeishu4dshStatus,
+  loadFeishuGatewayStatus,
   loadGatewayStatus,
+  saveFeishuGatewayConfig,
   saveGatewayConfig,
   startJob,
   streamJobEvents,
   type Feishu4dshStatus,
+  type FeishuGatewayStatus,
   type GatewayStatus,
   type JobEvent,
 } from '../api'
@@ -26,6 +30,16 @@ const installSource = ref(FEISHU4DSH_SOURCE_URL)
 const installing = ref(false)
 const installEvents = ref<JobEvent[]>([])
 const copiedCommand = ref('')
+const directGateway = ref<FeishuGatewayStatus | null>(null)
+const directGatewayError = ref('')
+const directGatewayMessage = ref('')
+const directGatewayBusy = ref('')
+const feishuAppId = ref('')
+const feishuAppSecret = ref('')
+const feishuDomain = ref<'feishu' | 'lark'>('feishu')
+const feishuRequireMention = ref(true)
+const feishuAllowedOpenIds = ref('')
+const feishuAllowedChatIds = ref('')
 
 const controlCapabilities = computed(() => {
   const response = status.value?.controlPlane.response as { capabilities?: { values?: string[] } } | undefined
@@ -48,9 +62,10 @@ async function refresh(): Promise<void> {
   loading.value = true
   error.value = ''
   setupError.value = ''
-  const [gatewayResult, setupResult] = await Promise.allSettled([
+  const [gatewayResult, setupResult, directResult] = await Promise.allSettled([
     loadGatewayStatus(),
     loadFeishu4dshStatus(),
+    loadFeishuGatewayStatus(),
   ])
   if (gatewayResult.status === 'fulfilled') {
     status.value = gatewayResult.value
@@ -66,7 +81,59 @@ async function refresh(): Promise<void> {
     feishuSetup.value = null
     setupError.value = setupResult.reason instanceof Error ? setupResult.reason.message : String(setupResult.reason)
   }
+  if (directResult.status === 'fulfilled') {
+    directGateway.value = directResult.value
+    feishuAppId.value = directResult.value.envFile.appId
+    feishuDomain.value = directResult.value.envFile.domain
+    feishuRequireMention.value = directResult.value.envFile.requireMention
+    feishuAllowedOpenIds.value = directResult.value.envFile.allowedOpenIds
+    feishuAllowedChatIds.value = directResult.value.envFile.allowedChatIds
+    directGatewayError.value = ''
+  } else {
+    directGateway.value = null
+    directGatewayError.value = directResult.reason instanceof Error ? directResult.reason.message : String(directResult.reason)
+  }
   loading.value = false
+}
+
+async function saveAndConnectDirectGateway(): Promise<void> {
+  if (directGatewayBusy.value !== '') return
+  directGatewayBusy.value = 'save'
+  directGatewayError.value = ''
+  directGatewayMessage.value = ''
+  try {
+    directGateway.value = await saveFeishuGatewayConfig({
+      appId: feishuAppId.value.trim(),
+      appSecret: feishuAppSecret.value,
+      domain: feishuDomain.value,
+      requireMention: feishuRequireMention.value,
+      allowedOpenIds: feishuAllowedOpenIds.value.trim(),
+      allowedChatIds: feishuAllowedChatIds.value.trim(),
+    })
+    feishuAppSecret.value = ''
+    directGatewayBusy.value = 'start'
+    directGateway.value = await controlFeishuGateway('start')
+    directGatewayMessage.value = 'Feishu 凭据已保存到 0600 文件，内置 Feishu gateway 已启动。'
+  } catch (cause) {
+    directGatewayError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    directGatewayBusy.value = ''
+  }
+}
+
+async function stopDirectGateway(): Promise<void> {
+  if (directGatewayBusy.value !== '') return
+  directGatewayBusy.value = 'stop'
+  directGatewayError.value = ''
+  directGatewayMessage.value = ''
+  try {
+    directGateway.value = await controlFeishuGateway('stop')
+    directGatewayMessage.value = '内置 Feishu gateway 已停止。'
+  } catch (cause) {
+    directGatewayError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    directGatewayBusy.value = ''
+  }
 }
 
 async function save(): Promise<void> {
@@ -127,10 +194,10 @@ onMounted(refresh)
       <div class="section-head">
         <div>
           <p class="eyebrow">GATEWAY / CHANNEL ADAPTER</p>
-          <h2>Gateway 配置与 feishu4dsh 连接状态</h2>
+          <h2>Gateway / Feishu 连接</h2>
           <p class="muted">
-            SHE 只消费 gateway.v1 的事件、命令和 RenderIntent。飞书 app secret、verification token、
-            encrypt key、tenant token 必须留在 feishu4dsh，不进入 SHE，也不暴露给 agent。
+            SHE 是独立 agent control plane，不要求安装 dsh 或 feishu4dsh。首选方式是使用下方内置 Feishu gateway：
+            飞书凭据只保存在本地 0600 文件，core、worker 和 agent 不读取，也不暴露给模型。
           </p>
         </div>
         <button class="secondary" :disabled="loading" @click="refresh">{{ loading ? '刷新中…' : '刷新状态' }}</button>
@@ -138,6 +205,87 @@ onMounted(refresh)
       <p v-if="error" class="error-text">{{ error }}</p>
       <p v-if="message" class="success-text">{{ message }}</p>
     </div>
+
+    <article class="card wide direct-feishu-card">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">BUILT-IN FEISHU CHANNEL</p>
+          <h2>直接连接飞书（不需要 dsh / feishu4dsh）</h2>
+          <p class="muted">
+            SHE 自带轻量 Feishu WebSocket gateway。它只依赖飞书 App ID/App Secret 和本机 SHE control plane，
+            不要求用户安装 dsh 或 feishu4dsh。凭据写入 <code>~/.config/she/feishu.env</code>（0600），
+            core/agent 不读取该文件。
+          </p>
+        </div>
+        <span :class="['pill', directGateway?.runtime.running ? 'succeeded' : directGateway?.envFile.appSecretConfigured ? 'warn' : 'failed']">
+          {{ directGateway?.runtime.running ? 'connected' : directGateway?.envFile.appSecretConfigured ? 'configured / stopped' : 'not configured' }}
+        </span>
+      </div>
+      <p v-if="directGatewayError" class="error-text">{{ directGatewayError }}</p>
+      <p v-if="directGatewayMessage" class="success-text">{{ directGatewayMessage }}</p>
+      <div v-if="directGateway" class="gateway-form direct-feishu-form">
+        <label>
+          Feishu App ID
+          <input v-model="feishuAppId" placeholder="cli_xxxxxxxx" />
+        </label>
+        <label>
+          Feishu App Secret
+          <input v-model="feishuAppSecret" type="password" :placeholder="directGateway.envFile.appSecretConfigured ? '已保存；留空保持不变' : '输入 App Secret'" autocomplete="new-password" />
+        </label>
+        <label>
+          Domain
+          <select v-model="feishuDomain">
+            <option value="feishu">Feishu（飞书）</option>
+            <option value="lark">Lark</option>
+          </select>
+        </label>
+        <label class="check-row"><input v-model="feishuRequireMention" type="checkbox" /> 群聊中必须 @ 机器人</label>
+        <label>
+          允许的 sender open_id（逗号分隔，留空不限制）
+          <input v-model="feishuAllowedOpenIds" placeholder="ou_xxx,ou_yyy" />
+        </label>
+        <label>
+          允许的 chat_id（逗号分隔，留空不限制）
+          <input v-model="feishuAllowedChatIds" placeholder="oc_xxx" />
+        </label>
+      </div>
+      <div v-if="directGateway" class="health-grid">
+        <div><span>env file</span><b><code>{{ directGateway.envFile.path }}</code></b></div>
+        <div><span>mode</span><b>{{ directGateway.envFile.mode === undefined ? '-' : `0${directGateway.envFile.mode.toString(8)}` }}</b></div>
+        <div><span>app id</span><b>{{ directGateway.envFile.appIdConfigured ? directGateway.envFile.appId : 'missing' }}</b></div>
+        <div><span>app secret</span><b>{{ directGateway.envFile.appSecretConfigured ? 'saved (value never returned)' : 'missing' }}</b></div>
+        <div><span>process</span><b>{{ directGateway.runtime.running ? `running pid=${directGateway.runtime.pid}` : 'stopped' }}</b></div>
+        <div v-if="directGateway.runtime.lastError"><span>last error</span><b class="error-text">{{ directGateway.runtime.lastError }}</b></div>
+      </div>
+      <div class="job-actions">
+        <button class="primary" :disabled="directGatewayBusy !== ''" @click="saveAndConnectDirectGateway">
+          {{ directGatewayBusy === 'save' ? '保存中…' : directGatewayBusy === 'start' ? '连接中…' : '保存并连接飞书' }}
+        </button>
+        <button v-if="directGateway?.runtime.running" class="secondary" :disabled="directGatewayBusy !== ''" @click="stopDirectGateway">
+          {{ directGatewayBusy === 'stop' ? '停止中…' : '停止 Feishu gateway' }}
+        </button>
+        <button class="secondary" :disabled="loading" @click="refresh">刷新状态</button>
+      </div>
+      <details v-if="directGateway?.runtime.logs.length" class="gateway-command-help">
+        <summary>查看 gateway 日志（不包含 App Secret）</summary>
+        <pre><code>{{ directGateway.runtime.logs.map(item => `${new Date(item.at).toLocaleTimeString()} [${item.stream}] ${item.text}`).join('\n') }}</code></pre>
+      </details>
+      <p class="muted small-note">
+        首次启动后，在飞书里给机器人发 <code>/she help</code>。当前内置 gateway 支持文本命令和任务
+        accepted/completed/failed 回传；卡片审批和文件回传仍属于后续增强。
+      </p>
+    </article>
+
+    <article class="card wide">
+      <div class="section-head">
+        <div>
+          <h2>外部 feishu4dsh adapter（可选，不默认依赖）</h2>
+          <p class="muted">
+            以下配置仅供已经单独部署 feishu4dsh 的高级用户检查；SHE 不要求安装 dsh 或 feishu4dsh。
+          </p>
+        </div>
+      </div>
+    </article>
 
     <article class="card wide">
       <div class="section-head">

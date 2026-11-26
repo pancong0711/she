@@ -255,6 +255,74 @@ export async function saveSandboxPreferences(input: SandboxPreferences): Promise
   return payload.value
 }
 
+export interface FeishuGatewayStatus {
+  readonly schema: 1
+  readonly checkedAt: number
+  readonly envFile: {
+    readonly path: string
+    readonly exists: boolean
+    readonly mode?: number
+    readonly permissionsOk?: boolean
+    readonly appId: string
+    readonly appIdConfigured: boolean
+    readonly appSecretConfigured: boolean
+    readonly domain: 'feishu' | 'lark'
+    readonly requireMention: boolean
+    readonly allowedOpenIds: string
+    readonly allowedChatIds: string
+  }
+  readonly runtime: {
+    readonly entry: string
+    readonly entryExists: boolean
+    readonly running: boolean
+    readonly pid: number | null
+    readonly startedAt: number | null
+    readonly lastError: string | null
+    readonly logs: readonly { readonly at: number; readonly stream: string; readonly text: string }[]
+  }
+  readonly note: string
+}
+
+export async function loadFeishuGatewayStatus(signal?: AbortSignal): Promise<FeishuGatewayStatus> {
+  const payload = await getJson<{ ok: boolean; value?: FeishuGatewayStatus; error?: { message?: string } }>('/api/feishu/gateway/status', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'Feishu gateway status unavailable')
+  return payload.value
+}
+
+export interface FeishuGatewayConfigInput {
+  readonly appId: string
+  readonly appSecret: string
+  readonly domain: 'feishu' | 'lark'
+  readonly requireMention: boolean
+  readonly allowedOpenIds: string
+  readonly allowedChatIds: string
+}
+
+export async function saveFeishuGatewayConfig(input: FeishuGatewayConfigInput): Promise<FeishuGatewayStatus> {
+  const response = await fetch(`${apiBase()}/api/feishu/gateway/config`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify(input),
+  })
+  const payload = await response.json() as { ok: boolean; value?: FeishuGatewayStatus; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `Feishu gateway config failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
+export async function controlFeishuGateway(action: 'start' | 'stop'): Promise<FeishuGatewayStatus> {
+  const response = await fetch(`${apiBase()}/api/feishu/gateway/${action}`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+  })
+  const payload = await response.json() as { ok: boolean; value?: FeishuGatewayStatus; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `Feishu gateway ${action} failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
 export const FEISHU4DSH_SOURCE_URL = 'git+https://github.com/pancong0711/feishu4dsh.git'
 
 export interface Feishu4dshStatus {
@@ -643,12 +711,12 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.5.0'
+export const COMPANION_RELEASE_VERSION = '0.6.0'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.5.0'
-export const COMPANION_RELEASE_TAG = 'v0.5.0-companion.1'
+export const COMPANION_MIN_VERSION = '0.6.0'
+export const COMPANION_RELEASE_TAG = 'v0.6.0-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
-export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
+export const COMPANION_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/latest/download/companion-release-manifest.json'
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`
 export const COMPANION_INSTALLER_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/install-companion.sh`
 

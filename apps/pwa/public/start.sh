@@ -4,8 +4,12 @@
 # starts the local companion, and opens the PWA. Never uses sudo or requests root.
 set -euo pipefail
 
-TAG="${SHE_COMPANION_RELEASE_TAG:-v0.4.7-companion.1}"
-BASE="${SHE_COMPANION_RELEASE_BASE:-https://github.com/pancong0711/she/releases/download/$TAG}"
+TAG="${SHE_COMPANION_RELEASE_TAG:-}"
+if [ -n "$TAG" ]; then
+  BASE="${SHE_COMPANION_RELEASE_BASE:-https://github.com/pancong0711/she/releases/download/$TAG}"
+else
+  BASE="${SHE_COMPANION_RELEASE_BASE:-https://github.com/pancong0711/she/releases/latest/download}"
+fi
 INSTALL_ROOT="${SHE_COMPANION_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/she/companion}"
 BIN_DIR="${SHE_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
 PORT="${SHE_PWA_PORT:-8787}"

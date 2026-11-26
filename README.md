@@ -149,6 +149,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.0.tar.gz --core-
 - [SHE companion 0.4.8 发布说明](docs/RELEASE-0.4.8-COMPANION.md)
 - [SHE companion 0.4.9 发布说明](docs/RELEASE-0.4.9-COMPANION.md)
 - [SHE companion 0.5.0 发布说明](docs/RELEASE-0.5.0-COMPANION.md)
+- [SHE companion 0.6.0 发布说明](docs/RELEASE-0.6.0-COMPANION.md)
 - [ADR-0002：不请求、不执行 root](docs/ADR-0002-no-root-privilege-policy.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)

@@ -1,0 +1,15 @@
+{
+  "name": "@she/feishu-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Direct Feishu/Lark channel adapter for the SHE control plane",
+  "scripts": {
+    "build": "esbuild src/main.mjs --bundle --platform=node --format=cjs --target=node22 --outfile=dist/main.cjs"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "1.73.0",
+    "@she/client": "workspace:*",
+    "@she/protocol": "workspace:*"
+  }
+}

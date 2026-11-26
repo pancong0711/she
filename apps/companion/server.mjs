@@ -27,6 +27,7 @@ import { SANDBOX_IMAGE_PRESETS, readSandboxPreferences, writeSandboxPreferences 
 import { defaultFeishu4dshPaths, inspectFeishu4dsh, validateFeishu4dshPackageSpec, validateFeishu4dshProfile } from './feishu4dsh.mjs'
 import { inspectOpenCodeService, reconcileOpenCodeWorkerConfig } from './opencode-service.mjs'
 import { sandboxAgentRecipeCatalog } from './sandbox-agent-recipes.mjs'
+import { FeishuGatewayManager } from './feishu-gateway-manager.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -64,6 +65,15 @@ const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtime
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
 const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
 const brokerTokenFile = process.env.SHE_BROKER_TOKEN_FILE?.trim() || join(configHome, 'she', 'broker-token')
+const feishuGatewayEnvFile = process.env.SHE_FEISHU_ENV_FILE?.trim() || join(configHome, 'she', 'feishu.env')
+const feishuGatewayEntry = process.env.SHE_FEISHU_GATEWAY_ENTRY?.trim() || join(here, '../feishu-gateway/dist/main.cjs')
+const feishuGateway = new FeishuGatewayManager({
+  envFile: feishuGatewayEnvFile,
+  entry: feishuGatewayEntry,
+  env: childEnv,
+  controlSocket: controlSocketPath,
+  tokenFile: controlTokenFile,
+})
 const allowedOrigins = new Set(
   (process.env.SHE_ALLOWED_ORIGINS
     ?? 'https://pancong0711.github.io,http://127.0.0.1:8787,http://localhost:8787,http://127.0.0.1:5173,http://localhost:5173')
@@ -1776,7 +1786,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'opencode-service', 'autostart', 'gateway', 'feishu4dsh', 'sandbox-preferences', 'sandbox-agent-recipes', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'opencode-service', 'autostart', 'gateway', 'feishu-gateway', 'feishu4dsh', 'sandbox-preferences', 'sandbox-agent-recipes', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1908,6 +1918,41 @@ async function handleCompanionApi(request, response) {
       sendJsonWithCors(request, response, 200, { ok: true, value: await inspectOpenCodeService() })
     } catch (error) {
       sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/feishu/gateway/status') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await feishuGateway.status() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/feishu/gateway/config') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      sendJsonWithCors(request, response, 200, { ok: true, value: await feishuGateway.save(body) })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && /^\/api\/feishu\/gateway\/(start|stop)$/.test(url.pathname)) {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const action = url.pathname.split('/').pop()
+      const value = action === 'start' ? await feishuGateway.start() : await feishuGateway.stop()
+      sendJsonWithCors(request, response, 200, { ok: true, value })
+    } catch (error) {
+      sendJsonWithCors(request, response, 409, { ok: false, error: { code: 'conflict', message: error.message, retryable: true } })
     }
     return
   }

@@ -1,10 +1,72 @@
-# Gateway 配置与 feishu4dsh 连接状态
+# Gateway：SHE 内置飞书通道与可选外部 adapter
 
-> 状态：T6.7 首版（配置、health probe、secret boundary）
+> 状态：companion 0.6.0 内置飞书 gateway 首版
 > 代码：
+> - `apps/feishu-gateway/src/main.mjs`
+> - `apps/companion/feishu-gateway-manager.mjs`
 > - `apps/companion/gateway.mjs`
 > - `apps/companion/server.mjs`
 > - `apps/pwa/src/components/GatewayPanel.vue`
+
+## 0. 首选连接方式：SHE 内置 Feishu gateway
+
+SHE 是独立 agent control plane，不是 dsh 插件。用户不需要预先安装 dsh 或 feishu4dsh。
+
+首选链路：
+
+```text
+飞书
+  ↕ 官方 Lark SDK WebSocket
+SHE built-in Feishu gateway（companion 管理的本地子进程）
+  ↕ @she/client / gateway.v1
+SHE control plane
+  → core worker / agent runtime
+```
+
+PWA Gateway 页面提供：
+
+- Feishu App ID / App Secret 配置；
+- Domain（Feishu / Lark）；
+- 群聊 require mention；
+- sender/chat allowlist；
+- 保存并连接、停止、刷新；
+- 进程状态和最近日志。
+
+凭据保存位置：
+
+```text
+$XDG_CONFIG_HOME/she/feishu.env
+回退 ~/.config/she/feishu.env
+权限：0600
+```
+
+Secret boundary：
+
+- App Secret 只由 built-in Feishu gateway 进程读取；
+- core、worker、agent、sandbox 不读取该文件；
+- PWA 保存后不返回 App Secret 值；
+- 日志不输出 App Secret；
+- 飞书 WebSocket 凭据不会进入 task prompt。
+
+当前内置 gateway 支持：
+
+- `/she help`、`/she list`、`/she status`、`/she submit`、`/she cancel`；
+- command result 文本回传；
+- task accepted/completed/failed；
+- agent text delta 聚合后随完成消息返回。
+
+后续增强：
+
+- 交互卡片/审批/表单；
+- artifact 文件下载与飞书文件审批；
+- 卡片化实时进度；
+- systemd user service 常驻/linger；
+- 多频道/多机器人。
+
+## 1. 外部 feishu4dsh adapter（高级可选项）
+
+下面内容仅适用于用户自己另外部署了 feishu4dsh 的情况。SHE 不默认依赖 dsh 或 feishu4dsh。
+
 
 ## 1. 定位
 
@@ -114,7 +176,27 @@ dsh plugin --profile <profile> add <packageSpec>
 
 前三步只证明“飞书 ↔ feishu4dsh ↔ dsh”通道可能可用；SHE 侧仍不能宣称完成。
 
-## 4. Companion API
+## 4. 内置 Feishu gateway Companion API
+
+```text
+GET  /api/feishu/gateway/status
+POST /api/feishu/gateway/config
+POST /api/feishu/gateway/start
+POST /api/feishu/gateway/stop
+```
+
+写操作要求 `X-SHE-Local-Action: 1`。
+
+`status` 返回：
+
+- env 文件路径、权限、是否配置 App ID/Secret（不返回值）；
+- domain、requireMention、allowlist；
+- gateway 进程 running/pid/startedAt/lastError；
+- 最近日志。
+
+`config` 可省略 App Secret（空字符串表示保留旧值）。
+
+## 5. 外部 adapter Companion API
 
 ```text
 GET  /api/gateway
@@ -140,7 +222,7 @@ status 返回：
 - adapter health probe（3 秒超时、禁止 redirect、只允许 loopback）；
 - secret boundary 说明。
 
-## 5. PWA Gateway 页面
+## 6. PWA Gateway 页面
 
 显示：
 
@@ -152,7 +234,7 @@ status 返回：
 - adapter health URL 与 HTTP 状态；
 - secret boundary 提示。
 
-## 6. 当前限制
+## 7. 当前限制
 
 - feishu4dsh 尚未实现统一 `/health` endpoint 时，会显示 unreachable；
 - 首版不保存 adapter token，因此带鉴权的 health endpoint 暂不支持；
@@ -161,7 +243,7 @@ status 返回：
 - 真机飞书验收仍属于 T4.6；
 - Gateway 页面不会让 agent 接触飞书 secret。
 
-## 7. 验收
+## 8. 验收
 
 - [x] loopback health URL 校验；
 - [x] secret 字段不落盘；

@@ -176,7 +176,7 @@ defineProps<{
           <tr><td>Agent Migration</td><td>发现本机 AI agent，dry-run 规划并迁移到 sandbox；只读凭据目录挂载，原进程不动。</td></tr>
           <tr><td>Sandboxes</td><td>创建 sandbox、Agent recipe 预装、卡片内安装/验证/执行命令、broker 列表、状态与资源。</td></tr>
           <tr><td>Packages</td><td>Companion/Core/Node/pnpm/git/bash/curl/tar/SHA-256/Docker/OpenCode 依赖清单；显示用途、缺失影响、可复制安装方法和官方文档链接。</td></tr>
-          <tr><td>Gateway</td><td>feishu4dsh dsh 插件检测/受控安装、control-plane gateway.v1 状态、adapter health；飞书 secret 始终留在 feishu4dsh。</td></tr>
+          <tr><td>Gateway</td><td>SHE 内置 Feishu WebSocket gateway（不依赖 dsh/feishu4dsh）；配置 App ID/Secret、启动/停止、任务回传；外部 feishu4dsh 仅作可选高级配置。</td></tr>
           <tr><td>Settings</td><td>companion URL、服务状态、worker/OpenCode/workspace 配置（密码仅保存路径）。</td></tr>
           <tr><td>Help</td><td>本页：概念、边界、操作说明和故障排查。</td></tr>
         </tbody>
@@ -196,8 +196,8 @@ defineProps<{
         <dd>确认 companion 正在运行，且页面是受支持的 origin；companion 只接受显式允许的浏览器来源。</dd>
         <dt>更新后页面像旧版</dt>
         <dd>service worker 可能缓存旧资源。强制刷新，或在 DevTools → Application → Service Workers 中 unregister 后重新加载。</dd>
-        <dt>安装了 feishu4dsh 是否就能连接飞书和 SHE？</dt>
-        <dd>不完全是。插件安装只完成飞书 ↔ feishu4dsh ↔ dsh 的通道准备；还要配置飞书应用凭据、启动用户服务，并由 feishu4dsh 实现 gateway.v1 adapter。SHE 不保存 secret，T4.6 真机联调仍未完成。</dd>
+        <dt>如何把飞书连接到 SHE？</dt>
+        <dd>不需要安装 dsh 或 feishu4dsh。Gateway 页面可直接填写飞书 App ID/App Secret，SHE companion 会启动内置 Feishu WebSocket gateway，调用 control plane 的 gateway.v1。Secret 写入 ~/.config/she/feishu.env（0600），core/agent 不读取。</dd>
         <dt>为什么新建 sandbox 里没有 agent？</dt>
         <dd>Sandbox 只消费镜像；运行期 rootfs 是只读的。现在可在创建时选择 Agent recipe，把固定版本安装到可写的 /home/agent/.local；也可以创建后用卡片内“安装 Agent”完成。生产环境仍推荐预构建并锁定 digest 的镜像。</dd>
         <dt>怎么进入 sandbox 执行命令？</dt>

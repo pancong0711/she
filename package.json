@@ -22,6 +22,7 @@
     "companion": "pnpm --filter @she/companion start",
     "build:core": "bash scripts/build-core-bundle.sh",
     "install:core": "bash scripts/install-core-bundle.sh",
+    "build:feishu-gateway": "pnpm --filter @she/feishu-gateway build",
     "build:companion": "bash scripts/build-companion-bundle.sh"
   },
   "devDependencies": {
