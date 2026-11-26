@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Added `/api/platform` and an Install & Doctor platform support matrix with explicit verified / implemented-unverified / design-only / unsupported statuses.
 - Added read-only Agents page and `GET /v1/agents` with OpenCode health, worker configuration, credential-file path only, and workspace authorization details.
 - Added explicit first-run Core install actions and moved source-only dependency/build/test actions into a clearly labelled developer-tools section.
 - Expanded Packages into a dependency catalog with requirement/usage metadata, platform-specific install commands, copy buttons, official docs links, and entries for git/bash/curl/tar/SHA-256/OpenCode alongside Docker/Node/pnpm/companion/core.

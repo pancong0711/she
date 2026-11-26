@@ -215,6 +215,9 @@ SHE_TOKEN_FILE
 - Settings：
   - companion URL；
   - 连接状态；
+- Install & Doctor 平台能力：
+  - OS/arch/Node/shell/uid/WSL 与 Docker 模式；
+  - Linux/macOS/Windows 支持矩阵，区分 verified / implemented-unverified / design-only / unsupported；
 - Install & Doctor 环境能力摘要：
   - 区分 required toolchain 与 sandbox/Docker 能力；
   - Docker 缺失时显示可选能力影响和安装指引；

@@ -807,6 +807,70 @@ async function packageCatalog() {
 }
 
 
+async function platformStatus() {
+  const platform = process.platform
+  const [dockerVersion, dockerSecurity] = await Promise.all([
+    captureCommand(undefined, 'docker', ['version', '--format', '{{.Server.Version}}']),
+    captureCommand(undefined, 'docker', ['info', '--format', '{{json .SecurityOptions}}']),
+  ])
+  const dockerAvailable = dockerVersion.ok
+  const dockerRootless = dockerAvailable && dockerSecurity.ok && dockerSecurity.stdout.includes('rootless')
+  let wsl = false
+  if (platform === 'linux') {
+    try {
+      const procVersion = await readFile('/proc/version', 'utf8')
+      wsl = /microsoft|wsl/i.test(procVersion)
+    } catch {}
+  }
+  const verified = 'verified'
+  const implementedUnverified = 'implemented-unverified'
+  const designOnly = 'design-only'
+  return {
+    schema: 1,
+    checkedAt: Date.now(),
+    runtime: {
+      platform,
+      arch: process.arch,
+      release: process.release?.name ?? 'node',
+      node: process.versions.node,
+      uid: typeof process.getuid === 'function' ? process.getuid() : null,
+      home: homedir(),
+      shell: platform === 'win32' ? 'powershell' : 'bash',
+      wsl,
+      pathSeparator: platform === 'win32' ? '\\' : '/',
+    },
+    docker: {
+      available: dockerAvailable,
+      mode: !dockerAvailable ? 'unavailable' : dockerRootless ? 'rootless' : 'root-equivalent-risk',
+      ...(dockerVersion.ok ? { version: dockerVersion.stdout } : {}),
+    },
+    capabilities: {
+      pwa: true,
+      companion: true,
+      coreSupervisor: true,
+      unixSocket: platform !== 'win32',
+      sandboxBroker: dockerAvailable,
+      agentMigration: dockerAvailable,
+      rootlessDocker: dockerRootless,
+      nativeWindowsSocket: false,
+    },
+    supportMatrix: [
+      { feature: 'PWA / Companion', linux: verified, macos: implementedUnverified, windows: implementedUnverified },
+      { feature: 'Core install / update / rollback', linux: verified, macos: implementedUnverified, windows: implementedUnverified },
+      { feature: 'OpenCode worker / Chat', linux: verified, macos: implementedUnverified, windows: implementedUnverified },
+      { feature: 'Sandbox broker / Docker', linux: verified, macos: implementedUnverified, windows: designOnly },
+      { feature: 'Agent Migration host mounts', linux: implementedUnverified, macos: designOnly, windows: designOnly },
+      { feature: 'Unix-socket control plane', linux: verified, macos: implementedUnverified, windows: 'unsupported' },
+    ],
+    notes: [
+      'SHE never executes sudo and never requests root.',
+      'Docker access through the docker group may be root-equivalent.',
+      'Windows/macOS entries are explicit about verification status rather than being presented as production-ready.',
+      ...(wsl ? ['WSL detected; Windows-native companion/socket behavior is still not verified.'] : []),
+    ],
+  }
+}
+
 async function startCore(job) {
   if (coreChild !== null) return { alreadyRunning: true }
   const entry = process.platform === 'win32'
@@ -1347,7 +1411,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'packages', 'worker-config', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'worker-config', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1478,6 +1542,14 @@ async function handleCompanionApi(request, response) {
       sendJsonWithCors(request, response, 200, { ok: true, value: record })
     } catch (error) {
       sendJsonWithCors(request, response, 404, { ok: false, error: { code: 'not_found', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/platform') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await platformStatus() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
     }
     return
   }

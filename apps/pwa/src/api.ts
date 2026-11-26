@@ -220,6 +220,43 @@ export async function loadPreflight(signal?: AbortSignal): Promise<PreflightResu
   return payload.value
 }
 
+export interface PlatformSupportRow {
+  readonly feature: string
+  readonly linux: string
+  readonly macos: string
+  readonly windows: string
+}
+
+export interface PlatformStatus {
+  readonly schema: 1
+  readonly checkedAt: number
+  readonly runtime: {
+    readonly platform: string
+    readonly arch: string
+    readonly release: string
+    readonly node: string
+    readonly uid: number | null
+    readonly home: string
+    readonly shell: string
+    readonly wsl: boolean
+    readonly pathSeparator: string
+  }
+  readonly docker: {
+    readonly available: boolean
+    readonly mode: string
+    readonly version?: string
+  }
+  readonly capabilities: Readonly<Record<string, boolean>>
+  readonly supportMatrix: readonly PlatformSupportRow[]
+  readonly notes: readonly string[]
+}
+
+export async function loadPlatformStatus(signal?: AbortSignal): Promise<PlatformStatus> {
+  const payload = await getJson<{ ok: boolean; value?: PlatformStatus; error?: { message?: string } }>('/api/platform', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'platform status unavailable')
+  return payload.value
+}
+
 export interface CoreStatus {
   readonly companion: string
   readonly supervisor: {

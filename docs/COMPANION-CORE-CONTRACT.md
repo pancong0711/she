@@ -36,6 +36,7 @@ GET /api/version
 GET /api/capabilities
 GET /api/core/status
 GET /api/preflight
+GET /api/platform
 POST /api/core/start
 POST /api/core/stop
 POST /api/core/restart
@@ -84,6 +85,8 @@ GET  /api/agents/migrations/:id
 - 安装能力声明。
 
 `/api/preflight`：返回最近一次环境检查结果；`install` job 会先强制执行同一组检查，存在 fail 时中止。
+
+`/api/platform`：返回 OS/arch/Node/shell/uid/WSL、Docker mode、capability 与跨平台支持矩阵；未验证平台明确标记。
 
 `/api/core/status`：
 

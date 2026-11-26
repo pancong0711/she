@@ -109,6 +109,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-
 - [Agent Worker 与 PWA Chat](docs/AGENT-WORKER.md)
 - [AI Agent 本机发现与容器化迁移](docs/AGENT-MIGRATION.md)
 - [软件包、运行时与依赖目录](docs/PACKAGES.md)
+- [平台能力与支持矩阵](docs/PLATFORM-SUPPORT.md)
 - [ADR-0002：不请求、不执行 root](docs/ADR-0002-no-root-privilege-policy.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)

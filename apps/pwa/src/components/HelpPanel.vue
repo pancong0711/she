@@ -196,6 +196,7 @@ defineProps<{
       <p><a :href="`${REPO_URL}/blob/main/docs/COMPANION-CORE-CONTRACT.md`" target="_blank" rel="noreferrer">Companion ↔ Core 契约</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/ENVIRONMENT-BOOTSTRAP.md`" target="_blank" rel="noreferrer">环境检查与安装边界</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/AGENT-MIGRATION.md`" target="_blank" rel="noreferrer">AI Agent 发现与容器化迁移</a></p>
+      <p><a :href="`${REPO_URL}/blob/main/docs/PLATFORM-SUPPORT.md`" target="_blank" rel="noreferrer">平台能力与支持矩阵</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/ADR-0002-no-root-privilege-policy.md`" target="_blank" rel="noreferrer">无 root 权限策略</a></p>
     </article>
   </div>

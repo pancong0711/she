@@ -95,7 +95,7 @@
 | T6.6a | Agent worker + PWA Chat：提交、事件流、实时 text/tool 状态 | T6.6/M2 | [x] | worker+OpenCode+agent.delta 实测 |
 | T6.6b | PWA Settings：worker/OpenCode/workspace 配置与重启应用 | T6.6a | [x] | 0600 config；密码仅路径；core restart 后生效 | 与 CLI/gateway 共用同一控制面会话 |
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
-| T6.8 | 跨平台安装/更新向导与支持矩阵页面 | T6.4/T3.7 | [ ] | Linux 已验证；macOS/Windows 明确状态 |
+| T6.8 | 跨平台安装/更新向导与支持矩阵页面 | T6.4/T3.7 | [~] | Linux 已验证；macOS/Windows 明确状态 | 平台探测与矩阵页面完成；安装向导/真机验收未完成 |
 | T6.9 | 本机 AI agent 发现、容器化迁移计划、凭据目录只读挂载与迁移记录 | T6.3/T3.3/T3.5 | [x] | 发现不读凭据内容；根目录 workspace 阻断；broker host mount 负例测试；PWA 勾选/配置/执行 |
 | T6.4f | Packages 依赖目录与缺失依赖安装指引 | T6.4e | [x] | requirement/用途/状态/安装命令/官方文档；不自动执行系统安装 |
 
@@ -153,3 +153,5 @@
 - 2026-11-26：优化 Install & Doctor 信息架构：Core 未安装时在 Dashboard、Core 卡片和 Packages 中提供明确“安装 Core”按钮；启动/停止/重启按钮在未安装时禁用；将“安装依赖/构建 PWA/构建 TypeScript/运行测试”移入“仅源码仓库使用”的开发者工具折叠区，并明确正常安装用户无需执行。
 
 - 2026-11-26：完成 T6.3b：control-plane 新增 `GET /v1/agents` 与 `SheClient.agents()`，返回 OpenCode `/api/info` health、worker 配置、凭据文件路径（不返回内容）和 workspace realpath/r-w-x/readOnly/leafAuthorized 只读视图；PWA 新增 Agents 页面。
+
+- 2026-11-26：T6.8 部分完成：新增 companion `/api/platform` 平台探测（OS/arch/Node/shell/uid/WSL/Docker mode）与 Linux/macOS/Windows 支持矩阵；Install & Doctor 新增平台能力卡片，明确 verified / implemented-unverified / design-only / unsupported；新增 `docs/PLATFORM-SUPPORT.md`。

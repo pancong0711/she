@@ -193,3 +193,11 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .developer-tools { margin-top: 16px; padding: 12px; border: 1px dashed #334155; border-radius: 10px; background: #02061755; }
 .developer-tools summary { cursor: pointer; color: #cbd5e1; font-weight: 600; }
 .developer-tools .job-actions { margin-top: 12px; }
+
+/* Platform support matrix */
+.support-table-wrap { overflow-x: auto; margin-top: 12px; }
+.support-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.support-table th, .support-table td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+.support-table th { color: #94a3b8; font-weight: 600; }
+.support-table td:first-child { color: #cbd5e1; }
+.platform-notes { margin: 14px 0 0; padding-left: 20px; color: #94a3b8; line-height: 1.6; }

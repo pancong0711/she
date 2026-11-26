@@ -20,6 +20,7 @@ import {
   loadCompanionHealth,
   loadCoreStatus,
   loadPackages,
+  loadPlatformStatus,
   loadPreflight,
   loadSandboxStats,
   loadSandboxes,
@@ -38,6 +39,7 @@ import {
   type JobSummary,
   type PackageInfo,
   type PackageInstallInfo,
+  type PlatformStatus,
   type PreflightResult,
   type WorkerConfig,
 } from './api'
@@ -100,6 +102,8 @@ const packages = ref<readonly PackageInfo[]>([])
 const packageError = ref('')
 const copiedPackageId = ref('')
 const preflight = ref<PreflightResult | null>(null)
+const platformStatus = ref<PlatformStatus | null>(null)
+const platformError = ref('')
 const workerConfigResponse = ref<Awaited<ReturnType<typeof loadWorkerConfig>> | null>(null)
 const workerConfig = ref<WorkerConfig | null>(null)
 const workerConfigError = ref('')
@@ -118,7 +122,7 @@ const companionOnline = computed(() => companion.value !== null)
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult, platformResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
@@ -127,6 +131,7 @@ async function refresh(): Promise<void> {
     loadWorkerConfig(),
     loadPreflight(),
     loadAgentRuntime(),
+    loadPlatformStatus(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -174,6 +179,13 @@ async function refresh(): Promise<void> {
   } else {
     agentRuntime.value = null
     agentRuntimeError.value = agentRuntimeResult.reason instanceof Error ? agentRuntimeResult.reason.message : String(agentRuntimeResult.reason)
+  }
+  if (platformResult.status === 'fulfilled') {
+    platformStatus.value = platformResult.value
+    platformError.value = ''
+  } else {
+    platformStatus.value = null
+    platformError.value = platformResult.reason instanceof Error ? platformResult.reason.message : String(platformResult.reason)
   }
   if (workerConfigResult.status === 'fulfilled') {
     workerConfigResponse.value = workerConfigResult.value
@@ -927,6 +939,47 @@ onBeforeUnmount(() => {
                   </li>
                 </ul>
               </details>
+            </template>
+          </div>
+
+          <div class="card wide-card platform-card">
+            <div class="section-head">
+              <div>
+                <h2>平台能力与支持矩阵</h2>
+                <p class="muted">明确当前平台、Docker 模式和已验证/未验证能力，不把未验收平台伪装成 production-ready。</p>
+              </div>
+              <span v-if="platformStatus" class="pill">{{ platformStatus.runtime.platform }} / {{ platformStatus.runtime.arch }}</span>
+              <span v-else class="pill">unavailable</span>
+            </div>
+            <p v-if="platformError" class="error-text">{{ platformError }}（旧 companion 可能未提供 `/api/platform`，升级 companion 后会显示。）</p>
+            <template v-if="platformStatus">
+              <div class="health-grid">
+                <div><span>Node</span><b>{{ platformStatus.runtime.node }}</b></div>
+                <div><span>shell</span><b>{{ platformStatus.runtime.shell }}</b></div>
+                <div><span>uid</span><b>{{ platformStatus.runtime.uid ?? 'n/a' }}</b></div>
+                <div><span>WSL</span><b>{{ platformStatus.runtime.wsl ? 'yes' : 'no' }}</b></div>
+                <div><span>Docker</span><b>{{ platformStatus.docker.available ? platformStatus.docker.mode : 'unavailable' }}{{ platformStatus.docker.version ? ` · ${platformStatus.docker.version}` : '' }}</b></div>
+                <div><span>unix socket</span><b>{{ platformStatus.capabilities.unixSocket ? 'supported' : 'not supported' }}</b></div>
+              </div>
+              <div class="support-table-wrap">
+                <table class="support-table">
+                  <thead><tr><th>能力</th><th>Linux</th><th>macOS</th><th>Windows</th></tr></thead>
+                  <tbody>
+                    <tr v-for="row in platformStatus.supportMatrix" :key="row.feature">
+                      <td>{{ row.feature }}</td>
+                      <td><span :class="['pill', row.linux === 'verified' ? 'succeeded' : row.linux === 'unsupported' ? 'failed' : 'warn']">{{ row.linux }}</span></td>
+                      <td><span :class="['pill', row.macos === 'verified' ? 'succeeded' : row.macos === 'unsupported' ? 'failed' : 'warn']">{{ row.macos }}</span></td>
+                      <td><span :class="['pill', row.windows === 'verified' ? 'succeeded' : row.windows === 'unsupported' ? 'failed' : 'warn']">{{ row.windows }}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <ul class="platform-notes">
+                <li v-for="note in platformStatus.notes" :key="note">{{ note }}</li>
+              </ul>
+              <p class="muted small-note">
+                支持矩阵与平台探测文档：<a href="https://github.com/pancong0711/she/blob/main/docs/PLATFORM-SUPPORT.md" target="_blank" rel="noreferrer">docs/PLATFORM-SUPPORT.md ↗</a>
+              </p>
             </template>
           </div>
 
