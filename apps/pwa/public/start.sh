@@ -40,7 +40,7 @@ NODE
 . "$WORK/meta.env"
 echo "SHE launcher: companion $SHE_VERSION"
 CURRENT_VERSION=""
-if [ -x "$INSTALL_ROOT/current/apps/companion/server.mjs" ] && [ -f "$INSTALL_ROOT/current/VERSION" ]; then
+if [ -f "$INSTALL_ROOT/current/apps/companion/server.mjs" ] && [ -f "$INSTALL_ROOT/current/VERSION" ]; then
   CURRENT_VERSION="$(tr -d '[:space:]' < "$INSTALL_ROOT/current/VERSION")"
 fi
 if [ "$CURRENT_VERSION" != "$SHE_VERSION" ]; then
@@ -76,6 +76,23 @@ exec node "$INSTALL_ROOT/current/apps/companion/server.mjs" "\$@"
 LAUNCHER
   chmod 0755 "$BIN_DIR/she-companion"
   echo "SHE launcher: installed companion $SHE_VERSION"
+fi
+
+# A running companion cannot be replaced in-place by this launcher. Detect it
+# before binding the port, otherwise the browser would keep showing the old API
+# while the new process exits with EADDRINUSE.
+if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/api/version" -o "$WORK/existing-version.json" 2>/dev/null; then
+  EXISTING_VERSION="$(node -e "try { const d=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')); process.stdout.write(String(d?.value?.companion ?? 'unknown')) } catch { process.stdout.write('unknown') }" "$WORK/existing-version.json" 2>/dev/null || printf 'unknown')"
+  if [ "$EXISTING_VERSION" = "$SHE_VERSION" ]; then
+    echo "SHE launcher: companion $SHE_VERSION is already running; opening http://127.0.0.1:$PORT"
+    (sleep 0.5; for opener in xdg-open open; do if command -v "$opener" >/dev/null 2>&1; then "$opener" "http://127.0.0.1:$PORT" >/dev/null 2>&1 || true; break; fi; done) &
+    exit 0
+  fi
+  echo "✗ 检测到旧 companion 正在运行：$EXISTING_VERSION" >&2
+  echo "  已安装新版本：$SHE_VERSION" >&2
+  echo "  请先停止正在运行的旧 companion（回到启动它的终端按 Ctrl+C，或结束对应进程），" >&2
+  echo "  然后重新运行 start.sh。" >&2
+  exit 1
 fi
 
 echo "SHE launcher: starting http://127.0.0.1:$PORT"

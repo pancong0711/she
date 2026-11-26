@@ -75,6 +75,10 @@ launcher 会：
 4. 安装到独立版本目录；
 5. 启动新 companion。
 
+如果检测到旧 companion 仍在运行，launcher 会明确提示先停止旧进程，而不是让新进程以 EADDRINUSE 静默失败。
+
+同时修复了 launcher 用 `-x` 检查 `server.mjs` 导致每次都重新下载 bundle 的问题；现在按 `VERSION` 文件比较版本，执行入口仍使用 `node server.mjs`。
+
 不会执行 sudo，不会请求 root。
 
 ## 5. 手动安装

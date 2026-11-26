@@ -64,6 +64,22 @@ try {
     "@echo off`r`nnode `"$current\apps\companion\server.mjs`" %*`r`n" | Set-Content -Path $launcher -Encoding ASCII
     Write-Host "SHE launcher: installed companion $version"
   }
+  $existingVersion = $null
+  try {
+    $existing = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/version" -TimeoutSec 2
+    $existingVersion = [string]$existing.value.companion
+  } catch {}
+  if ($existingVersion) {
+    if ($existingVersion -eq $version) {
+      Write-Host "SHE launcher: companion $version is already running; opening the PWA."
+      Start-Process "http://127.0.0.1:$Port"
+      exit 0
+    }
+    Write-Host "✗ 检测到旧 companion 正在运行：$existingVersion" -ForegroundColor Red
+    Write-Host "  已安装新版本：$version" -ForegroundColor Yellow
+    Write-Host "  请先停止旧 companion 进程，然后重新运行 start.bat / start.ps1。" -ForegroundColor Yellow
+    exit 1
+  }
   Write-Host "SHE launcher: starting http://127.0.0.1:$Port"
   Start-Process "http://127.0.0.1:$Port"
   $env:SHE_PWA_PORT = [string]$Port

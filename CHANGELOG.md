@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Fixed launcher update detection (`-x` check on non-executable server.mjs) and added explicit stale-companion process detection to avoid silent EADDRINUSE failures.
 - Companion version is now decoupled from the root/core package version; new companion release `v0.2.0-companion.1` fixes stale launcher update detection.
 - Added a workspace authorization registry and PWA Workspaces page with leaf-directory validation, read-only/read-write intent, realpath checks, and 0600 persistence.
 - Added `/api/platform` and an Install & Doctor platform support matrix with explicit verified / implemented-unverified / design-only / unsupported statuses.
