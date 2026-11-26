@@ -746,10 +746,10 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.7.0'
+export const COMPANION_RELEASE_VERSION = '0.7.1'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.7.0'
-export const COMPANION_RELEASE_TAG = 'v0.7.0-companion.1'
+export const COMPANION_MIN_VERSION = '0.7.1'
+export const COMPANION_RELEASE_TAG = 'v0.7.1-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/latest/download/companion-release-manifest.json'
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`
@@ -947,6 +947,12 @@ export interface OpenCodeServiceStatus {
     readonly pid?: number
     readonly detail?: string
   }
+  readonly models: readonly {
+    readonly providerID: string
+    readonly modelID: string
+    readonly name?: string
+    readonly variants?: readonly string[]
+  }[]
   readonly error?: string
 }
 

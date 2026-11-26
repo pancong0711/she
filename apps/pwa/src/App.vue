@@ -163,6 +163,7 @@ const workerConfig = ref<WorkerConfig | null>(null)
 const workerConfigError = ref('')
 const workerConfigMessage = ref('')
 const workerConfigSaving = ref(false)
+const detectedModelKey = ref('')
 const companionActionRunning = ref('')
 const companionUpdateCheck = ref<CompanionUpdateCheck | null>(null)
 const companionUpdateError = ref('')
@@ -902,8 +903,38 @@ function useDetectedOpenCode(): void {
   workerConfigMessage.value = '已填入检测到的 OpenCode 服务；点击“保存并重启 core”应用。'
 }
 
+function useDetectedModel(): void {
+  if (workerConfig.value === null || detectedModelKey.value === '') return
+  const detected = workerConfigResponse.value?.detectedOpenCode
+  const model = detected?.models.find(item => `${item.providerID}/${item.modelID}` === detectedModelKey.value)
+  if (model === undefined) return
+  workerConfig.value = {
+    ...workerConfig.value,
+    model: { providerId: model.providerID, modelId: model.modelID },
+  }
+  workerConfigError.value = ''
+  workerConfigMessage.value = `已选择 ${model.name ?? model.modelID}（${model.providerID}/${model.modelID}）；保存并重启 core 后用于任务。`
+}
+
 function openAgentRuntimeDetails(): void {
   active.value = 'agents'
+}
+
+async function redetectOpenCode(): Promise<void> {
+  workerConfigError.value = ''
+  workerConfigMessage.value = '正在重新检测 OpenCode 服务…'
+  try {
+    const response = await loadWorkerConfig()
+    workerConfigResponse.value = response
+    const detected = response.detectedOpenCode
+    if (detected?.detected) {
+      workerConfigMessage.value = `已重新检测：${detected.url} · health ${detected.health.ok ? (detected.health.version ?? 'ok') : (detected.health.detail ?? 'unavailable')} · ${detected.models.length} 个模型`
+    } else {
+      workerConfigMessage.value = `未检测到 OpenCode 服务：${detected?.health.detail ?? 'service.json not found'}`
+    }
+  } catch (cause) {
+    workerConfigError.value = cause instanceof Error ? cause.message : String(cause)
+  }
 }
 
 function formatBytes(bytes?: number): string {
@@ -2111,10 +2142,25 @@ onBeforeUnmount(() => {
               <div><span>credential file</span><b><code>{{ workerConfigResponse.detectedOpenCode.credentialFile }}</code>（只显示路径）</b></div>
               <div><span>health</span><b :class="workerConfigResponse.detectedOpenCode.health.ok ? 'success-text' : 'error-text'">{{ workerConfigResponse.detectedOpenCode.health.ok ? (workerConfigResponse.detectedOpenCode.health.version ?? 'ok') : (workerConfigResponse.detectedOpenCode.health.detail ?? 'unavailable') }}</b></div>
             </div>
+            <div class="settings-grid" v-if="workerConfigResponse.detectedOpenCode.models.length > 0">
+              <label>
+                检测到的模型（可直接用于快速验证）
+                <select v-model="detectedModelKey">
+                  <option value="">选择模型…</option>
+                  <option v-for="model in workerConfigResponse.detectedOpenCode.models" :key="`${model.providerID}/${model.modelID}`" :value="`${model.providerID}/${model.modelID}`">
+                    {{ model.name ?? model.modelID }} — {{ model.providerID }}/{{ model.modelID }}{{ model.name?.toLowerCase().includes('free') ? '（免费）' : '' }}
+                  </option>
+                </select>
+              </label>
+              <div class="job-actions">
+                <button class="secondary" :disabled="detectedModelKey === '' || workerConfig === null" @click="useDetectedModel">使用此模型</button>
+              </div>
+            </div>
             <div class="job-actions">
               <button class="secondary" :disabled="!workerConfigResponse.detectedOpenCode.detected || workerConfig === null" @click="useDetectedOpenCode">使用检测到的服务</button>
-              <button class="secondary" :disabled="loading" @click="refresh">重新检测</button>
+              <button class="secondary" :disabled="loading" @click="redetectOpenCode">重新检测</button>
             </div>
+            <p class="muted small-note">检测时间：{{ relativeTime(workerConfigResponse.detectedOpenCode.checkedAt) }}；检测到 {{ workerConfigResponse.detectedOpenCode.models.length }} 个模型。</p>
             <p class="muted small-note">
               如果这里显示 `49374`，而当前配置仍是 `49375`，任务会送到错误端口或错误认证。
               使用检测值后点击“保存并重启 core”。

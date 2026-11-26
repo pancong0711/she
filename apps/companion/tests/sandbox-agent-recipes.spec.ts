@@ -19,7 +19,7 @@ describe('sandbox agent recipes', () => {
   it('only exposes immutable catalog data', () => {
     const catalog = sandboxAgentRecipeCatalog()
     expect(catalog).toHaveLength(4)
-    expect(catalog.find(item => item.id === 'opencode')?.knownVersions).toContain('0.2.4')
+    expect(catalog.find(item => item.id === 'opencode')?.knownVersions).toContain('2.4.2')
     expect(JSON.stringify(catalog)).not.toContain('password')
   })
 })

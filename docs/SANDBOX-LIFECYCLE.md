@@ -101,8 +101,8 @@ Agent recipe 现在把每个版本安装到：
 因此：
 
 ```text
-安装 opencode@0.2.4
-安装 opencode@1.19.6
+安装 opencode@2.3.2
+安装 opencode@2.4.2
 ```
 
 两个版本可以同时存在于同一 sandbox 的持久化 home。
@@ -138,9 +138,9 @@ Agent recipe 现在把每个版本安装到：
 
 ```text
 agent: opencode
-package: opencode-ai
-requested: 0.2.4
-resolved: 0.2.4
+package: @opencode/cli
+requested: 2.4.2
+resolved: 2.4.2
 exact: true
 ```
 
@@ -148,7 +148,7 @@ exact: true
 
 ```text
 requested: 9.9.9
-resolved: 1.19.6
+resolved: 2.4.2
 fallback: true
 ```
 
@@ -165,7 +165,7 @@ fallback: true
   - 系统镜像（不预装 Agent）
 
 二级：
-  - Agent 对应具体版本，例如 0.2.4 / 1.19.6 / 已成功安装版本
+  - Agent 对应具体版本，例如 2.3.2 / 2.4.2 / 已成功安装版本
   - 系统镜像对应具体 image，例如 node:24-bookworm / ubuntu:24.04
 ```
 

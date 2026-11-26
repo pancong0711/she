@@ -58,6 +58,7 @@ export async function inspectOpenCodeService(options = {}) {
       : paths.configFile
   const detected = url !== undefined && credentialFile !== undefined
   let health = { ok: false, detail: detected ? 'not probed' : 'OpenCode service.json not found or has no password' }
+  let models = []
   if (detected && options.probe !== false) {
     try {
       const response = await fetch(`${url}/api/info`, {
@@ -81,6 +82,29 @@ export async function inspectOpenCodeService(options = {}) {
               ? 'OpenCode authentication failed; the saved password does not match the running service'
               : `OpenCode HTTP ${String(response.status)}`,
           }
+      if (health.ok) {
+        try {
+          const modelsResponse = await fetch(`${url}/api/model`, {
+            headers: { authorization: basicAuth(password), accept: 'application/json' },
+            signal: AbortSignal.timeout(3_000),
+            redirect: 'error',
+          })
+          const modelsBody = await modelsResponse.json().catch(() => undefined)
+          if (modelsResponse.ok && Array.isArray(modelsBody?.data)) {
+            models = modelsBody.data
+              .filter(item => typeof item?.providerID === 'string' && typeof item?.modelID === 'string')
+              .slice(0, 200)
+              .map(item => ({
+                providerID: item.providerID,
+                modelID: item.modelID,
+                ...(typeof item.name === 'string' ? { name: item.name } : {}),
+                ...(Array.isArray(item.variants) ? { variants: item.variants.map(variant => String(variant.id ?? '')).filter(Boolean) } : {}),
+              }))
+          }
+        } catch {
+          models = []
+        }
+      }
     } catch (error) {
       health = { ok: false, detail: error instanceof Error ? error.message : String(error) }
     }
@@ -100,6 +124,7 @@ export async function inspectOpenCodeService(options = {}) {
     ...(typeof state?.pid === 'number' ? { servicePid: state.pid } : {}),
     ...(typeof state?.version === 'string' ? { serviceVersion: state.version } : {}),
     health,
+    models,
   }
 }
 

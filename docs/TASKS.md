@@ -198,4 +198,6 @@
 
 - 2026-11-26：Agent 版本管理首版：Sandbox agent 版本可手填；新增 registry 版本解析（精确存在则使用，不存在回退最新稳定版，网络不可用时标记未验证）；新增 `~/.config/she/agent-versions.json`（0600），每个 agent 保留最近 5 个成功安装版本；Agent 安装改为版本目录 `/home/agent/.agents/<agent>/<version>` + current symlink；新增 `docs/SANDBOX-LIFECYCLE.md` 说明 stop/start/restart/destroy 与 workspace 关系；Sandbox 选择器改为 Agent/系统镜像一级、版本/镜像二级。
 
-- 2026-11-26：完成 Agent 版本管理：手填版本 + registry 校验 + 不存在回退 latest + 成功版本注册表（每 agent 最近 5 个）；安装改为 `/home/agent/.agents/<agent>/<version>` 多版本目录；OpenCode 内置推荐版本加入 0.2.4；Sandbox 创建/安装选择器两级化；新增 `docs/SANDBOX-LIFECYCLE.md`。发布 companion 0.7.0。
+- 2026-11-26：完成 Agent 版本管理：手填版本 + registry 校验 + 不存在回退 latest + 成功版本注册表（每 agent 最近 5 个）；安装改为 `/home/agent/.agents/<agent>/<version>` 多版本目录；OpenCode 内置推荐版本加入 2.4.2；Sandbox 创建/安装选择器两级化；新增 `docs/SANDBOX-LIFECYCLE.md`。发布 companion 0.7.0。
+
+- 2026-11-27：OpenCode v2 安装包切换为 `@opencode/cli`，解决 2.4.2 版本校验找不到的问题；Settings 检测新增 `/api/model` 模型列表和一键填入 provider/model；重新检测显示 url/health/model count；发布 companion 0.7.1。

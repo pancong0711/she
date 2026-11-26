@@ -21,19 +21,19 @@ function fakeFetch(versions: string[], latest: string) {
 
 describe('sandbox agent version resolution', () => {
   it('accepts an exact requested version', async () => {
-    const result = await resolveSandboxAgentVersion('opencode', '0.2.4', {
-      fetchImpl: fakeFetch(['0.2.3', '0.2.4', '1.19.6'], '1.19.6'),
+    const result = await resolveSandboxAgentVersion('opencode', '2.4.2', {
+      fetchImpl: fakeFetch(['2.3.2', '2.4.2'], '2.4.2'),
     })
-    expect(result).toMatchObject({ requested: '0.2.4', resolved: '0.2.4', exact: true, fallback: false, verified: true })
-    expect(result.recipe.version).toBe('0.2.4')
-    expect(result.recipe.install.command[2]).toContain('opencode-ai@0.2.4')
+    expect(result).toMatchObject({ requested: '2.4.2', resolved: '2.4.2', exact: true, fallback: false, verified: true })
+    expect(result.recipe.version).toBe('2.4.2')
+    expect(result.recipe.install.command[2]).toContain('@opencode/cli@2.4.2')
   })
 
   it('falls back to the latest stable version when the request is missing', async () => {
     const result = await resolveSandboxAgentVersion('opencode', '9.9.9', {
-      fetchImpl: fakeFetch(['0.2.4', '1.19.6'], '1.19.6'),
+      fetchImpl: fakeFetch(['2.3.2', '2.4.2'], '2.4.2'),
     })
-    expect(result).toMatchObject({ requested: '9.9.9', resolved: '1.19.6', exact: false, fallback: true, verified: true })
+    expect(result).toMatchObject({ requested: '9.9.9', resolved: '2.4.2', exact: false, fallback: true, verified: true })
     expect(result.warning).toContain('不存在')
   })
 

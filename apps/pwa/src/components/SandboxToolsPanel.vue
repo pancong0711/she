@@ -185,7 +185,7 @@ function formatTime(value: number): string {
         </label>
         <label>
           版本（二级，可手填）
-          <input v-model="versionInput" list="agent-version-options" :placeholder="selectedRecipe?.version ?? '1.19.6'" />
+          <input v-model="versionInput" list="agent-version-options" :placeholder="selectedRecipe?.version ?? '2.4.2'" />
           <datalist id="agent-version-options">
             <option v-for="item in selectedRecipe?.knownVersions ?? []" :key="`known-${item}`" :value="item">内置推荐版本</option>
             <option v-for="item in selectedRecipe?.installedVersions ?? []" :key="`installed-${item.version}`" :value="item.version">已成功安装</option>

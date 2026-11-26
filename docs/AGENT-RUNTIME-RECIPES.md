@@ -99,7 +99,7 @@ Sandbox 表单可选择以下固定版本 recipe：
 
 | Agent | npm 包 | 固定版本 | binary | 基础镜像 |
 |---|---|---|---|---|
-| OpenCode | `opencode-ai` | `1.19.6` | `opencode` | `node:24-bookworm` |
+| OpenCode | `@opencode/cli` | `2.4.2` | `opencode` | `node:24-bookworm` |
 | dsh | `@deepseek-ai/dsh` | `0.2.2-rc.5` | `dsh` | `node:24-bookworm` |
 | Hermes Agent | `hermes-agent` | `0.23.4` | `hermes` | `node:24-bookworm` |
 | Pi coding agent | `@mariozechner/pi-coding-agent` | `0.73.1` | `pi` | `node:24-bookworm` |
