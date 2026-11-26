@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -67,6 +67,16 @@ describe('SQLite store', () => {
     expect(events.events.map(item => item.event.type)).toEqual(['topic.created', 'task.enqueued'])
     expect(second.schemaVersion()).toBe(2)
     second.close()
+  })
+
+  it('creates a missing database parent directory and protects the database file', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'she-sqlite-parent-'))
+    cleanup.push(async () => rm(root, { recursive: true, force: true }))
+    const path = join(root, 'missing', 'nested', 'she.db')
+    const store = SqliteStore.open(path)
+    expect(store.schemaVersion()).toBe(2)
+    expect((await stat(path)).mode & 0o777).toBe(0o600)
+    store.close()
   })
 
   it('persists leases and recovers expired tasks after reopen', async () => {

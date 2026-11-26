@@ -41,6 +41,8 @@ const port = Number(process.env.SHE_PWA_PORT ?? 8787)
 const runtimeHome = process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.local', 'run')
 const configHome = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config')
 const dataHome = process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share')
+const stateHome = process.env.XDG_STATE_HOME?.trim() || join(homedir(), '.local', 'state')
+const coreDbPath = process.env.SHE_DB_PATH?.trim() || join(stateHome, 'she', 'she.db')
 const coreRoot = process.env.SHE_CORE_ROOT?.trim() || join(dataHome, 'she', 'core')
 const workerConfigPath = process.env.SHE_WORKER_CONFIG_FILE?.trim() || join(configHome, 'she', 'worker.json')
 const migrationRecordRoot = process.env.SHE_MIGRATION_RECORD_ROOT?.trim() || join(dataHome, 'she', 'migrations')
@@ -51,7 +53,7 @@ const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
 const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
 const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
 const COMPANION_RESTART_EXIT_CODE = 75
-const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.2.1-core.1/release-manifest.json'
+const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.2.2-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
 const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
@@ -994,6 +996,7 @@ async function startCore(job) {
   const command = process.platform === 'win32' ? 'cmd' : 'bash'
   const args = process.platform === 'win32' ? ['/c', entry] : [entry]
   const workerConfig = await readWorkerConfig()
+  await mkdir(dirname(coreDbPath), { recursive: true, mode: 0o700 }).catch(() => undefined)
   if (job !== undefined) appendJobEvent(job, { type: 'system', text: `starting core: ${entry}` })
   const child = spawn(command, args, {
     cwd: join(coreRoot, 'current'),

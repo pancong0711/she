@@ -1,5 +1,7 @@
 /** SQLite-backed implementation of SHE core repositories and event store. */
 
+import { chmodSync, mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type {
   Artifact,
@@ -567,7 +569,9 @@ export class SqliteStore {
 
   static open(path: string): SqliteStore {
     if (path.trim() === '') throw new Error('SQLite store path must not be empty')
+    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     const db = new DatabaseSync(path)
+    if (path !== ':memory:') chmodSync(path, 0o600)
     db.exec('PRAGMA foreign_keys = ON')
     db.exec('PRAGMA busy_timeout = 5000')
     if (path !== ':memory:') db.exec('PRAGMA journal_mode = WAL')
