@@ -94,7 +94,7 @@
 | T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [~] |
 | T6.6a | Agent worker + PWA Chat：提交、事件流、实时 text/tool 状态 | T6.6/M2 | [x] | worker+OpenCode+agent.delta 实测 |
 | T6.6b | PWA Settings：worker/OpenCode/workspace 配置与重启应用 | T6.6a | [x] | 0600 config；密码仅路径；core restart 后生效 | 与 CLI/gateway 共用同一控制面会话 |
-| T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
+| T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [~] | 不暴露/不读取飞书 secret 给 agent | 配置/health/secret boundary 页面完成；真机联调待 T4.6 |
 | T6.8 | 跨平台安装/更新向导与支持矩阵页面 | T6.4/T3.7 | [~] | Linux 已验证；macOS/Windows 明确状态 | 平台探测与矩阵页面完成；安装向导/真机验收未完成 |
 | T6.9 | 本机 AI agent 发现、容器化迁移计划、凭据目录只读挂载与迁移记录 | T6.3/T3.3/T3.5 | [x] | 发现不读凭据内容；根目录 workspace 阻断；broker host mount 负例测试；PWA 勾选/配置/执行 |
 | T6.10 | 用户级 companion 登录自启动与安装版开发者工具隐藏 | T6.4/T7.8 | [x] | 不写系统服务、不请求 root；安装版不执行源码依赖安装 |
@@ -169,3 +169,5 @@
 - 2026-11-26：完成 T6.5 迁移绑定：Agent Migration 的 reuse/legacy 来源必须选择 Workspaces 授权 ID；reuse 要求 read-write，new+/legacy 可用 read-only；计划与迁移记录保存 workspaceAuthorizationId；broker 继续二次校验并强制只读。PWA 迁移面板改为授权下拉选择。
 
 - 2026-11-26：完成 T6.10：新增 `/api/autostart` 与 Settings 登录自启动开关（Linux systemd --user/XDG、macOS LaunchAgent、Windows Startup）；安装版 companion 检测 `sourceCheckout=false` 并隐藏/阻断源码安装/构建/测试 job；Docker 安装指引按 Ubuntu/Debian/Fedora/Arch/macOS/Windows 生成具体命令。
+
+- 2026-11-26：T6.7 首版：新增 `/api/gateway` 与 PWA Gateway 页面；配置仅保存 loopback adapter health URL，显示 control-plane gateway.v1 状态与 adapter health；明确飞书 secret 由 feishu4dsh 持有。

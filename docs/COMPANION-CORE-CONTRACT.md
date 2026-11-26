@@ -95,6 +95,8 @@ GET  /api/agents/migrations/:id
 
 `/api/autostart`：用户级登录自启动状态与管理；只写用户目录，不创建系统级服务、不请求 root。
 
+`/api/gateway`：gateway.v1/feishu4dsh 连接状态与 loopback health URL 配置；不保存飞书 secret。
+
 `/api/companion/*`：仅在 launcher supervisor 模式下提供重启、停止、检查和安装 companion 更新；更新先校验 SHE release manifest 与 bundle SHA-256，再退出 75 交给 supervisor 重启。
 
 `/api/core/status`：

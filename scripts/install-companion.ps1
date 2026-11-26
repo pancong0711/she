@@ -26,10 +26,9 @@ try {
   New-Item -ItemType Junction -Path $current -Target $dest | Out-Null
   $state = @{ schema = 1; current = $version; installedAt = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json
   Set-Content -Path (Join-Path $InstallRoot 'state.json') -Value $state
-  $bin = Join-Path $env:LOCALAPPDATA 'she\bin'
-  New-Item -ItemType Directory -Force -Path $bin | Out-Null
-  $launcher = Join-Path $bin 'she-companion.cmd'
-  "@echo off`r`nnode `"$current\apps\companion\server.mjs`" %*`r`n" | Set-Content -Path $launcher -Encoding ASCII
+  New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
+  $launcher = Join-Path $BinDir 'she-companion.cmd'
+  "@echo off`r`nset `"SHE_COMPANION_ROOT=$InstallRoot`"`r`nset `"SHE_BIN_DIR=$BinDir`"`r`nnode `"$current\apps\companion\supervisor.mjs`" %*`r`n" | Set-Content -Path $launcher -Encoding ASCII
   Write-Host "✓ installed she-companion $version"
   Write-Host "  launcher: $launcher"
 } finally {

@@ -239,8 +239,10 @@ SHE_TOKEN_FILE
   - staging、切换、health check、自动回滚；
   - 实时更新日志；
 - 构建 PWA / 构建 TypeScript 包 / 运行测试等源码开发工具收进“开发者工具”折叠区。
-- 占位页：
-  - Gateway。
+- Gateway：
+  - control-plane gateway.v1 状态；
+  - feishu4dsh loopback health URL 配置与连接状态；
+  - secret boundary 说明。
 
 ## 5. 安全边界
 

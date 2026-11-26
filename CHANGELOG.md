@@ -6,6 +6,9 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Audit fixes: reset supervisor restart budget after stable uptime, launch supervisor from Windows installer, and quote Windows/XDG autostart paths.
+- Gateway page with loopback-only feishu4dsh health probing and explicit external secret boundary.
+- Added Gateway configuration/status page with loopback-only feishu4dsh health probing and explicit external secret boundary.
 - Added user-level companion login autostart, installed-bundle source-job guards, and distro-specific Docker installation commands.
 - Companion 0.3.1 binds Agent Migration workspace mounts to explicit authorization IDs and publishes the new release tag.
 - Agent Migration now binds reused/legacy workspace mounts to explicit Workspaces authorization IDs; read-only authorizations can only be legacy read-only mounts.

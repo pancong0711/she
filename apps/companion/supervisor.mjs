@@ -62,14 +62,20 @@ function spawnCompanion() {
     void cleanupPending('accepted')
   }, STARTUP_GRACE_MS)
   pendingTimer.unref()
+  const stableTimer = setTimeout(() => {
+    restarts = 0
+  }, 60_000)
+  stableTimer.unref()
 
   child.on('error', error => {
     clearTimeout(pendingTimer)
+    clearTimeout(stableTimer)
     log(`failed to start companion: ${error.message}`)
     process.exit(1)
   })
   child.on('exit', async (code, signal) => {
     clearTimeout(pendingTimer)
+    clearTimeout(stableTimer)
     if (shuttingDown) {
       process.exit(code ?? 0)
       return

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import HelpPanel from './components/HelpPanel.vue'
 import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
 import WorkspaceAuthorizationPanel from './components/WorkspaceAuthorizationPanel.vue'
+import GatewayPanel from './components/GatewayPanel.vue'
 import type { AgentRuntimeStatus, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
@@ -1310,6 +1311,10 @@ onBeforeUnmount(() => {
             </article>
           </div>
         </div>
+      </section>
+
+      <section v-else-if="active === 'gateway'">
+        <GatewayPanel />
       </section>
 
       <section v-else-if="active === 'settings'" class="card settings-card">

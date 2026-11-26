@@ -146,6 +146,57 @@ export async function loadCompanionHealth(signal?: AbortSignal): Promise<Compani
   return payload.value
 }
 
+export interface GatewayConfig {
+  readonly schema: 1
+  readonly channel: 'feishu4dsh'
+  readonly enabled: boolean
+  readonly adapterHealthUrl: string
+  readonly secretBoundary: 'external-only'
+}
+
+export interface GatewayStatus {
+  readonly schema: 1
+  readonly checkedAt: number
+  readonly config: GatewayConfig
+  readonly controlPlane: {
+    readonly reachable: boolean
+    readonly httpStatus?: number
+    readonly response?: unknown
+    readonly error?: string
+  }
+  readonly adapter: {
+    readonly configured: boolean
+    readonly reachable: boolean
+    readonly httpStatus?: number
+    readonly detail?: string
+    readonly response?: unknown
+  }
+  readonly secretBoundary: {
+    readonly owner: string
+    readonly sheReadsSecrets: boolean
+    readonly note: string
+  }
+}
+
+export async function loadGatewayStatus(signal?: AbortSignal): Promise<GatewayStatus> {
+  const payload = await getJson<{ ok: boolean; value?: GatewayStatus; error?: { message?: string } }>('/api/gateway', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'gateway status unavailable')
+  return payload.value
+}
+
+export async function saveGatewayConfig(input: { enabled: boolean; adapterHealthUrl: string }): Promise<GatewayStatus> {
+  const response = await fetch(`${apiBase()}/api/gateway`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify(input),
+  })
+  const payload = await response.json() as { ok: boolean; value?: GatewayStatus; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `gateway config save failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
 export interface AutostartStatus {
   readonly enabled: boolean
   readonly mode: 'systemd-user' | 'xdg-autostart' | 'launch-agent' | 'windows-startup' | 'disabled' | 'unsupported' | string
@@ -429,9 +480,9 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.3.2'
-export const COMPANION_MIN_VERSION = '0.3.2'
-export const COMPANION_RELEASE_TAG = 'v0.3.2-companion.1'
+export const COMPANION_RELEASE_VERSION = '0.3.3'
+export const COMPANION_MIN_VERSION = '0.3.3'
+export const COMPANION_RELEASE_TAG = 'v0.3.3-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

@@ -170,7 +170,7 @@ defineProps<{
           <tr><td>Agent Migration</td><td>发现本机 AI agent，dry-run 规划并迁移到 sandbox；只读凭据目录挂载，原进程不动。</td></tr>
           <tr><td>Sandboxes</td><td>broker 列表、状态、角色、image、按需 CPU/内存/PIDs。</td></tr>
           <tr><td>Packages</td><td>Companion/Core/Node/pnpm/git/bash/curl/tar/SHA-256/Docker/OpenCode 依赖清单；显示用途、缺失影响、可复制安装方法和官方文档链接。</td></tr>
-          <tr><td>Gateway</td><td>飞书等 channel adapter 配置：开发中，feishu4dsh 为第一个目标。</td></tr>
+          <tr><td>Gateway</td><td>control-plane gateway.v1 状态、feishu4dsh loopback health URL 与连接状态；飞书 secret 始终留在 feishu4dsh。</td></tr>
           <tr><td>Settings</td><td>companion URL、服务状态、worker/OpenCode/workspace 配置（密码仅保存路径）。</td></tr>
           <tr><td>Help</td><td>本页：概念、边界、操作说明和故障排查。</td></tr>
         </tbody>

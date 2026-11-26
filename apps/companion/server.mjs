@@ -21,6 +21,7 @@ import { authorizeWorkspace, listWorkspaceAuthorizations, removeWorkspaceAuthori
 import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
 import { autostartOptionsFromEnv, autostartStatus, disableAutostart, enableAutostart } from './autostart.mjs'
+import { probeGatewayAdapter, readGatewayConfig, writeGatewayConfig } from './gateway.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -45,6 +46,7 @@ const workerConfigPath = process.env.SHE_WORKER_CONFIG_FILE?.trim() || join(conf
 const migrationRecordRoot = process.env.SHE_MIGRATION_RECORD_ROOT?.trim() || join(dataHome, 'she', 'migrations')
 const migrationWorkspaceRoot = process.env.SHE_MIGRATION_WORKSPACE_ROOT?.trim() || join(dataHome, 'she', 'workspaces')
 const workspaceRegistryPath = process.env.SHE_WORKSPACE_REGISTRY?.trim() || join(configHome, 'she', 'workspaces.json')
+const gatewayConfigPath = process.env.SHE_GATEWAY_CONFIG_FILE?.trim() || join(configHome, 'she', 'gateway.json')
 const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
 const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
 const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
@@ -888,6 +890,26 @@ async function applyCompanionUpdate(manifestUrl) {
   return { from: companionVersion, to: checked.manifest.version, bundleSha256: download.sha256, restarting: true }
 }
 
+async function gatewayStatus() {
+  const config = await readGatewayConfig(gatewayConfigPath)
+  const control = await probeSocket(controlSocketPath, controlTokenFile)
+  const adapter = config.enabled
+    ? await probeGatewayAdapter(config.adapterHealthUrl)
+    : { configured: config.adapterHealthUrl !== '', reachable: false, detail: 'gateway adapter disabled' }
+  return {
+    schema: 1,
+    checkedAt: Date.now(),
+    config,
+    controlPlane: control,
+    adapter,
+    secretBoundary: {
+      owner: 'feishu4dsh',
+      sheReadsSecrets: false,
+      note: '飞书 app secret、verification token、encrypt key 和 tenant token 必须留在 feishu4dsh；SHE 只接收 gateway.v1 事件/命令。',
+    },
+  }
+}
+
 async function platformStatus() {
   const platform = process.platform
   const osRelease = await readOsRelease()
@@ -1505,7 +1527,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'autostart', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'autostart', 'gateway', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1596,6 +1618,32 @@ async function handleCompanionApi(request, response) {
       const result = await applyCompanionUpdate(String(body.manifestUrl ?? '').trim())
       sendJsonWithCors(request, response, 200, { ok: true, value: result })
       scheduleCompanionExit(COMPANION_RESTART_EXIT_CODE, 500)
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/gateway') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await gatewayStatus() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/gateway') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      const current = await readGatewayConfig(gatewayConfigPath)
+      await writeGatewayConfig(gatewayConfigPath, {
+        enabled: body.enabled === true,
+        adapterHealthUrl: body.adapterHealthUrl ?? current.adapterHealthUrl,
+      })
+      sendJsonWithCors(request, response, 200, { ok: true, value: await gatewayStatus() })
     } catch (error) {
       sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
     }
