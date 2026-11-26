@@ -9,6 +9,7 @@ import {
   BROKER_COMMANDS,
   COMPANION_BUNDLE_URL,
   COMPANION_MIN_VERSION,
+  PWA_BUILD_VERSION,
   COMPANION_INSTALLER_URL,
   COMPANION_MANIFEST_URL,
   COMPANION_RELEASE_URL,
@@ -260,6 +261,22 @@ async function saveWorker(restart: boolean): Promise<void> {
   } finally {
     workerConfigSaving.value = false
   }
+}
+
+async function forceReloadLocalPwa(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(registrations.map(registration => registration.unregister()))
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map(key => caches.delete(key)))
+    }
+  } catch {
+    // Reload still helps even if cleanup APIs are unavailable.
+  }
+  window.location.replace(`${window.location.pathname}?refresh=${Date.now()}`)
 }
 
 async function connectCompanion(): Promise<void> {
@@ -701,7 +718,7 @@ onBeforeUnmount(() => {
           <p>
             {{ remoteMode ? 'GitHub Pages PWA' : 'Local companion' }} ·
             gateway.v1 · {{ health?.version ?? 'offline' }} ·
-            companion v{{ companion?.version ?? 'offline' }}
+            PWA v{{ PWA_BUILD_VERSION }} · companion v{{ companion?.version ?? 'offline' }}
           </p>
         </div>
         <button class="refresh" :disabled="loading" @click="refresh">
@@ -1048,12 +1065,18 @@ onBeforeUnmount(() => {
             <div v-if="companionOutdated" class="alert companion-outdated-alert">
               <strong>Companion 版本过低</strong>
               <p>
-                当前 companion {{ companion.version }}，PWA 至少需要 {{ COMPANION_MIN_VERSION }}。
-                请重新下载并运行一次 start.sh / start.command / start.bat；launcher 会把新版本安装到独立版本目录。
+                当前 PWA 构建：<b>{{ PWA_BUILD_VERSION }}</b> ·
+                当前 companion API：<b>{{ companion.version }}</b> ·
+                最低要求：<b>{{ COMPANION_MIN_VERSION }}</b>。
               </p>
-              <p class="muted small-note">
-                PWA 不会在运行中替换 companion。旧版本继续运行是正常的，但新的本地 API 和安装说明不会出现。
+              <p>
+                这里是 127.0.0.1 本地 companion 提供的页面/API；GitHub Pages 更新不会自动替换本机正在运行的 companion。
+                请先在 Settings 中更新 companion，或停止旧进程后重新运行 start.sh / start.command / start.bat。
               </p>
+              <div class="hero-actions">
+                <button class="primary" @click="active = 'settings'">打开 Companion 更新</button>
+                <button class="secondary" @click="forceReloadLocalPwa">强制刷新本地 PWA</button>
+              </div>
             </div>
             <div class="health-grid">
               <div><span>PID</span><b>{{ companion.pid }}</b></div>
@@ -1375,7 +1398,8 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div class="health-grid">
-            <div><span>current</span><b>{{ companion?.version ?? 'offline' }}</b></div>
+            <div><span>PWA build</span><b>{{ PWA_BUILD_VERSION }}</b></div>
+            <div><span>companion current</span><b>{{ companion?.version ?? 'offline' }}</b></div>
             <div><span>minimum</span><b>{{ COMPANION_MIN_VERSION }}</b></div>
             <div><span>install root</span><b><code>{{ companion?.installRoot ?? '-' }}</code></b></div>
             <div><span>supervised</span><b>{{ companion?.supervised ? 'yes' : 'no' }}</b></div>

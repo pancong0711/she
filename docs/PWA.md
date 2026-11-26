@@ -245,6 +245,15 @@ SHE_TOKEN_FILE
   - feishu4dsh loopback health URL 配置与连接状态；
   - secret boundary 说明。
 
+## 4.1 PWA build 与 companion 版本
+
+页面顶部和 Settings 会同时显示：
+
+- `PWA v...`：当前浏览器实际加载的 PWA bundle；
+- `companion v...`：`127.0.0.1:8787/api/version` 返回的本地 companion 进程版本。
+
+这两个版本可以不同：GitHub Pages 只更新静态 PWA，不会替换本机正在运行的 companion。若 PWA 新于 companion，需要更新/重启本地 companion，而不是只刷新页面。
+
 ## 5. 安全边界
 
 PWA host：

@@ -490,6 +490,7 @@ export interface CoreUpdateCheck {
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.0-core.1/release-manifest.json'
 
 export const COMPANION_RELEASE_VERSION = '0.3.4'
+export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
 export const COMPANION_MIN_VERSION = '0.3.4'
 export const COMPANION_RELEASE_TAG = 'v0.3.4-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
