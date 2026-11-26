@@ -1,4 +1,4 @@
-const CACHE = 'she-pwa-v3'
+const CACHE = 'she-pwa-v4'
 const SHELL = ['./', './manifest.webmanifest', './icons/she.svg', './icons/she-192.png', './icons/she-512.png']
 
 self.addEventListener('install', event => {
@@ -15,7 +15,9 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url)
-  if (url.pathname.startsWith('/v1/')) return
+  // Never cache live local APIs. A cached health/package/core response makes the
+  // UI look connected after companion shutdown and hides newly installed data.
+  if (url.pathname.startsWith('/v1/') || url.pathname.startsWith('/api/') || url.pathname.startsWith('/broker/')) return
   if (event.request.method !== 'GET') return
   const networkFirst = event.request.mode === 'navigate' || /\/start\.(sh|command|ps1|bat)$/.test(url.pathname)
   if (networkFirst) {

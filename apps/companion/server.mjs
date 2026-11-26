@@ -578,6 +578,7 @@ async function packageCatalog() {
       dockerGuide.url,
     ),
     steps: dockerGuide.steps,
+    ...(dockerGuide.alternatives === undefined ? {} : { alternatives: dockerGuide.alternatives }),
   }
 
   return [
