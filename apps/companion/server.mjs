@@ -7,7 +7,7 @@
  * only. This layer must not import SHE core/control/broker implementation code.
  */
 
-import { createReadStream } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { access, mkdir, readFile, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises'
 import { createServer, request as httpRequest } from 'node:http'
 import { spawn } from 'node:child_process'
@@ -19,6 +19,8 @@ import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
 import { dockerGuidance, summarizePreflight } from './preflight.mjs'
 import { authorizeWorkspace, listWorkspaceAuthorizations, removeWorkspaceAuthorization } from './workspaces.mjs'
 import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
+import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
+import { autostartOptionsFromEnv, autostartStatus, disableAutostart, enableAutostart } from './autostart.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -26,6 +28,8 @@ const distDir = process.env.SHE_PWA_DIST?.trim()
   ? resolve(process.env.SHE_PWA_DIST.trim())
   : resolve(repoRoot, 'apps/pwa/dist')
 const companionVersion = JSON.parse(await readFile(join(here, 'package.json'), 'utf8')).version
+const sourceCheckout = existsSync(join(repoRoot, 'pnpm-workspace.yaml')) && existsSync(join(repoRoot, 'packages'))
+const DEV_JOB_KINDS = new Set(['install', 'build', 'build-all', 'test'])
 const userBin = join(homedir(), '.local', 'bin')
 const childEnv = {
   ...process.env,
@@ -521,6 +525,7 @@ async function coreStatus() {
 }
 
 async function packageCatalog() {
+  const osRelease = await readOsRelease()
   const current = await readCurrentCoreVersion()
   const previous = await readPreviousCoreVersion()
   const platform = process.platform
@@ -555,16 +560,13 @@ async function packageCatalog() {
     ...(url === undefined ? {} : { url }),
     note,
   })
+  const dockerGuide = dockerInstallGuide(platform, osRelease)
   const dockerInstall = install(
     'instructions-only',
-    isMac ? '安装 Docker Desktop' : isWindows ? '安装 Docker Desktop / WSL2' : '安装 Docker Engine 或 rootless Docker',
-    isMac
-      ? ['# 安装并启动 Docker Desktop，然后验证', 'docker version']
-      : isWindows
-        ? ['# 安装 Docker Desktop（启用 WSL2 backend），然后验证', 'docker version']
-        : ['# 由你本人按官方文档安装 Docker Engine 或 rootless Docker', '# https://docs.docker.com/engine/install/', 'docker version'],
-    'SHE 不执行 sudo、不安装 Docker、不请求 root。依赖 docker 组访问时可能是 root-equivalent。',
-    isMac || isWindows ? 'https://docs.docker.com/desktop/' : 'https://docs.docker.com/engine/install/',
+    dockerGuide.title,
+    dockerGuide.commands,
+    dockerGuide.note,
+    dockerGuide.url,
   )
 
   return [
@@ -888,6 +890,8 @@ async function applyCompanionUpdate(manifestUrl) {
 
 async function platformStatus() {
   const platform = process.platform
+  const osRelease = await readOsRelease()
+  const dockerGuide = dockerInstallGuide(platform, osRelease)
   const [dockerVersion, dockerSecurity] = await Promise.all([
     captureCommand(undefined, 'docker', ['version', '--format', '{{.Server.Version}}']),
     captureCommand(undefined, 'docker', ['info', '--format', '{{json .SecurityOptions}}']),
@@ -922,6 +926,7 @@ async function platformStatus() {
       available: dockerAvailable,
       mode: !dockerAvailable ? 'unavailable' : dockerRootless ? 'rootless' : 'root-equivalent-risk',
       ...(dockerVersion.ok ? { version: dockerVersion.stdout } : {}),
+      install: dockerGuide,
     },
     capabilities: {
       pwa: true,
@@ -1182,6 +1187,9 @@ async function executeJob(job) {
 
 function startJob(kind, input = {}) {
   if (!JOB_KINDS.has(kind)) throw new Error(`unsupported job kind: ${kind}`)
+  if (DEV_JOB_KINDS.has(kind) && !sourceCheckout) {
+    throw new Error('installed companion bundle does not include the source workspace; use Core install/update for runtime changes')
+  }
   if (activeJobId !== null) throw new Error('another install/debug job is already running')
   const job = {
     id: `job-${randomUUID()}`,
@@ -1456,6 +1464,7 @@ async function handleCompanionApi(request, response) {
         activeJobId,
         version: companionVersion,
         supervised: companionSupervised,
+        sourceCheckout,
         ...(companionInstallRoot === undefined ? {} : { installRoot: companionInstallRoot }),
         privilege: {
           rootRequired: false,
@@ -1496,7 +1505,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'autostart', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1587,6 +1596,29 @@ async function handleCompanionApi(request, response) {
       const result = await applyCompanionUpdate(String(body.manifestUrl ?? '').trim())
       sendJsonWithCors(request, response, 200, { ok: true, value: result })
       scheduleCompanionExit(COMPANION_RESTART_EXIT_CODE, 500)
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/autostart') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await autostartStatus(autostartOptionsFromEnv()) })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/autostart') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      const options = autostartOptionsFromEnv()
+      const status = body.enabled === true ? await enableAutostart(options) : await disableAutostart(options)
+      sendJsonWithCors(request, response, 200, { ok: true, value: status })
     } catch (error) {
       sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
     }

@@ -110,6 +110,7 @@ export interface CompanionHealth {
   readonly activeJobId: string | null
   readonly version: string
   readonly supervised?: boolean
+  readonly sourceCheckout?: boolean
   readonly installRoot?: string
 }
 
@@ -142,6 +143,32 @@ export type JobEvent =
 export async function loadCompanionHealth(signal?: AbortSignal): Promise<CompanionHealth> {
   const payload = await getJson<{ ok: boolean; value?: CompanionHealth; error?: { message?: string } }>('/api/health', signal)
   if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'companion unavailable')
+  return payload.value
+}
+
+export interface AutostartStatus {
+  readonly enabled: boolean
+  readonly mode: 'systemd-user' | 'xdg-autostart' | 'launch-agent' | 'windows-startup' | 'disabled' | 'unsupported' | string
+  readonly path: string | null
+  readonly note: string
+}
+
+export async function loadAutostart(signal?: AbortSignal): Promise<AutostartStatus> {
+  const payload = await getJson<{ ok: boolean; value?: AutostartStatus; error?: { message?: string } }>('/api/autostart', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'autostart status unavailable')
+  return payload.value
+}
+
+export async function setAutostart(enabled: boolean): Promise<AutostartStatus> {
+  const response = await fetch(`${apiBase()}/api/autostart`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify({ enabled }),
+  })
+  const payload = await response.json() as { ok: boolean; value?: AutostartStatus; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `autostart update failed: HTTP ${response.status}`)
+  }
   return payload.value
 }
 
@@ -346,12 +373,14 @@ export interface PlatformStatus {
     readonly home: string
     readonly shell: string
     readonly wsl: boolean
+    readonly distro?: string | null
     readonly pathSeparator: string
   }
   readonly docker: {
     readonly available: boolean
     readonly mode: string
     readonly version?: string
+    readonly install?: PackageInstallInfo
   }
   readonly capabilities: Readonly<Record<string, boolean>>
   readonly supportMatrix: readonly PlatformSupportRow[]
@@ -400,9 +429,9 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.3.1'
-export const COMPANION_MIN_VERSION = '0.3.1'
-export const COMPANION_RELEASE_TAG = 'v0.3.1-companion.1'
+export const COMPANION_RELEASE_VERSION = '0.3.2'
+export const COMPANION_MIN_VERSION = '0.3.2'
+export const COMPANION_RELEASE_TAG = 'v0.3.2-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

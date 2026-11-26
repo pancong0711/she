@@ -97,6 +97,7 @@
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
 | T6.8 | 跨平台安装/更新向导与支持矩阵页面 | T6.4/T3.7 | [~] | Linux 已验证；macOS/Windows 明确状态 | 平台探测与矩阵页面完成；安装向导/真机验收未完成 |
 | T6.9 | 本机 AI agent 发现、容器化迁移计划、凭据目录只读挂载与迁移记录 | T6.3/T3.3/T3.5 | [x] | 发现不读凭据内容；根目录 workspace 阻断；broker host mount 负例测试；PWA 勾选/配置/执行 |
+| T6.10 | 用户级 companion 登录自启动与安装版开发者工具隐藏 | T6.4/T7.8 | [x] | 不写系统服务、不请求 root；安装版不执行源码依赖安装 |
 | T6.4f | Packages 依赖目录与缺失依赖安装指引 | T6.4e | [x] | requirement/用途/状态/安装命令/官方文档；不自动执行系统安装 |
 
 ## M7 Companion / Core 分层与自更新
@@ -166,3 +167,5 @@
 - 2026-11-26：完成 T7.8：新增 companion supervisor（退出码 75 重启、20 秒启动窗口、pending rollback）；PWA Settings 显示 companion 版本并支持页面内重启/停止/检查更新/安装并重启；更新仅接受 SHE GitHub Release manifest，校验 SHA-256，非 supervisor 模式禁用。实际验证 0.3.0→0.3.1 更新成功、故意启动失败回滚到 0.3.0。
 
 - 2026-11-26：完成 T6.5 迁移绑定：Agent Migration 的 reuse/legacy 来源必须选择 Workspaces 授权 ID；reuse 要求 read-write，new+/legacy 可用 read-only；计划与迁移记录保存 workspaceAuthorizationId；broker 继续二次校验并强制只读。PWA 迁移面板改为授权下拉选择。
+
+- 2026-11-26：完成 T6.10：新增 `/api/autostart` 与 Settings 登录自启动开关（Linux systemd --user/XDG、macOS LaunchAgent、Windows Startup）；安装版 companion 检测 `sourceCheckout=false` 并隐藏/阻断源码安装/构建/测试 job；Docker 安装指引按 Ubuntu/Debian/Fedora/Arch/macOS/Windows 生成具体命令。

@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Added user-level companion login autostart, installed-bundle source-job guards, and distro-specific Docker installation commands.
 - Companion 0.3.1 binds Agent Migration workspace mounts to explicit authorization IDs and publishes the new release tag.
 - Agent Migration now binds reused/legacy workspace mounts to explicit Workspaces authorization IDs; read-only authorizations can only be legacy read-only mounts.
 - Added supervisor-managed companion restart/shutdown/update from the PWA, with version display, SHA-256 verification, and startup-failure rollback.

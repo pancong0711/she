@@ -21,6 +21,7 @@ import {
   getCompanionUrl,
   isLocalOrigin,
   loadAgentRuntime,
+  loadAutostart,
   loadCompanionHealth,
   loadCoreStatus,
   loadPackages,
@@ -32,6 +33,7 @@ import {
   loadWorkerConfig,
   restartCompanion,
   saveWorkerConfig,
+  setAutostart,
   shutdownCompanion,
   sendTaskToShe,
   setCompanionUrl,
@@ -41,6 +43,7 @@ import {
   subscribeGatewayEvents,
   type CompanionHealth,
   type CoreStatus,
+  type AutostartStatus,
   type CompanionUpdateCheck,
   type CoreUpdateCheck,
   type JobEvent,
@@ -110,6 +113,7 @@ const coreUpdateError = ref('')
 const packages = ref<readonly PackageInfo[]>([])
 const packageError = ref('')
 const copiedPackageId = ref('')
+const copiedDockerGuide = ref(false)
 const preflight = ref<PreflightResult | null>(null)
 const platformStatus = ref<PlatformStatus | null>(null)
 const platformError = ref('')
@@ -122,6 +126,9 @@ const companionActionRunning = ref('')
 const companionUpdateCheck = ref<CompanionUpdateCheck | null>(null)
 const companionUpdateError = ref('')
 const companionMessage = ref('')
+const autostart = ref<AutostartStatus | null>(null)
+const autostartError = ref('')
+const autostartBusy = ref(false)
 let timer: ReturnType<typeof setInterval> | undefined
 
 const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
@@ -136,7 +143,7 @@ const companionOutdated = computed(() => companion.value !== null && isVersionOl
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult, platformResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult, platformResult, autostartResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
@@ -146,6 +153,7 @@ async function refresh(): Promise<void> {
     loadPreflight(),
     loadAgentRuntime(),
     loadPlatformStatus(),
+    loadAutostart(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -200,6 +208,13 @@ async function refresh(): Promise<void> {
   } else {
     platformStatus.value = null
     platformError.value = platformResult.reason instanceof Error ? platformResult.reason.message : String(platformResult.reason)
+  }
+  if (autostartResult.status === 'fulfilled') {
+    autostart.value = autostartResult.value
+    autostartError.value = ''
+  } else {
+    autostart.value = null
+    autostartError.value = autostartResult.reason instanceof Error ? autostartResult.reason.message : String(autostartResult.reason)
   }
   if (workerConfigResult.status === 'fulfilled') {
     workerConfigResponse.value = workerConfigResult.value
@@ -286,6 +301,21 @@ async function restartCompanionFromPage(): Promise<void> {
     companionUpdateError.value = cause instanceof Error ? cause.message : String(cause)
   } finally {
     companionActionRunning.value = ''
+  }
+}
+
+async function toggleAutostart(enabled: boolean): Promise<void> {
+  if (autostartBusy.value) return
+  autostartBusy.value = true
+  autostartError.value = ''
+  companionMessage.value = ''
+  try {
+    autostart.value = await setAutostart(enabled)
+    companionMessage.value = enabled ? '已启用登录自启动。' : '已关闭登录自启动。'
+  } catch (cause) {
+    autostartError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    autostartBusy.value = false
   }
 }
 
@@ -448,6 +478,18 @@ function packageInstall(item: PackageInfo): PackageInstallInfo {
     title: '安装/修复说明',
     commands: [],
     note: `当前本地 companion ${companion.value?.version ?? 'unknown'} 低于 PWA 期望的 ${COMPANION_MIN_VERSION}，因此 /api/packages 没有返回 install 字段。旧进程仍在运行；升级文件并不会自动替换它。`,
+  }
+}
+
+async function copyDockerGuideCommands(): Promise<void> {
+  const commands = platformStatus.value?.docker.install?.commands ?? []
+  if (commands.length === 0) return
+  try {
+    await navigator.clipboard.writeText(commands.join('\n'))
+    copiedDockerGuide.value = true
+    setTimeout(() => { copiedDockerGuide.value = false }, 1500)
+  } catch {
+    copiedDockerGuide.value = false
   }
 }
 
@@ -993,7 +1035,7 @@ onBeforeUnmount(() => {
               <button class="primary" :disabled="jobRunning" @click="runJob('doctor')">环境检查</button>
               <button class="secondary" :disabled="jobRunning" @click="runJob('bootstrap')">用户级环境准备（不请求 root）</button>
             </div>
-            <details class="developer-tools">
+            <details v-if="companion?.sourceCheckout !== false" class="developer-tools">
               <summary>开发者工具（仅源码仓库使用）</summary>
               <p class="muted small-note">
                 这些按钮执行 pnpm 脚本，只用于 SHE 源码开发/调试。正常安装用户不需要点击；
@@ -1006,6 +1048,7 @@ onBeforeUnmount(() => {
                 <button class="secondary" :disabled="jobRunning" @click="runJob('test')">运行测试</button>
               </div>
             </details>
+            <p v-else class="muted small-note">当前运行的是安装版 companion bundle，不包含 pnpm workspace；源码构建/测试工具已隐藏。Core 运行时请使用 Core 安装/更新。</p>
             <p v-if="jobError" class="error-text">{{ jobError }}</p>
             <p v-if="job" class="muted">last job: {{ job.kind }} · {{ job.status }} · {{ job.id }}</p>
             <p v-if="jobWarnings.length > 0" class="warn-text">
@@ -1045,7 +1088,10 @@ onBeforeUnmount(() => {
                   {{ warning.detail }}<br />
                   <span v-if="warning.remediation">修复：{{ warning.remediation }}</span>
                 </p>
-                <a class="secondary" href="https://docs.docker.com/engine/install/" target="_blank" rel="noreferrer">Docker 官方安装文档 ↗</a>
+                <div class="package-actions">
+                  <button class="primary" @click="active = 'packages'">打开 Packages 查看安装命令</button>
+                  <a class="secondary" href="https://docs.docker.com/engine/install/" target="_blank" rel="noreferrer">Docker 官方安装文档 ↗</a>
+                </div>
               </div>
               <details v-if="(preflight.warnings?.length ?? 0) > 0" class="preflight-details">
                 <summary>查看全部 {{ preflight.warnings?.length }} 个 warning</summary>
@@ -1071,6 +1117,7 @@ onBeforeUnmount(() => {
             <p v-if="platformError" class="error-text">{{ platformError }}（旧 companion 可能未提供 `/api/platform`，升级 companion 后会显示。）</p>
             <template v-if="platformStatus">
               <div class="health-grid">
+                <div><span>distro</span><b>{{ platformStatus.runtime.distro ?? 'unknown' }}</b></div>
                 <div><span>Node</span><b>{{ platformStatus.runtime.node }}</b></div>
                 <div><span>shell</span><b>{{ platformStatus.runtime.shell }}</b></div>
                 <div><span>uid</span><b>{{ platformStatus.runtime.uid ?? 'n/a' }}</b></div>
@@ -1078,6 +1125,16 @@ onBeforeUnmount(() => {
                 <div><span>Docker</span><b>{{ platformStatus.docker.available ? platformStatus.docker.mode : 'unavailable' }}{{ platformStatus.docker.version ? ` · ${platformStatus.docker.version}` : '' }}</b></div>
                 <div><span>unix socket</span><b>{{ platformStatus.capabilities.unixSocket ? 'supported' : 'not supported' }}</b></div>
               </div>
+              <details v-if="!platformStatus.docker.available && platformStatus.docker.install" class="docker-install-guide">
+                <summary>{{ platformStatus.docker.install.title }}</summary>
+                <p class="muted small-note">{{ platformStatus.docker.install.note }}</p>
+                <pre class="package-commands"><code>{{ platformStatus.docker.install.commands.join('\n') }}</code></pre>
+                <div class="package-actions">
+                  <button class="secondary" @click="copyDockerGuideCommands">{{ copiedDockerGuide ? '已复制' : '复制 Docker 安装命令' }}</button>
+                  <a class="secondary" :href="platformStatus.docker.install.url" target="_blank" rel="noreferrer">Docker 官方文档 ↗</a>
+                  <button class="primary" @click="active = 'packages'">打开 Packages</button>
+                </div>
+              </details>
               <div class="support-table-wrap">
                 <table class="support-table">
                   <thead><tr><th>能力</th><th>Linux</th><th>macOS</th><th>Windows</th></tr></thead>
@@ -1287,6 +1344,7 @@ onBeforeUnmount(() => {
             <div><span>minimum</span><b>{{ COMPANION_MIN_VERSION }}</b></div>
             <div><span>install root</span><b><code>{{ companion?.installRoot ?? '-' }}</code></b></div>
             <div><span>supervised</span><b>{{ companion?.supervised ? 'yes' : 'no' }}</b></div>
+            <div><span>source checkout</span><b>{{ companion?.sourceCheckout === true ? 'yes' : companion?.sourceCheckout === false ? 'no (installed bundle)' : 'unknown' }}</b></div>
           </div>
           <p v-if="companionMessage" class="success-text">{{ companionMessage }}</p>
           <p v-if="companionUpdateError" class="error-text">{{ companionUpdateError }}</p>
@@ -1316,6 +1374,28 @@ onBeforeUnmount(() => {
           <p v-if="companionUpdateCheck && !companionUpdateCheck.needsUpdate" class="muted small-note">
             当前 {{ companionUpdateCheck.current }} 已是最新版本。
           </p>
+
+          <div class="autostart-block">
+            <div class="section-head">
+              <div>
+                <h3>登录自启动</h3>
+                <p class="muted small-note">用户级自启动，不安装系统服务，不请求 root。Linux 使用 systemd --user 或 XDG autostart；macOS 使用 LaunchAgent；Windows 使用 Startup 文件夹。</p>
+              </div>
+              <span :class="['pill', autostart?.enabled ? 'succeeded' : 'warn']">{{ autostart?.enabled ? 'enabled' : 'disabled' }}</span>
+            </div>
+            <div v-if="autostart" class="health-grid">
+              <div><span>mode</span><b>{{ autostart.mode }}</b></div>
+              <div><span>path</span><b><code>{{ autostart.path ?? '-' }}</code></b></div>
+              <div><span>note</span><b>{{ autostart.note }}</b></div>
+            </div>
+            <p v-if="autostartError" class="error-text">{{ autostartError }}</p>
+            <div class="job-actions">
+              <button v-if="!autostart?.enabled" class="primary" :disabled="autostartBusy || !companion?.supervised" @click="toggleAutostart(true)">{{ autostartBusy ? '启用中…' : '启用登录自启动' }}</button>
+              <button v-else class="secondary" :disabled="autostartBusy || !companion?.supervised" @click="toggleAutostart(false)">{{ autostartBusy ? '关闭中…' : '关闭登录自启动' }}</button>
+              <button class="secondary" :disabled="loading" @click="refresh">刷新状态</button>
+            </div>
+            <p class="muted small-note">Linux 的 systemd --user 通常随桌面登录启动；如果需要在未登录时启动，需要管理员配置 linger，SHE 不会代你执行。</p>
+          </div>
         </div>
         <p class="muted">
           普通用户应优先直接打开 <code>http://127.0.0.1:8787</code>，同源模式无需额外配置 CORS。

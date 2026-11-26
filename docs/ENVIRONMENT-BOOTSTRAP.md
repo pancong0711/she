@@ -243,3 +243,9 @@ pnpm companion
 - [ ] Docker/rootless 平台安装向导；
 - [ ] signed companion installer；
 - [ ] 系统安装审计与回滚。
+
+## 11. Docker 与 core 启动
+
+Docker 不是 core 启动的硬依赖。没有 Docker 时 companion、control-plane、Tasks 和 worker 直接 workspace 模式仍可启动；broker 会 degraded，Sandbox 与 Agent Migration 不可用。
+
+分发版会在 Packages 和 Install & Doctor 中提供当前发行版的 Docker 安装命令；SHE 只展示，不执行 sudo。详见 `docs/DOCKER-INSTALL.md`。
