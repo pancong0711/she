@@ -24,7 +24,26 @@ PWA Chat
 
 与 feishu4dsh/CLI 共用同一个 control plane、同一个 conversation/task 状态源。
 
-## 2. 启用 worker
+## 2. PWA 中配置 worker
+
+Install & Doctor → Settings 页面可直接编辑：
+
+- worker enabled；
+- OpenCode URL / username；
+- OpenCode password 文件路径（只保存路径，不保存密码内容）；
+- workspace path；
+- model provider/id/variant；
+- poll interval / lease TTL。
+
+保存后点击“保存并重启 core”，companion 会把配置写入：
+
+```text
+~/.config/she/worker.json（0600）
+```
+
+并在启动 `run-core` 时转换为对应的 `SHE_*` 环境变量。PWA 不读取或显示密码文件内容。
+
+## 3. 启用 worker（环境变量方式）
 
 默认关闭：
 
@@ -56,7 +75,7 @@ SHE_WORKER_POLL_MS=1000
 SHE_WORKER_LEASE_TTL_MS=300000
 ```
 
-## 3. 运行方式
+## 4. 运行方式
 
 ```text
 while not stopped:
@@ -71,7 +90,7 @@ while not stopped:
 
 当前是单 worker，多个 Topic 按顺序处理；同一 Topic 始终串行。
 
-## 4. 事件映射
+## 5. 事件映射
 
 `TaskRunner` 把以下 agent 事件写入 EventStore：
 
@@ -93,7 +112,7 @@ gateway.v1 映射：
 
 PWA Chat 消费 `/v1/events`，按 `eventId` 去重，实时追加 agent 输出。
 
-## 5. PWA Chat
+## 6. PWA Chat
 
 页面：
 
@@ -112,17 +131,17 @@ Chat
 - 使用 `pwa:local` 作为稳定 conversation id；
 - Ctrl/Cmd + Enter 发送。
 
-## 6. 当前限制
+## 7. 当前限制
 
 - worker 单进程、顺序处理；多 agent 并发/角色策略后续实现；
 - 默认只使用一个配置的 workspace path；
-- 尚未在 PWA 中编辑 worker/OpenCode 凭据；当前通过环境/配置启动；
+- PWA 可编辑 worker/OpenCode/workspace 配置，但密码内容仍由用户维护在 0600 文件中；
 - agent 报告/产物还没有完整下载 UI；
 - OpenCode permission rules 不是 OS 沙箱；强隔离仍需 sandbox/broker；
 - 如果 worker 未启用，任务会保持 queued，Chat 页面会明确提示；
 - 未完成 task artifact 的 PWA 展示和下载。
 
-## 7. 验收
+## 8. 验收
 
 - [x] worker 可在 `SHE_WORKER_ENABLED=1` 时启动；
 - [x] OpenCode adapter 能执行 task；
@@ -130,6 +149,6 @@ Chat
 - [x] gateway event stream 输出 agent.delta；
 - [x] PWA Chat 提交任务并实时展示文本；
 - [x] worker disabled 时任务仍可排队并显示提示；
-- [ ] PWA 内配置 worker/凭据；
+- [x] PWA 内配置 worker/OpenCode/workspace（密码仅路径）；
 - [ ] artifact 下载/报告展示；
 - [ ] 多 agent/预算/角色策略。

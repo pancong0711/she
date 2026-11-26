@@ -155,7 +155,7 @@ defineProps<{
           <tr><td>Sandboxes</td><td>broker 列表、状态、角色、image、按需 CPU/内存/PIDs。</td></tr>
           <tr><td>Packages</td><td>Companion/Core/Node/pnpm/Docker 运行时清单；companion launcher、core 更新和用户级 pnpm 准备已接入。</td></tr>
           <tr><td>Gateway</td><td>飞书等 channel adapter 配置：开发中，feishu4dsh 为第一个目标。</td></tr>
-          <tr><td>Settings</td><td>companion URL 与三类服务连接状态。</td></tr>
+          <tr><td>Settings</td><td>companion URL、服务状态、worker/OpenCode/workspace 配置（密码仅保存路径）。</td></tr>
           <tr><td>Help</td><td>本页：概念、边界、操作说明和故障排查。</td></tr>
         </tbody>
       </table>

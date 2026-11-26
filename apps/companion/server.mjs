@@ -33,6 +33,7 @@ const runtimeHome = process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.loc
 const configHome = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config')
 const dataHome = process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share')
 const coreRoot = process.env.SHE_CORE_ROOT?.trim() || join(dataHome, 'she', 'core')
+const workerConfigPath = process.env.SHE_WORKER_CONFIG_FILE?.trim() || join(configHome, 'she', 'worker.json')
 const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
@@ -257,6 +258,103 @@ async function runPreflight(job) {
 }
 
 
+function expandHome(path) {
+  if (path === '~') return homedir()
+  return path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
+}
+
+function defaultWorkerConfig() {
+  const providerId = process.env.SHE_AGENT_MODEL_PROVIDER?.trim() || ''
+  const modelId = process.env.SHE_AGENT_MODEL_ID?.trim() || ''
+  const variant = process.env.SHE_AGENT_MODEL_VARIANT?.trim() || ''
+  return {
+    schema: 1,
+    enabled: process.env.SHE_WORKER_ENABLED === '1',
+    opencodeUrl: process.env.SHE_OPENCODE_URL?.trim() || 'http://127.0.0.1:49375',
+    opencodeUsername: process.env.SHE_OPENCODE_USERNAME?.trim() || 'opencode',
+    opencodePasswordFile: process.env.SHE_OPENCODE_PASSWORD_FILE?.trim() || expandHome('~/.config/opencode/service.json'),
+    workspacePath: process.env.SHE_WORKSPACE_PATH?.trim() || join(dataHome, 'she', 'workspaces', 'default'),
+    pollIntervalMs: Number(process.env.SHE_WORKER_POLL_MS ?? 1_000),
+    leaseTtlMs: Number(process.env.SHE_WORKER_LEASE_TTL_MS ?? 300_000),
+    ...(providerId !== '' && modelId !== '' ? { model: { providerId, modelId, ...(variant === '' ? {} : { variant }) } } : {}),
+  }
+}
+
+async function readWorkerConfig() {
+  const defaults = defaultWorkerConfig()
+  try {
+    const parsed = JSON.parse(await readFile(workerConfigPath, 'utf8'))
+    if (parsed?.schema !== 1) throw new Error('invalid worker config schema')
+    return {
+      ...defaults,
+      ...parsed,
+      pollIntervalMs: Number(parsed.pollIntervalMs ?? defaults.pollIntervalMs),
+      leaseTtlMs: Number(parsed.leaseTtlMs ?? defaults.leaseTtlMs),
+    }
+  } catch (error) {
+    if (error?.code === 'ENOENT') return defaults
+    throw error
+  }
+}
+
+function validateWorkerConfig(input) {
+  const defaults = defaultWorkerConfig()
+  const workspacePath = expandHome(String(input.workspacePath ?? defaults.workspacePath).trim())
+  const passwordFile = expandHome(String(input.opencodePasswordFile ?? defaults.opencodePasswordFile).trim())
+  if (!resolve(workspacePath).startsWith('/')) throw new Error('workspacePath must be absolute')
+  if (!resolve(passwordFile).startsWith('/')) throw new Error('opencodePasswordFile must be absolute')
+  const opencodeUrl = String(input.opencodeUrl ?? defaults.opencodeUrl).trim()
+  if (!/^https?:\/\//.test(opencodeUrl)) throw new Error('opencodeUrl must be http(s)')
+  const pollIntervalMs = Number(input.pollIntervalMs ?? defaults.pollIntervalMs)
+  const leaseTtlMs = Number(input.leaseTtlMs ?? defaults.leaseTtlMs)
+  if (!Number.isInteger(pollIntervalMs) || pollIntervalMs < 100) throw new Error('pollIntervalMs must be >= 100')
+  if (!Number.isInteger(leaseTtlMs) || leaseTtlMs < 1_000) throw new Error('leaseTtlMs must be >= 1000')
+  const modelInput = input.model
+  const model = modelInput !== undefined && modelInput !== null
+    ? {
+        providerId: String(modelInput.providerId ?? '').trim(),
+        modelId: String(modelInput.modelId ?? '').trim(),
+        ...(String(modelInput.variant ?? '').trim() === '' ? {} : { variant: String(modelInput.variant).trim() }),
+      }
+    : undefined
+  if (model !== undefined && (model.providerId === '' || model.modelId === '')) throw new Error('model providerId/modelId are required')
+  return {
+    schema: 1,
+    enabled: input.enabled === true,
+    opencodeUrl: opencodeUrl.replace(/\/+$/, ''),
+    opencodeUsername: String(input.opencodeUsername ?? defaults.opencodeUsername).trim() || 'opencode',
+    opencodePasswordFile: resolve(passwordFile),
+    workspacePath: resolve(workspacePath),
+    pollIntervalMs,
+    leaseTtlMs,
+    ...(model === undefined ? {} : { model }),
+  }
+}
+
+async function saveWorkerConfig(input) {
+  const config = validateWorkerConfig(input)
+  await mkdir(dirname(workerConfigPath), { recursive: true, mode: 0o700 })
+  await writeFile(workerConfigPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+  return config
+}
+
+function workerEnvFromConfig(config) {
+  return {
+    SHE_WORKER_ENABLED: config.enabled ? '1' : '0',
+    SHE_OPENCODE_URL: config.opencodeUrl,
+    SHE_OPENCODE_USERNAME: config.opencodeUsername,
+    SHE_OPENCODE_PASSWORD_FILE: config.opencodePasswordFile,
+    SHE_WORKSPACE_PATH: config.workspacePath,
+    SHE_WORKER_POLL_MS: String(config.pollIntervalMs),
+    SHE_WORKER_LEASE_TTL_MS: String(config.leaseTtlMs),
+    ...(config.model === undefined ? {} : {
+      SHE_AGENT_MODEL_PROVIDER: config.model.providerId,
+      SHE_AGENT_MODEL_ID: config.model.modelId,
+      ...(config.model.variant === undefined ? {} : { SHE_AGENT_MODEL_VARIANT: config.model.variant }),
+    }),
+  }
+}
+
 function recordCoreOutput(stream, text, job) {
   for (const line of String(text).replace(/\r/g, '').split('\n')) {
     if (line === '') continue
@@ -387,10 +485,11 @@ async function startCore(job) {
   coreStartedAt = Date.now()
   const command = process.platform === 'win32' ? 'cmd' : 'bash'
   const args = process.platform === 'win32' ? ['/c', entry] : [entry]
+  const workerConfig = await readWorkerConfig()
   if (job !== undefined) appendJobEvent(job, { type: 'system', text: `starting core: ${entry}` })
   const child = spawn(command, args, {
     cwd: join(coreRoot, 'current'),
-    env: childEnv,
+    env: { ...childEnv, ...workerEnvFromConfig(workerConfig) },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   coreChild = child
@@ -750,7 +849,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'packages'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'packages', 'worker-config'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -802,6 +901,31 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: lastPreflight ?? { at: null, ok: null, checks: [] },
     })
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/worker/config') {
+    try {
+      sendJsonWithCors(request, response, 200, {
+        ok: true,
+        value: { config: await readWorkerConfig(), path: workerConfigPath, restartRequired: false },
+      })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/worker/config') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      const config = await saveWorkerConfig(body)
+      sendJsonWithCors(request, response, 200, { ok: true, value: { config, path: workerConfigPath, restartRequired: true } })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/packages') {

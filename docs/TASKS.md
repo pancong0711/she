@@ -92,7 +92,8 @@
 | T6.4d | 特权环境（Docker/rootless/系统依赖）instructions-only 支持矩阵 | T6.4b | [x] | 只展示方法；不执行 sudo/不请求 root | 显式同意、checksum、审计、回滚 | PWA 点击触发并实时显示 stdout/stderr | 校验、权限确认、日志、回滚入口 |
 | T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [ ] | 只允许叶子目录；不可绕过 broker |
 | T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [~] |
-| T6.6a | Agent worker + PWA Chat：提交、事件流、实时 text/tool 状态 | T6.6/M2 | [x] | worker+OpenCode+agent.delta 实测 | 与 CLI/gateway 共用同一控制面会话 |
+| T6.6a | Agent worker + PWA Chat：提交、事件流、实时 text/tool 状态 | T6.6/M2 | [x] | worker+OpenCode+agent.delta 实测 |
+| T6.6b | PWA Settings：worker/OpenCode/workspace 配置与重启应用 | T6.6a | [x] | 0600 config；密码仅路径；core restart 后生效 | 与 CLI/gateway 共用同一控制面会话 |
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
 | T6.8 | 跨平台安装/更新向导与支持矩阵页面 | T6.4/T3.7 | [ ] | Linux 已验证；macOS/Windows 明确状态 |
 
@@ -139,3 +140,4 @@
 - 2026-11-25：完成 T6.4c3：PWA 增加 `start.bat`/`start.ps1`/`start.command`/`start.sh` 一键 launcher；从 Release 下载 manifest/bundle、校验 SHA、安装 companion、启动并打开页面；实测 start.sh 完整链路通过。
 - 2026-11-25：完成 T6.4e：companion `/api/packages` 与 PWA Packages 页面，展示 companion/core/Node/pnpm/Docker 状态，并接入 launcher、core 更新和用户级 pnpm 准备入口。
 - 2026-11-25：完成 T6.6a：control-plane worker（OpenCode adapter）、task.agent_event 持久化、gateway agent.delta 映射、PWA Chat 实时对话/任务布置；fake OpenCode worker smoke 通过。
+- 2026-11-25：完成 T6.6b：PWA Settings 编辑 worker/OpenCode/workspace/model/poll/lease 配置，写入 0600 worker.json；companion 启动 core 时注入 SHE_* 环境变量；保存并重启 core 后 worker 实际执行任务成功。

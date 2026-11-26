@@ -30,3 +30,4 @@ All notable changes to SHE are documented here.
 - Added assignment-assistant-style one-click launchers (`start.bat`, `start.ps1`, `start.command`, `start.sh`) that download, verify, install, start companion, and open the PWA without root.
 - Added companion package inventory API and PWA Packages page for companion/core/runtime status, launcher downloads, core updates, and user-level pnpm bootstrap.
 - Added control-plane OpenCode worker, persisted agent events, gateway agent.delta mapping, and PWA Chat for task submission and live agent output.
+- Added PWA settings for worker/OpenCode/workspace/model configuration with a 0600 companion config file and core restart application.

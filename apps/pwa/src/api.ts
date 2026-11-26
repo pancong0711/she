@@ -332,3 +332,46 @@ export async function* subscribeGatewayEvents(signal?: AbortSignal): AsyncIterab
     reader.releaseLock()
   }
 }
+
+export interface WorkerModelConfig {
+  readonly providerId: string
+  readonly modelId: string
+  readonly variant?: string
+}
+
+export interface WorkerConfig {
+  readonly schema: 1
+  readonly enabled: boolean
+  readonly opencodeUrl: string
+  readonly opencodeUsername: string
+  readonly opencodePasswordFile: string
+  readonly workspacePath: string
+  readonly pollIntervalMs: number
+  readonly leaseTtlMs: number
+  readonly model?: WorkerModelConfig
+}
+
+export interface WorkerConfigResponse {
+  readonly config: WorkerConfig
+  readonly path: string
+  readonly restartRequired: boolean
+}
+
+export async function loadWorkerConfig(signal?: AbortSignal): Promise<WorkerConfigResponse> {
+  const payload = await getJson<{ ok: boolean; value?: WorkerConfigResponse; error?: { message?: string } }>('/api/worker/config', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'worker config unavailable')
+  return payload.value
+}
+
+export async function saveWorkerConfig(config: WorkerConfig): Promise<WorkerConfigResponse> {
+  const response = await fetch(`${apiBase()}/api/worker/config`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify(config),
+  })
+  const payload = await response.json() as { ok: boolean; value?: WorkerConfigResponse; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `worker config save failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}

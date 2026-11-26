@@ -21,6 +21,8 @@ import {
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
+  loadWorkerConfig,
+  saveWorkerConfig,
   sendTaskToShe,
   setCompanionUrl,
   startJob,
@@ -32,6 +34,7 @@ import {
   type JobEvent,
   type JobSummary,
   type PackageInfo,
+  type WorkerConfig,
 } from './api'
 
 type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'chat' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
@@ -86,6 +89,11 @@ const coreUpdateCheck = ref<CoreUpdateCheck | null>(null)
 const coreUpdateError = ref('')
 const packages = ref<readonly PackageInfo[]>([])
 const packageError = ref('')
+const workerConfigResponse = ref<Awaited<ReturnType<typeof loadWorkerConfig>> | null>(null)
+const workerConfig = ref<WorkerConfig | null>(null)
+const workerConfigError = ref('')
+const workerConfigMessage = ref('')
+const workerConfigSaving = ref(false)
 let timer: ReturnType<typeof setInterval> | undefined
 
 const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
@@ -98,12 +106,13 @@ const companionOnline = computed(() => companion.value !== null)
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
     loadCoreStatus(),
     loadPackages(),
+    loadWorkerConfig(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -144,7 +153,46 @@ async function refresh(): Promise<void> {
     packages.value = []
     packageError.value = packageResult.reason instanceof Error ? packageResult.reason.message : String(packageResult.reason)
   }
+  if (workerConfigResult.status === 'fulfilled') {
+    workerConfigResponse.value = workerConfigResult.value
+    workerConfig.value = {
+      ...workerConfigResult.value.config,
+      model: workerConfigResult.value.config.model ?? { providerId: '', modelId: '' },
+    }
+    workerConfigError.value = ''
+  } else {
+    workerConfigError.value = workerConfigResult.reason instanceof Error ? workerConfigResult.reason.message : String(workerConfigResult.reason)
+  }
   loading.value = false
+}
+
+async function saveWorker(restart: boolean): Promise<void> {
+  if (workerConfig.value === null || workerConfigSaving.value) return
+  workerConfigSaving.value = true
+  workerConfigError.value = ''
+  workerConfigMessage.value = ''
+  try {
+    const { model, ...rest } = workerConfig.value
+    const payload: WorkerConfig = {
+      ...rest,
+      ...(model !== undefined && model.providerId.trim() !== '' && model.modelId.trim() !== ''
+        ? { model: { providerId: model.providerId.trim(), modelId: model.modelId.trim(), ...(model.variant === undefined || model.variant.trim() === '' ? {} : { variant: model.variant.trim() }) } }
+        : {}),
+    }
+    workerConfigResponse.value = await saveWorkerConfig(payload)
+    workerConfig.value = workerConfigResponse.value.config
+    if (restart && coreStatus.value?.installed.current !== null) {
+      await runCoreAction('restart')
+      workerConfigMessage.value = '已保存并重启 core；worker 会在新 core 启动时应用配置。'
+    } else {
+      workerConfigMessage.value = '已保存。需要重启 core 后生效。'
+    }
+    await refresh()
+  } catch (cause) {
+    workerConfigError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    workerConfigSaving.value = false
+  }
 }
 
 async function connectCompanion(): Promise<void> {
@@ -822,6 +870,33 @@ onBeforeUnmount(() => {
         <p class="muted">
           普通用户应优先直接打开 <code>http://127.0.0.1:8787</code>，同源模式无需额外配置 CORS。
         </p>
+
+        <div class="worker-settings">
+          <h2>Agent Worker / OpenCode</h2>
+          <p class="muted">
+            worker 通过 control plane 执行 `/she submit` 任务。这里只保存 OpenCode 凭据文件路径，
+            不保存密码内容；需要重启 core 后生效。
+          </p>
+          <p v-if="workerConfigError" class="error-text">{{ workerConfigError }}</p>
+          <p v-if="workerConfigMessage" class="success-text">{{ workerConfigMessage }}</p>
+          <div v-if="workerConfig" class="settings-grid">
+            <label class="check-row"><input v-model="workerConfig.enabled" type="checkbox" /> 启用 worker</label>
+            <label>OpenCode URL<input v-model="workerConfig.opencodeUrl" placeholder="http://127.0.0.1:49375" /></label>
+            <label>OpenCode username<input v-model="workerConfig.opencodeUsername" /></label>
+            <label>Password file（只保存路径）<input v-model="workerConfig.opencodePasswordFile" placeholder="/home/user/.config/opencode/service.json" /></label>
+            <label>Workspace path<input v-model="workerConfig.workspacePath" placeholder="/home/user/projects/my-workspace" /></label>
+            <label>Model provider<input v-model="workerConfig.model!.providerId" placeholder="opencode-go" /></label>
+            <label>Model ID<input v-model="workerConfig.model!.modelId" placeholder="deepseek-v4.1-flash" /></label>
+            <label>Model variant<input v-model="workerConfig.model!.variant" placeholder="high（可选）" /></label>
+            <label>Poll interval (ms)<input v-model.number="workerConfig.pollIntervalMs" type="number" min="100" /></label>
+            <label>Lease TTL (ms)<input v-model.number="workerConfig.leaseTtlMs" type="number" min="1000" /></label>
+          </div>
+          <p v-if="workerConfigResponse?.path" class="muted small-note">config file: {{ workerConfigResponse.path }}</p>
+          <div class="job-actions">
+            <button class="secondary" :disabled="workerConfigSaving || workerConfig === null" @click="saveWorker(false)">保存</button>
+            <button class="primary" :disabled="workerConfigSaving || workerConfig === null || coreStatus?.installed.current === null" @click="saveWorker(true)">保存并重启 core</button>
+          </div>
+        </div>
       </section>
 
       <section v-else-if="active === 'help'">
