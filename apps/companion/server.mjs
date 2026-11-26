@@ -563,13 +563,16 @@ async function packageCatalog() {
     note,
   })
   const dockerGuide = dockerInstallGuide(platform, osRelease)
-  const dockerInstall = install(
-    'instructions-only',
-    dockerGuide.title,
-    dockerGuide.commands,
-    dockerGuide.note,
-    dockerGuide.url,
-  )
+  const dockerInstall = {
+    ...install(
+      'instructions-only',
+      dockerGuide.title,
+      dockerGuide.commands,
+      dockerGuide.note,
+      dockerGuide.url,
+    ),
+    steps: dockerGuide.steps,
+  }
 
   return [
     {

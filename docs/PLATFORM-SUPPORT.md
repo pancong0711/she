@@ -93,7 +93,7 @@ GET /api/platform
 
 - 当前主验证平台；
 - Unix socket、core bundle、Docker/rootless 路径已验证；
-- Docker 组权限仍提示 root-equivalent 风险。
+- 推荐 rootless Docker；Docker 组权限仍提示 root-equivalent 风险。
 
 ### macOS
 

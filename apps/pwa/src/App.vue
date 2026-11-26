@@ -54,6 +54,7 @@ import {
   type JobSummary,
   type PackageInfo,
   type PackageInstallInfo,
+  type PackageInstallStep,
   type PlatformStatus,
   type PreflightResult,
   type WorkerConfig,
@@ -1182,7 +1183,21 @@ onBeforeUnmount(() => {
               <details v-if="!platformStatus.docker.available && platformStatus.docker.install" class="docker-install-guide">
                 <summary>{{ platformStatus.docker.install.title }}</summary>
                 <p class="muted small-note">{{ platformStatus.docker.install.note }}</p>
-                <pre class="package-commands"><code>{{ platformStatus.docker.install.commands.join('\n') }}</code></pre>
+                <div v-if="platformStatus.docker.install.steps?.length" class="package-install-steps">
+                  <div v-for="(step, index) in platformStatus.docker.install.steps" :key="`docker-${index}`" class="package-install-step">
+                    <div class="package-install-step-head">
+                      <span class="step-number">{{ index + 1 }}</span>
+                      <code>{{ step.command }}</code>
+                    </div>
+                    <p>{{ step.explanation }}</p>
+                    <div class="install-step-badges">
+                      <span v-if="step.requiresRoot" class="pill warn">需要管理员权限</span>
+                      <span v-if="step.optional" class="pill">可选</span>
+                    </div>
+                    <p v-if="step.note" class="muted small-note">{{ step.note }}</p>
+                  </div>
+                </div>
+                <pre v-else class="package-commands"><code>{{ platformStatus.docker.install.commands.join('\n') }}</code></pre>
                 <div class="package-actions">
                   <button class="secondary" @click="copyDockerGuideCommands">{{ copiedDockerGuide ? '已复制' : '复制 Docker 安装命令' }}</button>
                   <a class="secondary" :href="platformStatus.docker.install.url" target="_blank" rel="noreferrer">Docker 官方文档 ↗</a>
@@ -1342,7 +1357,21 @@ onBeforeUnmount(() => {
                   <span class="pill">{{ packageInstall(item).mode }}</span>
                 </div>
                 <p class="muted small-note">{{ packageInstall(item).note }}</p>
-                <pre v-if="packageInstall(item).commands.length > 0" class="package-commands"><code>{{ packageInstall(item).commands.join('\n') }}</code></pre>
+                <div v-if="packageInstall(item).steps?.length" class="package-install-steps">
+                  <div v-for="(step, index) in packageInstall(item).steps" :key="`${item.id}-${index}`" class="package-install-step">
+                    <div class="package-install-step-head">
+                      <span class="step-number">{{ index + 1 }}</span>
+                      <code>{{ step.command }}</code>
+                    </div>
+                    <p>{{ step.explanation }}</p>
+                    <div class="install-step-badges">
+                      <span v-if="step.requiresRoot" class="pill warn">需要管理员权限</span>
+                      <span v-if="step.optional" class="pill">可选</span>
+                    </div>
+                    <p v-if="step.note" class="muted small-note">{{ step.note }}</p>
+                  </div>
+                </div>
+                <pre v-else-if="packageInstall(item).commands.length > 0" class="package-commands"><code>{{ packageInstall(item).commands.join('\n') }}</code></pre>
                 <div class="package-actions">
                   <button v-if="packageInstall(item).commands.length > 0" class="secondary" @click="copyPackageCommands(item)">
                     {{ copiedPackageId === item.id ? '已复制' : '复制安装命令' }}

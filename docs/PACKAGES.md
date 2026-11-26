@@ -53,6 +53,8 @@ Packages 页面不只显示版本号，还要回答三个问题：
 
 Docker 不是 companion/core/Tasks 的 required 依赖。缺少 Docker 时基础控制面仍可工作，但 Sandboxes、Agent Migration、broker 容器不可用。
 
+Docker 安装指引默认使用 **rootless Docker**；不推荐把当前用户加入 root Docker 组。Packages 页面会逐行展示命令、解释、管理员权限要求和可选步骤。
+
 ## 3. API
 
 ```text

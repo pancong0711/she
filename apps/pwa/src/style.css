@@ -217,3 +217,12 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .chat-artifacts { margin-top: 16px; padding: 14px; border: 1px solid #1e293b; border-radius: 12px; background: #02061766; display: grid; gap: 8px; }
 .chat-artifacts h3 { margin: 0; font-size: 15px; }
 .chat-artifacts a { color: #38bdf8; text-decoration: none; overflow-wrap: anywhere; }
+
+/* Step-by-step installation explanations */
+.package-install-steps { display: grid; gap: 10px; margin: 12px 0; }
+.package-install-step { padding: 10px 12px; border: 1px solid #1e293b; border-radius: 10px; background: #02061788; }
+.package-install-step-head { display: flex; gap: 10px; align-items: flex-start; }
+.package-install-step-head code { color: #bae6fd; overflow-wrap: anywhere; }
+.step-number { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; background: #0c4a6e; color: #bae6fd; font-size: 11px; }
+.package-install-step p { margin: 8px 0 0; color: #94a3b8; line-height: 1.6; font-size: 12px; }
+.install-step-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

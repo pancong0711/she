@@ -4,17 +4,23 @@ import { describe, expect, it } from 'vitest'
 import { dockerInstallGuide } from '../docker-install.mjs'
 
 describe('docker install guidance', () => {
-  it('provides concrete Ubuntu commands without executing them', () => {
+  it('provides rootless Ubuntu commands and per-line explanations', () => {
     const guide = dockerInstallGuide('linux', { ID: 'ubuntu', VERSION_CODENAME: 'jammy' })
-    expect(guide.commands.join('\n')).toContain('download.docker.com/linux/ubuntu')
-    expect(guide.commands.join('\n')).toContain('docker version')
-    expect(guide.note).toContain('不会执行')
+    const commands = guide.commands.join('\n')
+    expect(commands).toContain('get.docker.com/rootless')
+    expect(commands).toContain('dockerd-rootless-setuptool.sh install')
+    expect(commands).toContain('docker context use rootless')
+    expect(commands).toContain('docker info')
+    expect(commands).not.toContain('usermod -aG docker')
+    expect(guide.steps.every(step => typeof step.explanation === 'string' && step.explanation.length > 0)).toBe(true)
+    expect(guide.note).toContain('不要把当前用户加入 docker 组')
   })
 
-  it('provides Docker Desktop commands for macOS and Windows', () => {
-    expect(dockerInstallGuide('darwin', {}).commands.join('\n')).toContain('docs.docker.com/desktop')
+  it('provides Docker Desktop steps for macOS and Windows', () => {
+    expect(dockerInstallGuide('darwin', {}).commands.join('\n')).toContain('docker version')
     const win = dockerInstallGuide('win32', {})
     expect(win.commands.join('\n')).toContain('winget install --id Docker.DockerDesktop')
-    expect(win.commands.join('\n')).toContain('WSL2')
+    expect(win.steps.map(step => step.explanation).join('\n')).toContain('WSL2')
+    expect(win.commands.join('\n')).not.toContain('usermod')
   })
 })

@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Docker installation guidance is now rootless-first and provides per-command explanations; do not add the user to the root docker group by default.
 - Added separate PWA build / companion API version display and a one-click local service-worker/cache reset for version-mismatch diagnosis.
 - Added task report artifacts: successful tasks persist Markdown reports, emit artifact events, and expose list/download APIs with Chat download links.
 - Audit fixes: reset supervisor restart budget after stable uptime, launch supervisor from Windows installer, and quote Windows/XDG autostart paths.
