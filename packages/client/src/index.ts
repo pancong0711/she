@@ -11,6 +11,7 @@ import type {
   GatewayServerEvent,
   GatewaySnapshot,
   GatewayWelcome,
+  AgentRuntimeStatus,
   Result,
   SheError,
 } from '@she/protocol'
@@ -132,6 +133,12 @@ export class SheClient {
   async snapshot(signal?: AbortSignal): Promise<GatewaySnapshot> {
     const response = await this.requestJson<unknown>('GET', '/v1/snapshot', undefined, signal)
     return unwrapResult<GatewaySnapshot>(response, 'snapshot failed')
+  }
+
+  /** Read-only OpenCode adapter health and worker workspace authorization view. */
+  async agents(signal?: AbortSignal): Promise<AgentRuntimeStatus> {
+    const response = await this.requestJson<unknown>('GET', '/v1/agents', undefined, signal)
+    return unwrapResult<AgentRuntimeStatus>(response, 'agent status failed')
   }
 
   async *events(options: SubscribeOptions = {}): AsyncIterable<GatewayServerEvent> {

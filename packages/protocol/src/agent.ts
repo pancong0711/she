@@ -144,6 +144,35 @@ export interface AgentHealth {
   readonly checkedAt: number
 }
 
+export interface WorkspaceAccessView {
+  readonly key: string
+  readonly path: string
+  readonly realPath?: string
+  readonly source: string
+  readonly exists: boolean
+  readonly isDirectory: boolean
+  readonly readable: boolean
+  readonly writable: boolean
+  readonly executable: boolean
+  readonly readOnly: boolean
+  /** A leaf workspace must not be a filesystem root or the user home itself. */
+  readonly leafAuthorized: boolean
+  readonly warnings: readonly string[]
+}
+
+export interface AgentRuntimeStatus {
+  readonly configured: boolean
+  readonly adapterId: string
+  readonly displayName: string
+  readonly url: string
+  readonly username: string
+  /** File path only. Credential contents are never returned. */
+  readonly credentialFile: string
+  readonly model?: AgentModelRef
+  readonly health: AgentHealth
+  readonly workspace: WorkspaceAccessView
+}
+
 export interface AgentAdapterDescriptor {
   readonly adapterId: string
   readonly displayName: string

@@ -11,6 +11,7 @@ import {
   makeCapabilitySet,
   type GatewayCommandInvocation,
   type GatewayInteractionResponse,
+  type AgentRuntimeStatus,
 } from '@she/protocol'
 import { ControlPlaneServer } from '@she/control-plane'
 
@@ -50,6 +51,29 @@ async function harness() {
       return GATEWAY_V1_FIXTURES.snapshot
     },
   }
+  const agentStatus: AgentRuntimeStatus = {
+    configured: true,
+    adapterId: 'opencode',
+    displayName: 'OpenCode',
+    url: 'http://127.0.0.1:49375',
+    username: 'opencode',
+    credentialFile: '/home/test/.config/opencode/service.json',
+    health: { adapterId: 'opencode', ok: true, version: '2.0.0', checkedAt: 1_700_000_000_000 },
+    workspace: {
+      key: 'worker-default',
+      path: '/home/test/workspace',
+      realPath: '/home/test/workspace',
+      source: 'SHE_WORKSPACE_PATH',
+      exists: true,
+      isDirectory: true,
+      readable: true,
+      writable: true,
+      executable: true,
+      readOnly: false,
+      leafAuthorized: true,
+      warnings: [],
+    },
+  }
   const server = new ControlPlaneServer({
     socketPath,
     token: 'test-token',
@@ -57,6 +81,8 @@ async function harness() {
     capabilities: makeCapabilitySet(['text.inbound', 'text.outbound']),
     handlers,
     eventStore,
+    workerStatus: () => ({ enabled: true, state: 'idle', updatedAt: 1_700_000_000_000 }),
+    agentStatus: () => agentStatus,
     eventPollIntervalMs: 5,
     heartbeatIntervalMs: 10_000,
     clock: { now: () => 1_700_000_000_000 },
@@ -99,6 +125,18 @@ describe('control-plane gateway.v1 server', () => {
     const snapshot = await client.snapshot()
     expect(snapshot.cursor).toBe('evt:1')
     expect(snapshot.tasks).toHaveLength(1)
+  })
+
+  it('serves read-only agent health and workspace authorization status', async () => {
+    const { client } = await harness()
+    const status = await client.agents()
+    expect(status).toMatchObject({
+      configured: true,
+      adapterId: 'opencode',
+      health: { ok: true, version: '2.0.0' },
+      workspace: { leafAuthorized: true, readOnly: false, writable: true },
+    })
+    expect(JSON.stringify(status)).not.toContain('credentialContent')
   })
 
   it('returns structured errors for authentication failures', async () => {

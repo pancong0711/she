@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import HelpPanel from './components/HelpPanel.vue'
 import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
-import type { GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
+import type { AgentRuntimeStatus, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
   COMPANION_BUNDLE_URL,
@@ -16,6 +16,7 @@ import {
   coreAction,
   getCompanionUrl,
   isLocalOrigin,
+  loadAgentRuntime,
   loadCompanionHealth,
   loadCoreStatus,
   loadPackages,
@@ -41,11 +42,12 @@ import {
   type WorkerConfig,
 } from './api'
 
-type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'chat' | 'migrate' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
+type Tab = 'dashboard' | 'tasks' | 'agents' | 'sandboxes' | 'chat' | 'migrate' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'tasks', label: 'Tasks' },
+  { id: 'agents', label: 'Agents' },
   { id: 'sandboxes', label: 'Sandboxes' },
   { id: 'chat', label: 'Chat' },
   { id: 'migrate', label: 'Agent Migration' },
@@ -61,6 +63,8 @@ const health = ref<GatewayHealth | null>(null)
 const snapshot = ref<GatewaySnapshot | null>(null)
 const sandboxes = ref<readonly SandboxView[]>([])
 const brokerHealth = ref<SandboxBrokerHealth | null>(null)
+const agentRuntime = ref<AgentRuntimeStatus | null>(null)
+const agentRuntimeError = ref('')
 const sandboxStats = ref<Record<string, SandboxStats>>({})
 const sandboxError = ref('')
 const loadingStats = ref('')
@@ -114,7 +118,7 @@ const companionOnline = computed(() => companion.value !== null)
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
@@ -122,6 +126,7 @@ async function refresh(): Promise<void> {
     loadPackages(),
     loadWorkerConfig(),
     loadPreflight(),
+    loadAgentRuntime(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -163,6 +168,13 @@ async function refresh(): Promise<void> {
     packageError.value = packageResult.reason instanceof Error ? packageResult.reason.message : String(packageResult.reason)
   }
   if (preflightResult.status === 'fulfilled') preflight.value = preflightResult.value
+  if (agentRuntimeResult.status === 'fulfilled') {
+    agentRuntime.value = agentRuntimeResult.value
+    agentRuntimeError.value = ''
+  } else {
+    agentRuntime.value = null
+    agentRuntimeError.value = agentRuntimeResult.reason instanceof Error ? agentRuntimeResult.reason.message : String(agentRuntimeResult.reason)
+  }
   if (workerConfigResult.status === 'fulfilled') {
     workerConfigResponse.value = workerConfigResult.value
     workerConfig.value = {
@@ -595,6 +607,72 @@ onBeforeUnmount(() => {
             </tbody>
           </table>
         </template>
+      </section>
+
+      <section v-else-if="active === 'agents'" class="agents-page">
+        <div v-if="agentRuntimeError" class="alert">
+          <strong>Agent 运行时状态不可用</strong>
+          <p>{{ agentRuntimeError }}</p>
+          <button class="primary" @click="active = 'setup'">打开 Install &amp; Doctor</button>
+        </div>
+        <div v-if="agentRuntime" class="grid">
+          <article class="card wide">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">AGENT RUNTIME</p>
+                <h2>{{ agentRuntime.displayName }} · {{ agentRuntime.adapterId }}</h2>
+                <p class="muted">只读状态来自 control plane，不在 PWA 维护第二状态源。</p>
+              </div>
+              <span :class="['pill', agentRuntime.health.ok ? 'succeeded' : 'failed']">
+                {{ agentRuntime.health.ok ? 'healthy' : 'unavailable' }}
+              </span>
+            </div>
+            <div class="health-grid">
+              <div><span>configured</span><b>{{ agentRuntime.configured ? 'yes' : 'no' }}</b></div>
+              <div><span>worker</span><b>{{ health?.worker?.state ?? 'unknown' }} · {{ health?.worker?.enabled ? 'enabled' : 'disabled' }}</b></div>
+              <div><span>OpenCode URL</span><b>{{ agentRuntime.url }}</b></div>
+              <div><span>username</span><b>{{ agentRuntime.username }}</b></div>
+              <div><span>credential file</span><b><code>{{ agentRuntime.credentialFile }}</code>（仅路径，不读取内容）</b></div>
+              <div><span>version</span><b>{{ agentRuntime.health.version ?? '-' }}</b></div>
+              <div><span>checked</span><b>{{ relativeTime(agentRuntime.health.checkedAt) }}</b></div>
+              <div><span>model</span><b>{{ agentRuntime.model ? `${agentRuntime.model.providerId} / ${agentRuntime.model.modelId}${agentRuntime.model.variant ? ` / ${agentRuntime.model.variant}` : ''}` : 'not configured' }}</b></div>
+              <div v-if="agentRuntime.health.detail"><span>detail</span><b class="error-text">{{ agentRuntime.health.detail }}</b></div>
+              <div v-if="health?.worker?.lastTaskId"><span>last task</span><b>{{ health.worker.lastTaskId }}</b></div>
+              <div v-if="health?.worker?.lastError"><span>last error</span><b class="error-text">{{ health.worker.lastError }}</b></div>
+            </div>
+            <div v-if="!agentRuntime.configured || !agentRuntime.health.ok" class="alert">
+              <strong>Agent runtime 尚未就绪</strong>
+              <p>{{ agentRuntime.configured ? 'OpenCode 健康检查失败。请确认服务已启动，并检查 Settings 中的 URL 与凭据文件路径。' : 'Worker 未启用。请在 Settings 配置 OpenCode 和 worker，然后保存并重启 core。' }}</p>
+              <button class="primary" @click="active = 'settings'">打开 Settings</button>
+            </div>
+          </article>
+
+          <article class="card wide">
+            <div class="section-head">
+              <div>
+                <h2>Workspace 授权（只读）</h2>
+                <p class="muted">当前 worker 使用单一 workspace；只显示配置来源、真实路径和当前用户访问权限。</p>
+              </div>
+              <span :class="['pill', agentRuntime.workspace.leafAuthorized && agentRuntime.workspace.writable ? 'succeeded' : 'warn']">
+                {{ agentRuntime.workspace.leafAuthorized ? (agentRuntime.workspace.writable ? 'read-write' : 'read-only') : 'needs attention' }}
+              </span>
+            </div>
+            <div class="health-grid">
+              <div><span>source</span><b>{{ agentRuntime.workspace.source }}</b></div>
+              <div><span>path</span><b><code>{{ agentRuntime.workspace.path }}</code></b></div>
+              <div><span>real path</span><b><code>{{ agentRuntime.workspace.realPath ?? '-' }}</code></b></div>
+              <div><span>exists</span><b>{{ agentRuntime.workspace.exists ? 'yes' : 'no' }}</b></div>
+              <div><span>directory</span><b>{{ agentRuntime.workspace.isDirectory ? 'yes' : 'no' }}</b></div>
+              <div><span>read / write / execute</span><b>{{ agentRuntime.workspace.readable ? 'r' : '-' }}{{ agentRuntime.workspace.writable ? 'w' : '-' }}{{ agentRuntime.workspace.executable ? 'x' : '-' }}</b></div>
+              <div><span>leaf authorized</span><b>{{ agentRuntime.workspace.leafAuthorized ? 'yes' : 'no' }}</b></div>
+              <div><span>readOnly</span><b>{{ agentRuntime.workspace.readOnly ? 'yes' : 'no' }}</b></div>
+            </div>
+            <div v-for="warning in agentRuntime.workspace.warnings" :key="warning" class="warn-text">! {{ warning }}</div>
+            <p class="muted small-note">
+              这是只读视图，不会修改 workspace 权限。目录授权编辑与叶子目录白名单将在 T6.5 继续接入。
+            </p>
+          </article>
+        </div>
       </section>
 
       <section v-else-if="active === 'sandboxes'" class="sandbox-page">

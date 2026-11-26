@@ -64,6 +64,7 @@ SHE_VERSION
 | POST | `/v1/commands` | 命令请求，返回 `Result<GatewayCommandResult>` |
 | POST | `/v1/interactions` | 卡片/表单交互请求，返回 `Result<GatewayInteractionResult>` |
 | GET | `/v1/snapshot` | cursor 过期或重连后的只读状态重建 |
+| GET | `/v1/agents` | OpenCode health、worker 配置和 workspace 授权只读视图 |
 | GET | `/v1/events?cursor=evt:N` | NDJSON 事件流 |
 
 认证：配置 token 时，所有请求都需要：
@@ -114,7 +115,21 @@ gateway 收到 `cursor_expired` 后必须调用 `/v1/snapshot` 重建状态，�
 - 未知命令返回 `accepted: false` + 文本帮助；
 - 所有渲染均为平台无关 `RenderIntent`，飞书卡片由 feishu4dsh 转换。
 
-## 6. 测试覆盖
+## 6. Agent / Workspace 只读状态
+
+`GET /v1/agents` 返回 `Result<AgentRuntimeStatus>`：
+
+- `configured`：worker 是否启用；
+- adapter id/display name；
+- OpenCode URL、username、凭据文件路径（不返回内容）；
+- model provider/id/variant；
+- `AgentHealth`：OpenCode `/api/info` 探测结果；
+- `WorkspaceAccessView`：配置路径、realpath、目录/存在性、r/w/x、只读状态、是否叶子目录和 warning。
+
+workspace 只读视图不会修改权限。root、home 本身会标记 `leafAuthorized=false`。
+`SheClient.agents()` 提供对应客户端方法。
+
+## 7. 测试覆盖
 
 - health/hello/command/interaction/snapshot；
 - bearer token 负例；

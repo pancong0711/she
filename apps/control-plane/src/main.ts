@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /** Executable entrypoint for the local SHE control-plane daemon. */
 
+import { constants as fsConstants } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { mkdir, readFile } from 'node:fs/promises'
+import { join, parse } from 'node:path'
+import { access, mkdir, readFile, realpath, stat } from 'node:fs/promises'
 import { SequentialIdGenerator, SystemClock, TaskService } from '@she/control'
-import type { AgentModelRef, GatewayWorkerHealth } from '@she/protocol'
+import type { AgentModelRef, AgentRuntimeStatus, GatewayWorkerHealth, WorkspaceAccessView } from '@she/protocol'
 import { OpenCodeAgentAdapter } from '@she/agent-opencode'
 import { SqliteStore } from '@she/store-sqlite'
 import { ControlPlaneServer } from './server.js'
@@ -78,6 +79,51 @@ async function readOpenCodeCredential(path: string): Promise<string> {
   return parsed.password
 }
 
+async function inspectWorkspace(path: string): Promise<WorkspaceAccessView> {
+  const home = await realpath(homedir()).catch(() => homedir())
+  const view: WorkspaceAccessView = {
+    key: 'worker-default',
+    path,
+    source: 'SHE_WORKSPACE_PATH',
+    exists: false,
+    isDirectory: false,
+    readable: false,
+    writable: false,
+    executable: false,
+    readOnly: false,
+    leafAuthorized: false,
+    warnings: [],
+  }
+  try {
+    const info = await stat(path)
+    const realPath = await realpath(path)
+    const [readable, writable, executable] = await Promise.all([
+      access(path, fsConstants.R_OK).then(() => true).catch(() => false),
+      access(path, fsConstants.W_OK).then(() => true).catch(() => false),
+      access(path, fsConstants.X_OK).then(() => true).catch(() => false),
+    ])
+    const warnings: string[] = []
+    const leafAuthorized = realPath !== parse(realPath).root && realPath !== home
+    if (!info.isDirectory()) warnings.push('已配置的 workspace 不是目录。')
+    if (!leafAuthorized) warnings.push('workspace 不能是文件系统根目录或用户主目录本身。')
+    if (!writable) warnings.push('当前用户对 workspace 不可写；worker 任务可能失败。')
+    return {
+      ...view,
+      realPath,
+      exists: true,
+      isDirectory: info.isDirectory(),
+      readable,
+      writable,
+      executable,
+      readOnly: !writable,
+      leafAuthorized,
+      warnings,
+    }
+  } catch {
+    return { ...view, warnings: ['workspace 尚不存在；worker 启用时 control-plane 会尝试创建它。'] }
+  }
+}
+
 async function main(): Promise<void> {
   const config = resolveControlPlaneConfig()
   const store = SqliteStore.open(config.databasePath)
@@ -99,12 +145,14 @@ async function main(): Promise<void> {
     clock,
   })
   let worker: TaskWorker | undefined
+  let agent: OpenCodeAgentAdapter | undefined
   let workerDisabledError: string | undefined
+  const workspacePath = join(expandHome(config.workspacePath))
   if (config.workerEnabled) {
     try {
       const credential = await readOpenCodeCredential(join(expandHome(config.opencodePasswordFile)))
-      await mkdir(join(expandHome(config.workspacePath)), { recursive: true, mode: 0o700 })
-      const agent = new OpenCodeAgentAdapter({
+      await mkdir(workspacePath, { recursive: true, mode: 0o700 })
+      agent = new OpenCodeAgentAdapter({
         baseUrl: config.opencodeUrl,
         username: config.opencodeUsername,
         credential,
@@ -121,7 +169,7 @@ async function main(): Promise<void> {
           leases: store.leases,
         },
         agent,
-        workspacePath: join(expandHome(config.workspacePath)),
+        workspacePath,
         pollIntervalMs: config.workerPollIntervalMs,
         leaseTtlMs: config.workerLeaseTtlMs,
         ...(config.model === undefined ? {} : { model: config.model }),
@@ -141,6 +189,29 @@ async function main(): Promise<void> {
     ...(workerDisabledError === undefined ? {} : { lastError: workerDisabledError }),
     updatedAt: Date.now(),
   }
+  const agentStatus = async (): Promise<AgentRuntimeStatus> => {
+    const health = agent === undefined
+      ? {
+          adapterId: 'opencode',
+          ok: false,
+          detail: config.workerEnabled
+            ? (workerDisabledError ?? 'OpenCode adapter is not configured')
+            : 'worker disabled (SHE_WORKER_ENABLED != 1)',
+          checkedAt: Date.now(),
+        }
+      : await agent.health()
+    return {
+      configured: config.workerEnabled,
+      adapterId: 'opencode',
+      displayName: 'OpenCode',
+      url: config.opencodeUrl,
+      username: config.opencodeUsername,
+      credentialFile: join(expandHome(config.opencodePasswordFile)),
+      ...(config.model === undefined ? {} : { model: config.model }),
+      health,
+      workspace: await inspectWorkspace(workspacePath),
+    }
+  }
   const server = new ControlPlaneServer({
     socketPath: config.socketPath,
     ...(await readOptionalToken(join(expandHome(config.tokenFile))).then(token => token === undefined ? {} : { token })),
@@ -149,6 +220,7 @@ async function main(): Promise<void> {
     eventStore: store.events,
     clock,
     workerStatus,
+    agentStatus,
   })
   await server.start()
   process.stdout.write(`she-control-plane listening on ${config.socketPath}\n`)

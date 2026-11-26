@@ -81,7 +81,7 @@
 | T6.2a | GitHub Pages PWA 部署与静态/companion 双模式连接 | T6.2 | [x] | Pages URL 可安装；可连接 127.0.0.1 companion | localhost 可打开/可安装；health 可达 |
 | T6.3 | Dashboard/agents/sandboxes/tasks 只读页面 | T6.2/M3 | [~] |
 | T6.3a | Sandboxes 只读页面与 broker `/broker/v1/*` 代理 | T6.3 | [x] | list/status/stats；broker 离线提示 |
-| T6.3b | Agent/OpenCode health 与 workspace 授权只读列表 | T6.3 | [ ] | 只读 health/授权来源 | 信息来自 control plane，无重复状态源 |
+| T6.3b | Agent/OpenCode health 与 workspace 授权只读列表 | T6.3 | [x] | 只读 health/授权来源 | 信息来自 control plane，无重复状态源 |
 | T6.4 | 软件包目录、下载、校验、显式确认安装/更新 | T6.3/T3.6 | [~] |
 | T6.4e | Packages 页面：companion/core/runtime 清单与操作入口 | T6.4c3/T7.6 | [x] | `/api/packages` + PWA 卡片；不伪造安装状态 |
 | T6.4a | Companion Install & Doctor：白名单 job runner、环境检查、依赖/构建/测试、实时日志 | T6.2a | [x] |
@@ -151,3 +151,5 @@
 - 2026-11-26：完成 T6.4f：Packages 扩展为 12 项依赖目录，新增 Node/pnpm/git/bash/curl/tar/SHA-256/Docker/OpenCode 等状态、用途、requirement、平台化安装命令、复制按钮和官方文档链接；补齐 `docs/PACKAGES.md`。
 
 - 2026-11-26：优化 Install & Doctor 信息架构：Core 未安装时在 Dashboard、Core 卡片和 Packages 中提供明确“安装 Core”按钮；启动/停止/重启按钮在未安装时禁用；将“安装依赖/构建 PWA/构建 TypeScript/运行测试”移入“仅源码仓库使用”的开发者工具折叠区，并明确正常安装用户无需执行。
+
+- 2026-11-26：完成 T6.3b：control-plane 新增 `GET /v1/agents` 与 `SheClient.agents()`，返回 OpenCode `/api/info` health、worker 配置、凭据文件路径（不返回内容）和 workspace realpath/r-w-x/readOnly/leafAuthorized 只读视图；PWA 新增 Agents 页面。

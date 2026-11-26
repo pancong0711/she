@@ -1,4 +1,5 @@
 import type {
+  AgentRuntimeStatus,
   GatewayHealth,
   GatewaySnapshot,
   SandboxBrokerHealth,
@@ -62,6 +63,10 @@ export async function loadSnapshot(signal?: AbortSignal): Promise<SnapshotResult
     getResult<GatewaySnapshot>('/v1/snapshot', signal),
   ])
   return { health, snapshot }
+}
+
+export async function loadAgentRuntime(signal?: AbortSignal): Promise<AgentRuntimeStatus> {
+  return await getResult<AgentRuntimeStatus>('/v1/agents', signal)
 }
 
 export async function loadSandboxes(signal?: AbortSignal): Promise<SandboxResult> {

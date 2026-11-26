@@ -152,3 +152,15 @@ Chat
 - [x] PWA 内配置 worker/OpenCode/workspace（密码仅路径）；
 - [ ] artifact 下载/报告展示；
 - [ ] 多 agent/预算/角色策略。
+
+
+## Agent 健康与 Workspace 只读状态
+
+control-plane 新增 `GET /v1/agents`，返回 `AgentRuntimeStatus`：
+
+- OpenCode adapter 配置与 `/api/info` health；
+- worker 是否启用、凭据文件路径（仅路径）；
+- model 配置；
+- worker workspace 的 realpath、存在性、r/w/x、readOnly、leafAuthorized 和 warning。
+
+PWA 的 Agents 页面只读展示这些信息，不读取凭据内容，也不修改 workspace 权限。目录授权编辑仍归 T6.5。

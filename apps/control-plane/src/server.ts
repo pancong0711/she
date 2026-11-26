@@ -17,6 +17,7 @@ import type {
   GatewaySnapshot,
   GatewayWelcome,
   GatewayWorkerHealth,
+  AgentRuntimeStatus,
   SheError,
 } from '@she/protocol'
 import {
@@ -48,6 +49,7 @@ export interface ControlPlaneServerOptions {
   readonly clock?: Clock
   readonly maxBodyBytes?: number
   readonly workerStatus?: () => Promise<GatewayWorkerHealth> | GatewayWorkerHealth
+  readonly agentStatus?: () => Promise<AgentRuntimeStatus> | AgentRuntimeStatus
 }
 
 export class ControlPlaneHttpError extends Error {
@@ -284,6 +286,7 @@ export class ControlPlaneServer {
   private readonly clock: Clock
   private readonly maxBodyBytes: number
   private readonly workerStatus: (() => Promise<GatewayWorkerHealth> | GatewayWorkerHealth) | undefined
+  private readonly agentStatus: (() => Promise<AgentRuntimeStatus> | AgentRuntimeStatus) | undefined
   private httpServer: Server | undefined
   private readonly streams = new Set<ServerResponse>()
 
@@ -302,6 +305,7 @@ export class ControlPlaneServer {
     this.clock = options.clock ?? SYSTEM_CLOCK
     this.maxBodyBytes = options.maxBodyBytes ?? 1_048_576
     this.workerStatus = options.workerStatus
+    this.agentStatus = options.agentStatus
     if (this.eventPollIntervalMs < 1) throw new Error('eventPollIntervalMs must be positive')
     if (this.eventBatchSize < 1) throw new Error('eventBatchSize must be positive')
   }
@@ -352,6 +356,14 @@ export class ControlPlaneServer {
           ...(worker === undefined ? {} : { worker }),
         }
         jsonWrite(response, 200, health)
+        return
+      }
+      if (request.method === 'GET' && url.pathname === '/v1/agents') {
+        if (this.agentStatus === undefined) {
+          jsonWrite(response, 404, resultErr(sheError('not_found', 'agent status is not configured')))
+          return
+        }
+        jsonWrite(response, 200, resultOk(await this.agentStatus()))
         return
       }
       if (request.method === 'POST' && url.pathname === '/v1/hello') {

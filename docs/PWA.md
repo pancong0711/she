@@ -188,6 +188,11 @@ SHE_TOKEN_FILE
 - Tasks：
   - 只读任务表；
   - 状态、摘要、priority、更新时间；
+- Agents：
+  - OpenCode adapter health（版本/错误/checkedAt）；
+  - worker 状态与最近 task/error；
+  - 凭据文件只显示路径；
+  - worker workspace 的 realpath、r/w/x、readOnly 和叶子目录授权状态；
 - Chat：
   - 通过 `/she submit` 布置任务；
   - 实时显示 agent text delta、tool call、完成/失败；

@@ -162,6 +162,7 @@ defineProps<{
         <tbody>
           <tr><td>Dashboard</td><td>control plane health、task/sandbox 计数、最近任务。</td></tr>
           <tr><td>Tasks</td><td>只读 task snapshot；Chat 提交后的任务也在这里显示。</td></tr>
+          <tr><td>Agents</td><td>OpenCode health、worker 状态、workspace 只读授权视图；凭据只显示文件路径。</td></tr>
           <tr><td>Chat</td><td>通过 `/she submit` 布置任务，实时显示 agent text delta、工具状态和完成/失败。</td></tr>
           <tr><td>Agent Migration</td><td>发现本机 AI agent，dry-run 规划并迁移到 sandbox；只读凭据目录挂载，原进程不动。</td></tr>
           <tr><td>Sandboxes</td><td>broker 列表、状态、角色、image、按需 CPU/内存/PIDs。</td></tr>
