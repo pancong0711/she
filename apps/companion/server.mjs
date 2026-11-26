@@ -27,6 +27,7 @@ import { SANDBOX_IMAGE_PRESETS, readSandboxPreferences, writeSandboxPreferences 
 import { defaultFeishu4dshPaths, inspectFeishu4dsh, validateFeishu4dshPackageSpec, validateFeishu4dshProfile } from './feishu4dsh.mjs'
 import { inspectOpenCodeService, reconcileOpenCodeWorkerConfig } from './opencode-service.mjs'
 import { sandboxAgentRecipeCatalog } from './sandbox-agent-recipes.mjs'
+import { installedVersionsFor, readAgentVersionRegistry, recordAgentInstall, resolveSandboxAgentVersion } from './sandbox-agent-versions.mjs'
 import { FeishuGatewayManager } from './feishu-gateway-manager.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -56,6 +57,7 @@ const migrationWorkspaceRoot = process.env.SHE_MIGRATION_WORKSPACE_ROOT?.trim() 
 const workspaceRegistryPath = process.env.SHE_WORKSPACE_REGISTRY?.trim() || join(configHome, 'she', 'workspaces.json')
 const gatewayConfigPath = process.env.SHE_GATEWAY_CONFIG_FILE?.trim() || join(configHome, 'she', 'gateway.json')
 const sandboxPreferencesPath = process.env.SHE_SANDBOX_PREFERENCES_FILE?.trim() || join(configHome, 'she', 'sandbox.json')
+const agentVersionRegistryPath = process.env.SHE_AGENT_VERSION_REGISTRY?.trim() || join(configHome, 'she', 'agent-versions.json')
 const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
 const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
 const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
@@ -1786,7 +1788,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'opencode-service', 'autostart', 'gateway', 'feishu-gateway', 'feishu4dsh', 'sandbox-preferences', 'sandbox-agent-recipes', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'opencode-service', 'autostart', 'gateway', 'feishu-gateway', 'feishu4dsh', 'sandbox-preferences', 'sandbox-agent-recipes', 'sandbox-agent-versions', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1888,7 +1890,40 @@ async function handleCompanionApi(request, response) {
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/sandbox/agent-recipes') {
-    sendJsonWithCors(request, response, 200, { ok: true, value: sandboxAgentRecipeCatalog() })
+    try {
+      const registry = await readAgentVersionRegistry(agentVersionRegistryPath)
+      const catalog = sandboxAgentRecipeCatalog().map(item => ({
+        ...item,
+        installedVersions: installedVersionsFor(registry, item.id),
+      }))
+      sendJsonWithCors(request, response, 200, { ok: true, value: catalog })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/sandbox/agent-recipes/resolve') {
+    try {
+      const agentId = url.searchParams.get('agentId') ?? ''
+      const version = url.searchParams.get('version') ?? ''
+      sendJsonWithCors(request, response, 200, { ok: true, value: await resolveSandboxAgentVersion(agentId, version) })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/sandbox/agent-recipes/record-install') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      await recordAgentInstall(agentVersionRegistryPath, body)
+      sendJsonWithCors(request, response, 200, { ok: true, value: { path: agentVersionRegistryPath } })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/sandbox/preferences') {

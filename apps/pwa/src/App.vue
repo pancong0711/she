@@ -21,6 +21,7 @@ import {
   applyCompanionUpdate,
   artifactDownloadUrl,
   createSandbox,
+  execSandbox,
   checkCompanionUpdate,
   checkCoreUpdate,
   coreAction,
@@ -35,6 +36,8 @@ import {
   loadPreflight,
   loadSandboxAgentRecipes,
   loadSandboxPreferences,
+  recordSandboxAgentInstall,
+  resolveSandboxAgentVersion,
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
@@ -65,6 +68,7 @@ import {
   type PlatformStatus,
   type PreflightResult,
   type SandboxAgentRecipe,
+  type SandboxAgentVersionResolution,
   type SandboxPreferences,
   type SandboxPreferencesResponse,
   type WorkerConfig,
@@ -170,6 +174,9 @@ const sandboxPreferences = ref<SandboxPreferencesResponse | null>(null)
 const sandboxAgentRecipes = ref<readonly SandboxAgentRecipe[]>([])
 const sandboxAgentRecipeError = ref('')
 const sandboxAgentRecipeId = ref('')
+const sandboxAgentVersion = ref('')
+const sandboxAgentVersionResolution = ref<SandboxAgentVersionResolution | null>(null)
+const sandboxAgentVersionChecking = ref(false)
 const selectedSandboxAgentRecipe = computed(() => sandboxAgentRecipes.value.find(item => item.id === sandboxAgentRecipeId.value))
 const sandboxPreferenceForm = ref<SandboxPreferences | null>(null)
 const sandboxPreferenceError = ref('')
@@ -612,13 +619,59 @@ async function loadSandboxRecipes(): Promise<void> {
 
 function applySandboxAgentRecipe(): void {
   const recipe = selectedSandboxAgentRecipe.value
-  if (recipe === undefined) return
+  if (recipe === undefined) {
+    sandboxAgentVersion.value = ''
+    sandboxAgentVersionResolution.value = null
+    return
+  }
+  sandboxAgentVersion.value = recipe.version
+  sandboxAgentVersionResolution.value = null
   sandboxDraft.value = {
     ...sandboxDraft.value,
     agentId: recipe.id,
     image: recipe.image,
     networkMode: recipe.networkMode,
     command: '由 Agent recipe 在容器启动时安装并保持运行',
+  }
+}
+
+async function checkSandboxAgentVersion(): Promise<void> {
+  const recipe = selectedSandboxAgentRecipe.value
+  if (recipe === undefined || sandboxAgentVersionChecking.value) return
+  sandboxAgentVersionChecking.value = true
+  sandboxCreateError.value = ''
+  try {
+    sandboxAgentVersionResolution.value = await resolveSandboxAgentVersion(recipe.id, sandboxAgentVersion.value.trim())
+    if (sandboxAgentVersionResolution.value.fallback) {
+      sandboxAgentVersion.value = sandboxAgentVersionResolution.value.resolved
+    }
+  } catch (cause) {
+    sandboxAgentVersionResolution.value = null
+    sandboxCreateError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    sandboxAgentVersionChecking.value = false
+  }
+}
+
+async function monitorAgentBootstrap(sandboxName: string, recipe: SandboxAgentRecipe, version: string): Promise<void> {
+  // The container installs asynchronously after `docker run -d` returns. Poll
+  // the fixed verify command for a bounded time and record only a real success.
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 5_000))
+    try {
+      const result = await execSandbox(sandboxName, {
+        command: [...recipe.verify.command],
+        cwd: recipe.verify.cwd,
+        timeoutMs: recipe.verify.timeoutMs,
+      })
+      if (result.exitCode === 0) {
+        await recordSandboxAgentInstall({ agentId: recipe.id, version, success: true, sandboxName }).catch(() => undefined)
+        await loadSandboxRecipes()
+        return
+      }
+    } catch {
+      // Keep waiting; the bootstrap may still be installing.
+    }
   }
 }
 
@@ -632,7 +685,16 @@ async function submitSandbox(): Promise<void> {
   sandboxCreating.value = true
   sandboxCreateError.value = ''
   try {
-    const recipe = selectedSandboxAgentRecipe.value
+    const baseRecipe = selectedSandboxAgentRecipe.value
+    let recipe = baseRecipe
+    let resolvedVersion = baseRecipe?.version ?? ''
+    if (baseRecipe !== undefined) {
+      const resolution = await resolveSandboxAgentVersion(baseRecipe.id, sandboxAgentVersion.value.trim())
+      sandboxAgentVersionResolution.value = resolution
+      recipe = resolution.recipe
+      resolvedVersion = resolution.resolved
+      sandboxAgentVersion.value = resolution.resolved
+    }
     await createSandbox({
       name: draft.name,
       role: draft.role as 'standalone' | 'main' | 'worker' | 'observer' | 'utility',
@@ -645,6 +707,7 @@ async function submitSandbox(): Promise<void> {
         ? { command: [...recipe.bootstrap.command] }
         : draft.command.trim() === '' ? {} : { command: parseCommandLine(draft.command) }),
     })
+    if (recipe !== undefined) void monitorAgentBootstrap(draft.name, recipe, resolvedVersion)
     sandboxCreateOpen.value = false
     await refresh()
   } catch (cause) {
@@ -1218,13 +1281,24 @@ onBeforeUnmount(() => {
             <p class="muted">创建会调用 broker 的 `POST /v1/sandboxes`，需要 Docker/rootless Docker 可用。选择 Agent recipe 后，容器启动时会自动安装 agent 到 <code>/home/agent/.local</code>，然后保持运行。</p>
             <div class="settings-grid">
               <label>
-                Agent recipe（创建时预装）
+                Runtime 一级：Agent / 系统
                 <select v-model="sandboxAgentRecipeId" @change="applySandboxAgentRecipe">
-                  <option value="">不预装（空容器）</option>
-                  <option v-for="recipe in sandboxAgentRecipes" :key="recipe.id" :value="recipe.id">
-                    {{ recipe.label }} — {{ recipe.packageName }}@{{ recipe.version }}
-                  </option>
+                  <option value="">系统镜像（不预装 Agent）</option>
+                  <optgroup label="Agent">
+                    <option v-for="recipe in sandboxAgentRecipes" :key="recipe.id" :value="recipe.id">
+                      {{ recipe.label }} — {{ recipe.packageName }}
+                    </option>
+                  </optgroup>
                 </select>
+              </label>
+              <label v-if="selectedSandboxAgentRecipe">
+                Agent 二级：版本（可手填）
+                <input v-model="sandboxAgentVersion" list="create-agent-version-options" :placeholder="selectedSandboxAgentRecipe.version" />
+                <datalist id="create-agent-version-options">
+                  <option v-for="item in selectedSandboxAgentRecipe.knownVersions" :key="`known-${item}`" :value="item">内置推荐版本</option>
+                  <option v-for="item in selectedSandboxAgentRecipe.installedVersions ?? []" :key="`installed-${item.version}`" :value="item.version">已成功安装</option>
+                  <option :value="selectedSandboxAgentRecipe.version">默认</option>
+                </datalist>
               </label>
               <label>名称<input v-model="sandboxDraft.name" placeholder="sbx-main" /></label>
               <label>角色
@@ -1238,12 +1312,14 @@ onBeforeUnmount(() => {
               </label>
               <label>Agent ID<input v-model="sandboxDraft.agentId" placeholder="opencode" /></label>
               <label>镜像预设
-                <select v-model="sandboxDraft.image">
-                  <option v-for="preset in sandboxPreferences?.catalog ?? []" :key="preset.id" :value="preset.image">{{ preset.label }} — {{ preset.image }}</option>
+                <select v-model="sandboxDraft.image" :disabled="selectedSandboxAgentRecipe !== undefined">
+                  <optgroup label="Docker / 系统镜像">
+                    <option v-for="preset in sandboxPreferences?.catalog ?? []" :key="preset.id" :value="preset.image">{{ preset.label }} — {{ preset.image }}</option>
+                  </optgroup>
                   <option v-if="sandboxPreferences && !sandboxPreferences.catalog.some(preset => preset.image === sandboxDraft.image)" :value="sandboxDraft.image">自定义：{{ sandboxDraft.image }}</option>
                 </select>
               </label>
-              <label>自定义镜像<input v-model="sandboxDraft.image" placeholder="node:24-bookworm 或 your-agent:1.0.0" /></label>
+              <label>自定义镜像<input v-model="sandboxDraft.image" :disabled="selectedSandboxAgentRecipe !== undefined" placeholder="node:24-bookworm 或 your-agent:1.0.0" /></label>
               <label>网络
                 <select v-model="sandboxDraft.networkMode">
                   <option value="egress">egress（Docker bridge，仅出站）</option>
@@ -1262,10 +1338,25 @@ onBeforeUnmount(() => {
             <div v-if="selectedSandboxAgentRecipe" class="agent-recipe-help">
               <p><b>{{ selectedSandboxAgentRecipe.label }}</b> · <code>{{ selectedSandboxAgentRecipe.packageName }}@{{ selectedSandboxAgentRecipe.version }}</code></p>
               <p>{{ selectedSandboxAgentRecipe.description }}</p>
-              <p class="muted small-note">安装位置：<code>/home/agent/.local/bin/{{ selectedSandboxAgentRecipe.binary }}</code>；创建后可在 Sandboxes 卡片里执行验证命令。</p>
+              <p class="muted small-note">版本目录：<code>/home/agent/.agents/{{ selectedSandboxAgentRecipe.id }}/&lt;version&gt;</code>；当前链接：<code>/home/agent/.local/bin/{{ selectedSandboxAgentRecipe.binary }}</code>。创建后可在 Sandboxes 卡片里执行验证命令。</p>
               <ul>
                 <li v-for="requirement in selectedSandboxAgentRecipe.requirements" :key="requirement">{{ requirement }}</li>
               </ul>
+              <p v-if="selectedSandboxAgentRecipe.installedVersions?.length" class="muted small-note">
+                本机成功安装过：
+                {{ selectedSandboxAgentRecipe.installedVersions.map(item => item.version).join(', ') }}
+              </p>
+              <div class="job-actions">
+                <button class="secondary" :disabled="sandboxAgentVersionChecking" @click="checkSandboxAgentVersion">
+                  {{ sandboxAgentVersionChecking ? '校验中…' : '校验版本是否存在' }}
+                </button>
+              </div>
+              <p v-if="sandboxAgentVersionResolution" class="muted small-note">
+                请求 {{ sandboxAgentVersionResolution.requested }} → 使用 <b>{{ sandboxAgentVersionResolution.resolved }}</b>
+                <span :class="['pill', sandboxAgentVersionResolution.exact ? 'succeeded' : 'warn']">{{ sandboxAgentVersionResolution.exact ? 'exact' : 'fallback' }}</span>
+                <span :class="['pill', sandboxAgentVersionResolution.verified ? 'succeeded' : 'warn']">{{ sandboxAgentVersionResolution.verified ? 'registry verified' : 'registry unavailable' }}</span>
+              </p>
+              <p v-if="sandboxAgentVersionResolution?.warning" class="warn-text small-note">{{ sandboxAgentVersionResolution.warning }}</p>
             </div>
             <div class="container-setting-explain">
               <p><b>启动命令</b>：追加在镜像之后，不经过宿主 shell。`sleep infinity` 只保持容器运行；要执行 shell 脚本，写 `sh -lc "..."` 并显式加引号。留空表示使用镜像自己的 ENTRYPOINT/CMD。</p>

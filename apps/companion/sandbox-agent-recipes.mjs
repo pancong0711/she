@@ -10,9 +10,14 @@ function installScript(recipe) {
   return [
     'export HOME=/home/agent',
     'export PATH="/home/agent/.local/bin:$PATH"',
-    'export NPM_CONFIG_PREFIX=/home/agent/.local',
-    'mkdir -p /home/agent/.local/bin /home/agent/.local/lib /home/agent/.config /home/agent/.local/share /cache/npm',
-    `npm install --global --prefix /home/agent/.local --no-fund --no-audit --loglevel=warn ${recipe.packageName}@${recipe.version}`,
+    `export NPM_CONFIG_PREFIX=/home/agent/.agents/${recipe.id}/${recipe.version}`,
+    'mkdir -p /home/agent/.local/bin /home/agent/.config /home/agent/.local/share /home/agent/.agents /cache/npm',
+    `PREFIX=/home/agent/.agents/${recipe.id}/${recipe.version}`,
+    'rm -rf "$PREFIX"',
+    'mkdir -p "$PREFIX"',
+    `npm install --global --prefix "$PREFIX" --no-fund --no-audit --loglevel=warn ${recipe.packageName}@${recipe.version}`,
+    `ln -sfn "$PREFIX/bin/${recipe.binary}" /home/agent/.local/bin/${recipe.binary}`,
+    `ln -sfn "$PREFIX" /home/agent/.agents/${recipe.id}/current`,
     `command -v ${recipe.binary}`,
   ]
 }
@@ -40,6 +45,7 @@ function recipe(input) {
     networkMode: input.networkMode ?? 'egress',
     requirements: input.requirements ?? ['Node.js in base image', 'network egress to npm registry'],
     notes: input.notes ?? [],
+    knownVersions: input.knownVersions ?? [input.version],
     install: { command, cwd: '/workspace', timeoutMs: input.timeoutMs ?? 300_000 },
     verify: { command: check, cwd: '/workspace', timeoutMs: 30_000 },
     bootstrap: { command: bootstrap, cwd: '/workspace', timeoutMs: input.timeoutMs ?? 300_000 },
@@ -60,6 +66,7 @@ export const SANDBOX_AGENT_RECIPES = [
       'opencode-ai 需要平台对应的 optional dependency；Linux x64/arm64 由 npm 自动选择。',
       '服务模式示例：opencode serve --hostname 0.0.0.0 --port 4096；SHE worker 自动路由尚未接入。',
     ],
+    knownVersions: ['0.2.4', '1.19.6'],
     exampleCommand: 'opencode --version',
   }),
   recipe({
@@ -108,7 +115,7 @@ export const SANDBOX_AGENT_RECIPES = [
 ]
 
 export function sandboxAgentRecipeCatalog() {
-  return SANDBOX_AGENT_RECIPES.map(({ schema, id, label, description, packageName, version, binary, image, networkMode, requirements, notes, install, verify, bootstrap, exampleCommand }) => ({
+  return SANDBOX_AGENT_RECIPES.map(({ schema, id, label, description, packageName, version, binary, image, networkMode, requirements, notes, knownVersions, install, verify, bootstrap, exampleCommand }) => ({
     schema,
     id,
     label,
@@ -120,9 +127,18 @@ export function sandboxAgentRecipeCatalog() {
     networkMode,
     requirements,
     notes,
+    knownVersions,
     install,
     verify,
     bootstrap,
     ...(exampleCommand === undefined ? {} : { exampleCommand }),
   }))
+}
+
+export function sandboxAgentRecipeWithVersion(agentId, version) {
+  const base = SANDBOX_AGENT_RECIPES.find(item => item.id === agentId)
+  if (base === undefined) throw new Error(`unknown sandbox agent: ${agentId}`)
+  const text = String(version ?? '').trim()
+  if (!/^[0-9A-Za-z][0-9A-Za-z.+-]{0,79}$/.test(text)) throw new Error('agent version is invalid')
+  return recipe({ ...base, version: text })
 }

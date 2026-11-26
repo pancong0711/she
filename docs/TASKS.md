@@ -195,3 +195,7 @@
 - 2026-11-26：完成 sandbox agent 安装与命令执行首版：broker 新增 `sandbox.exec` capability、`POST /v1/sandboxes/:name/exec`、固定容器 HOME/PATH/NPM prefix、超时/输出截断与审计；PWA Sandboxes 增加 Agent recipe 创建时 bootstrap（OpenCode/dsh/Hermes/Pi，固定版本）、卡片内“安装 Agent / 验证 / 执行命令”；安装写入 `/home/agent/.local`，不修改只读 rootfs；新增 `apps/companion/sandbox-agent-recipes.mjs`。发布 core 0.3.0 与 companion 0.5.0。
 
 - 2026-11-26：完成 SHE 内置 Feishu gateway 首版，不再默认依赖 dsh/feishu4dsh：新增 `apps/feishu-gateway`（官方 Lark SDK WebSocket + `@she/client`），companion 新增 `/api/feishu/gateway/status|config|start|stop`，PWA Gateway 支持 App ID/Secret 0600 配置、连接/停止、allowlist 和日志；支持 `/she` 文本命令与 task accepted/completed/failed 回传；修复 start.sh/start.ps1 固定旧 tag 和 PWA update manifest 固定旧 Release 的问题，launcher/更新检查改为 `releases/latest/download`。发布 companion 0.6.0。
+
+- 2026-11-26：Agent 版本管理首版：Sandbox agent 版本可手填；新增 registry 版本解析（精确存在则使用，不存在回退最新稳定版，网络不可用时标记未验证）；新增 `~/.config/she/agent-versions.json`（0600），每个 agent 保留最近 5 个成功安装版本；Agent 安装改为版本目录 `/home/agent/.agents/<agent>/<version>` + current symlink；新增 `docs/SANDBOX-LIFECYCLE.md` 说明 stop/start/restart/destroy 与 workspace 关系；Sandbox 选择器改为 Agent/系统镜像一级、版本/镜像二级。
+
+- 2026-11-26：完成 Agent 版本管理：手填版本 + registry 校验 + 不存在回退 latest + 成功版本注册表（每 agent 最近 5 个）；安装改为 `/home/agent/.agents/<agent>/<version>` 多版本目录；OpenCode 内置推荐版本加入 0.2.4；Sandbox 创建/安装选择器两级化；新增 `docs/SANDBOX-LIFECYCLE.md`。发布 companion 0.7.0。

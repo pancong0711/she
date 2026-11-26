@@ -202,6 +202,10 @@ defineProps<{
         <dd>Sandbox 只消费镜像；运行期 rootfs 是只读的。现在可在创建时选择 Agent recipe，把固定版本安装到可写的 /home/agent/.local；也可以创建后用卡片内“安装 Agent”完成。生产环境仍推荐预构建并锁定 digest 的镜像。</dd>
         <dt>怎么进入 sandbox 执行命令？</dt>
         <dd>Sandboxes 卡片内点击“执行命令”，输入容器内 shell 命令。broker 通过 docker exec 执行，命令以 sh -lc 运行，并受 cwd、超时和输出大小限制。当前是一次性命令；完整交互式终端尚未实现。</dd>
+        <dt>停止或删除 sandbox 会删除 workspace 吗？</dt>
+        <dd>stop/restart 只停止或重启容器，不删除数据。destroy 默认保留 sandbox 数据目录；只有显式 preserveData=false 才删除。workspace 是挂载进 sandbox 的项目目录，与容器生命周期不是同一个概念。</dd>
+        <dt>升级 agent 版本需要重建 sandbox 吗？</dt>
+        <dd>不需要。每个版本安装到 /home/agent/.agents/&lt;agent&gt;/&lt;version&gt;，当前版本链接到 /home/agent/.local/bin。可在同一 sandbox 安装新版本并重启对应进程；只有需要不同资源/网络/基础镜像时才建议新建 sandbox。</dd>
       </dl>
     </article>
 
@@ -212,6 +216,7 @@ defineProps<{
       <p><a :href="`${REPO_URL}/blob/main/docs/ENVIRONMENT-BOOTSTRAP.md`" target="_blank" rel="noreferrer">环境检查与安装边界</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/AGENT-MIGRATION.md`" target="_blank" rel="noreferrer">AI Agent 发现与容器化迁移</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/AGENT-RUNTIME-RECIPES.md`" target="_blank" rel="noreferrer">Agent Runtime Recipes（sandbox 自带 agent）</a></p>
+      <p><a :href="`${REPO_URL}/blob/main/docs/SANDBOX-LIFECYCLE.md`" target="_blank" rel="noreferrer">Sandbox 生命周期、Agent 版本与 Workspace 关系</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/GATEWAY.md`" target="_blank" rel="noreferrer">Gateway 与 feishu4dsh 安装/连接边界</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/PLATFORM-SUPPORT.md`" target="_blank" rel="noreferrer">平台能力与支持矩阵</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/WORKSPACES.md`" target="_blank" rel="noreferrer">Workspace 授权与叶子目录策略</a></p>

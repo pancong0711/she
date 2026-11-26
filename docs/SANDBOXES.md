@@ -198,3 +198,12 @@ exec sleep infinity
 - sandbox 创建需要 broker 与 Docker/rootless Docker 可用；
 - worker 当前仍运行在宿主用户空间，不会自动使用新 sandbox；
 - exec 是一次性命令，不是完整交互式 PTY。
+
+## 9. Agent 版本和二级选择
+
+- 新建 Sandbox 时先选择一级 Runtime：Agent 或系统镜像；
+- Agent 二级选择具体版本，版本可手填；
+- 创建前调用 registry 校验版本，不存在时回退 latest 并提示；
+- 每个 agent 保留最近 5 个成功安装版本；
+- 安装目录为 `/home/agent/.agents/<agent>/<version>`，当前版本链接到 `/home/agent/.local/bin/<binary>`；
+- 更多生命周期与 workspace 关系见 [Sandbox 生命周期](SANDBOX-LIFECYCLE.md)。

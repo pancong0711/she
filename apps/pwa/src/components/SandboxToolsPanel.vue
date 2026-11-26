@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { SandboxExecResult, SandboxView } from '@she/protocol'
-import { execSandbox, loadSandboxAgentRecipes, type SandboxAgentRecipe } from '../api'
+import {
+  execSandbox,
+  loadSandboxAgentRecipes,
+  recordSandboxAgentInstall,
+  resolveSandboxAgentVersion,
+  type SandboxAgentRecipe,
+  type SandboxAgentVersionResolution,
+} from '../api'
 
 const props = defineProps<{ sandbox: SandboxView; brokerOnline: boolean }>()
 
@@ -16,9 +23,18 @@ const running = ref(false)
 const error = ref('')
 const result = ref<SandboxExecResult | null>(null)
 const copiedDockerCommand = ref(false)
+const versionInput = ref('')
+const versionResolution = ref<SandboxAgentVersionResolution | null>(null)
+const versionChecking = ref(false)
 
 const selectedRecipe = computed(() => recipes.value.find(item => item.id === selectedRecipeId.value) ?? recipes.value[0])
 const canRun = computed(() => props.brokerOnline && props.sandbox.status === 'running' && !running.value)
+
+watch(selectedRecipe, recipe => {
+  if (recipe === undefined) return
+  versionInput.value = recipe.version
+  versionResolution.value = null
+})
 
 onMounted(async () => {
   try {
@@ -52,14 +68,65 @@ async function runShell(command: string, workdir = cwd.value, timeout = timeoutM
   }
 }
 
-async function installSelected(): Promise<void> {
+async function checkVersion(): Promise<void> {
   const recipe = selectedRecipe.value
-  if (recipe === undefined) return
-  await runShell(recipe.install.command[2] ?? '', recipe.install.cwd, recipe.install.timeoutMs, recipe.install.cwd)
+  if (recipe === undefined || versionChecking.value) return
+  versionChecking.value = true
+  error.value = ''
+  try {
+    versionResolution.value = await resolveSandboxAgentVersion(recipe.id, versionInput.value.trim())
+    if (versionResolution.value.fallback) {
+      error.value = versionResolution.value.warning ?? `版本不存在，已回退到 ${versionResolution.value.resolved}`
+    }
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    versionChecking.value = false
+  }
+}
+
+async function installSelected(): Promise<void> {
+  const baseRecipe = selectedRecipe.value
+  if (baseRecipe === undefined || running.value) return
+  running.value = true
+  error.value = ''
+  result.value = null
+  try {
+    const resolution = await resolveSandboxAgentVersion(baseRecipe.id, versionInput.value.trim())
+    versionResolution.value = resolution
+    const recipe = resolution.recipe
+    const installed = await execSandbox(props.sandbox.name, {
+      command: ['sh', '-lc', recipe.install.command[2] ?? ''],
+      cwd: recipe.install.cwd,
+      timeoutMs: recipe.install.timeoutMs,
+    })
+    result.value = installed
+    if (installed.exitCode === 0) {
+      await recordSandboxAgentInstall({
+        agentId: recipe.id,
+        version: resolution.resolved,
+        success: true,
+        sandboxName: props.sandbox.name,
+      }).catch(() => undefined)
+      recipes.value = recipes.value.map(item => item.id === recipe.id
+        ? {
+            ...item,
+            installedVersions: [
+              { version: resolution.resolved, installedAt: Date.now(), sandboxName: props.sandbox.name },
+              ...(item.installedVersions ?? []).filter(entry => entry.version !== resolution.resolved),
+            ].slice(0, 5),
+          }
+        : item)
+    }
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    running.value = false
+  }
 }
 
 async function verifySelected(): Promise<void> {
-  const recipe = selectedRecipe.value
+  const recipe = versionResolution.value?.recipe ?? selectedRecipe.value
   if (recipe === undefined) return
   await runShell(recipe.verify.command[2] ?? '', recipe.verify.cwd, recipe.verify.timeoutMs, recipe.verify.cwd)
 }
@@ -109,15 +176,24 @@ function formatTime(value: number): string {
       <p v-if="recipesError" class="error-text">{{ recipesError }}</p>
       <div class="sandbox-tool-form">
         <label>
-          Agent recipe
+          Agent（一级）
           <select v-model="selectedRecipeId">
             <option v-for="recipe in recipes" :key="recipe.id" :value="recipe.id">
-              {{ recipe.label }} — {{ recipe.packageName }}@{{ recipe.version }}
+              {{ recipe.label }} — {{ recipe.packageName }}
             </option>
           </select>
         </label>
         <label>
-          cwd
+          版本（二级，可手填）
+          <input v-model="versionInput" list="agent-version-options" :placeholder="selectedRecipe?.version ?? '1.19.6'" />
+          <datalist id="agent-version-options">
+            <option v-for="item in selectedRecipe?.knownVersions ?? []" :key="`known-${item}`" :value="item">内置推荐版本</option>
+            <option v-for="item in selectedRecipe?.installedVersions ?? []" :key="`installed-${item.version}`" :value="item.version">已成功安装</option>
+            <option v-if="selectedRecipe" :value="selectedRecipe.version">默认</option>
+          </datalist>
+        </label>
+        <label>
+          命令 cwd
           <input v-model="cwd" placeholder="/workspace" />
         </label>
         <label>
@@ -127,19 +203,33 @@ function formatTime(value: number): string {
       </div>
       <div v-if="selectedRecipe" class="recipe-info">
         <p>{{ selectedRecipe.description }}</p>
-        <p class="muted small-note">镜像建议：<code>{{ selectedRecipe.image }}</code>；安装位置：<code>/home/agent/.local/bin/{{ selectedRecipe.binary }}</code></p>
+        <p class="muted small-note">镜像建议：<code>{{ selectedRecipe.image }}</code>；版本目录：<code>/home/agent/.agents/{{ selectedRecipe.id }}/&lt;version&gt;</code>；当前链接：<code>/home/agent/.local/bin/{{ selectedRecipe.binary }}</code></p>
         <ul>
           <li v-for="requirement in selectedRecipe.requirements" :key="requirement">{{ requirement }}</li>
         </ul>
         <p v-for="note in selectedRecipe.notes" :key="note" class="muted small-note">• {{ note }}</p>
         <p v-if="selectedRecipe.exampleCommand" class="muted small-note">验证示例：<code>{{ selectedRecipe.exampleCommand }}</code></p>
       </div>
+      <div class="version-resolution" v-if="versionResolution">
+        <p>
+          请求版本 <code>{{ versionResolution.requested }}</code>
+          → 解析版本 <code>{{ versionResolution.resolved }}</code>
+          <span :class="['pill', versionResolution.exact ? 'succeeded' : 'warn']">{{ versionResolution.exact ? 'exact' : 'fallback to latest' }}</span>
+          <span :class="['pill', versionResolution.verified ? 'succeeded' : 'warn']">{{ versionResolution.verified ? 'registry verified' : 'registry unavailable' }}</span>
+        </p>
+        <p v-if="versionResolution.warning" class="warn-text small-note">{{ versionResolution.warning }}</p>
+        <p class="muted small-note">可用稳定版本（最近 30 个）：{{ versionResolution.availableVersions.slice(0, 12).join(', ') }}{{ versionResolution.availableVersions.length > 12 ? ' …' : '' }}</p>
+      </div>
       <div class="job-actions">
+        <button class="secondary" :disabled="!canRun || selectedRecipe === undefined || versionChecking" @click="checkVersion">
+          {{ versionChecking ? '校验中…' : '校验版本' }}
+        </button>
         <button class="primary" :disabled="!canRun || selectedRecipe === undefined" @click="installSelected">
           {{ running ? '安装中…' : '安装并验证' }}
         </button>
         <button class="secondary" :disabled="!canRun || selectedRecipe === undefined" @click="verifySelected">仅验证</button>
       </div>
+      <p class="muted small-note">成功安装的版本会记录到 companion 的 agent 版本注册表，每个 agent 默认保留最近 5 个成功版本。</p>
     </section>
 
     <section v-if="mode === 'exec'" class="sandbox-tool-panel">
@@ -201,6 +291,8 @@ function formatTime(value: number): string {
 .recipe-info { padding: 10px; border-radius: 8px; background: #0f172a; }
 .recipe-info p { margin: 6px 0; color: #cbd5e1; font-size: 12px; }
 .recipe-info ul { margin: 6px 0 0; padding-left: 18px; color: #94a3b8; font-size: 12px; }
+.version-resolution { padding: 10px; border-radius: 8px; background: #0f172a; }
+.version-resolution p { margin: 4px 0; font-size: 12px; color: #cbd5e1; }
 .compact-alert { margin: 0; padding: 10px 12px; font-size: 12px; }
 .exec-result { padding: 10px; border: 1px solid #334155; border-radius: 10px; background: #020617; }
 .exec-result-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
