@@ -259,3 +259,6 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .agent-recipe-help summary { cursor: pointer; color: #fbbf24; font-weight: 600; }
 .agent-recipe-help p { color: #94a3b8; font-size: 12px; line-height: 1.6; }
 .agent-recipe-help pre { max-height: 360px; overflow: auto; }
+
+.opencode-detection { margin: 14px 0; padding: 14px; border: 1px solid #334155; border-radius: 12px; background: #0f172a88; }
+.opencode-detection h3 { margin: 0 0 4px; font-size: 15px; }

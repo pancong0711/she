@@ -165,6 +165,23 @@ describe('TaskRunner', () => {
     expect(page.events.some(item => item.event.type === 'task.agent_event')).toBe(true)
   })
 
+  it('reports the claim before agent execution starts', async () => {
+    const { service, runner } = createHarness('success')
+    const submitted = await service.submit({
+      conversationKey: 'chat-1',
+      workspaceKey: 'workspace-1',
+      request: 'claim callback',
+    })
+    let claimedTaskId: string | undefined
+    const result = await runner.runNext({
+      topicId: submitted.topic.id,
+      ownerId: 'worker-1',
+      onClaim: task => { claimedTaskId = task.id },
+    })
+    expect(claimedTaskId).toBe(submitted.task.id)
+    expect(result?.finalStatus).toBe('succeeded')
+  })
+
   it('persists a markdown report artifact for a successful task workspace', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'she-report-'))
     cleanup.push(async () => rm(workspace, { recursive: true, force: true }))

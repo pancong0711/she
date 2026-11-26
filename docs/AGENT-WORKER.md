@@ -60,6 +60,31 @@ SHE_OPENCODE_PASSWORD_FILE=~/.config/opencode/service.json
 SHE_WORKSPACE_PATH=~/.local/share/she/workspaces/default
 ```
 
+### OpenCode `--service` 自动发现
+
+新版 OpenCode 以 `opencode serve --service` 运行时会写入：
+
+```text
+$XDG_STATE_HOME/opencode/service.json
+回退 ~/.local/state/opencode/service.json
+```
+
+其中包含当前实际 `url`、`pid`、`version` 和 `password`。companion 现在会：
+
+- 读取该 state 文件；
+- 通过 `GET /api/info` 验证 `opencode:<password>`；
+- 在 Settings 显示检测到的 URL、health、版本和凭据文件路径；
+- 只显示路径和 health，不返回 password；
+- 对仍保存旧默认值 `49375 + ~/.config/opencode/service.json` 的 worker 配置，
+  自动跟随检测到的 live service URL。
+
+如果 OpenCode 实际端口是 `49374`，而 SHE 仍使用 `49375`，任务会失败并记录
+`OpenCode authentication failed` 或连接错误。此时在 Settings 点击“使用检测到的服务”，
+再“保存并重启 core”。
+
+注意：重启 OpenCode `--service` 后 password 会变化，因此应让 worker 凭据文件指向
+`~/.local/state/opencode/service.json`，不要手工复制旧 password 到另一个文件。
+
 可选模型：
 
 ```text
@@ -82,11 +107,18 @@ while not stopped:
   list active topics
   for each topic:
     claim next queued task
+    set worker state=running and lastTaskId
     create/resume OpenCode session
     stream agent events
     transition task to terminal state
     release lease
+  if no task claimed:
+    set worker state=idle
 ```
+
+`idle` 的含义是“当前没有正在处理的任务”，不是“worker 没启用”。
+任务执行期间 `/v1/health.worker.state` 现在会显示 `running`，并在结束后回到 `idle`；
+如果执行失败，`worker.lastError` 和 task.error 会保留可操作错误。
 
 当前是单 worker，多个 Topic 按顺序处理；同一 Topic 始终串行。
 
@@ -128,6 +160,7 @@ Chat
 - 实时显示 agent text delta；
 - 显示 tool call 状态；
 - 显示任务完成/失败；
+- 失败时显示 taskId、错误消息，并提示到 Agents 页面检查 OpenCode health；
 - 使用 `pwa:local` 作为稳定 conversation id；
 - Ctrl/Cmd + Enter 发送。
 
@@ -139,6 +172,7 @@ Chat
 - agent 报告/产物还没有完整下载 UI；
 - OpenCode permission rules 不是 OS 沙箱；强隔离仍需 sandbox/broker；
 - 如果 worker 未启用，任务会保持 queued，Chat 页面会明确提示；
+- worker 已启用但 OpenCode URL/凭据错误时，任务会快速进入 failed，不会静默消失；
 - 未完成 task artifact 的 PWA 展示和下载。
 
 ## 8. 验收

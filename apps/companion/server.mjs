@@ -25,6 +25,7 @@ import { probeGatewayAdapter, readGatewayConfig, writeGatewayConfig } from './ga
 import { terminateUnixSocketOwner } from './core-process.mjs'
 import { SANDBOX_IMAGE_PRESETS, readSandboxPreferences, writeSandboxPreferences } from './sandbox-preferences.mjs'
 import { defaultFeishu4dshPaths, inspectFeishu4dsh, validateFeishu4dshPackageSpec, validateFeishu4dshProfile } from './feishu4dsh.mjs'
+import { inspectOpenCodeService, reconcileOpenCodeWorkerConfig } from './opencode-service.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -57,7 +58,7 @@ const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
 const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
 const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
 const COMPANION_RESTART_EXIT_CODE = 75
-const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.2.2-core.1/release-manifest.json'
+const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.2.3-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
 const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
@@ -475,16 +476,16 @@ function expandHome(path) {
   return path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
 }
 
-function defaultWorkerConfig() {
+function defaultWorkerConfig(openCodeService) {
   const providerId = process.env.SHE_AGENT_MODEL_PROVIDER?.trim() || ''
   const modelId = process.env.SHE_AGENT_MODEL_ID?.trim() || ''
   const variant = process.env.SHE_AGENT_MODEL_VARIANT?.trim() || ''
   return {
     schema: 1,
     enabled: process.env.SHE_WORKER_ENABLED === '1',
-    opencodeUrl: process.env.SHE_OPENCODE_URL?.trim() || 'http://127.0.0.1:49375',
-    opencodeUsername: process.env.SHE_OPENCODE_USERNAME?.trim() || 'opencode',
-    opencodePasswordFile: process.env.SHE_OPENCODE_PASSWORD_FILE?.trim() || expandHome('~/.config/opencode/service.json'),
+    opencodeUrl: process.env.SHE_OPENCODE_URL?.trim() || openCodeService?.url || 'http://127.0.0.1:49375',
+    opencodeUsername: process.env.SHE_OPENCODE_USERNAME?.trim() || openCodeService?.username || 'opencode',
+    opencodePasswordFile: process.env.SHE_OPENCODE_PASSWORD_FILE?.trim() || openCodeService?.credentialFile || expandHome('~/.config/opencode/service.json'),
     workspacePath: process.env.SHE_WORKSPACE_PATH?.trim() || join(dataHome, 'she', 'workspaces', 'default'),
     pollIntervalMs: Number(process.env.SHE_WORKER_POLL_MS ?? 1_000),
     leaseTtlMs: Number(process.env.SHE_WORKER_LEASE_TTL_MS ?? 300_000),
@@ -492,25 +493,31 @@ function defaultWorkerConfig() {
   }
 }
 
-async function readWorkerConfig() {
-  const defaults = defaultWorkerConfig()
+async function readWorkerConfig(openCodeService) {
+  const detectedOpenCode = openCodeService ?? await inspectOpenCodeService().catch(() => undefined)
+  const defaults = defaultWorkerConfig(detectedOpenCode)
   try {
     const parsed = JSON.parse(await readFile(workerConfigPath, 'utf8'))
     if (parsed?.schema !== 1) throw new Error('invalid worker config schema')
-    return {
+    const merged = {
       ...defaults,
       ...parsed,
       pollIntervalMs: Number(parsed.pollIntervalMs ?? defaults.pollIntervalMs),
       leaseTtlMs: Number(parsed.leaseTtlMs ?? defaults.leaseTtlMs),
     }
+    // Old versions filled the Settings form with a hard-coded URL/config path.
+    // If OpenCode's --service state file advertises a different loopback URL
+    // and the user never changed those two legacy defaults, follow the live
+    // service instead of sending every task to a stale port.
+    const legacyConfigFile = resolve(expandHome('~/.config/opencode/service.json'))
+    return reconcileOpenCodeWorkerConfig(merged, detectedOpenCode, legacyConfigFile)
   } catch (error) {
     if (error?.code === 'ENOENT') return defaults
     throw error
   }
 }
 
-function validateWorkerConfig(input) {
-  const defaults = defaultWorkerConfig()
+function validateWorkerConfig(input, defaults = defaultWorkerConfig()) {
   const workspacePath = expandHome(String(input.workspacePath ?? defaults.workspacePath).trim())
   const passwordFile = expandHome(String(input.opencodePasswordFile ?? defaults.opencodePasswordFile).trim())
   if (!resolve(workspacePath).startsWith('/')) throw new Error('workspacePath must be absolute')
@@ -544,7 +551,10 @@ function validateWorkerConfig(input) {
 }
 
 async function saveWorkerConfig(input) {
-  const config = validateWorkerConfig(input)
+  const openCodeService = await inspectOpenCodeService().catch(() => undefined)
+  const validated = validateWorkerConfig(input, defaultWorkerConfig(openCodeService))
+  const legacyConfigFile = resolve(expandHome('~/.config/opencode/service.json'))
+  const config = reconcileOpenCodeWorkerConfig(validated, openCodeService, legacyConfigFile)
   await mkdir(dirname(workerConfigPath), { recursive: true, mode: 0o700 })
   await writeFile(workerConfigPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
   return config
@@ -1677,6 +1687,27 @@ async function executeAgentMigration(job) {
   appendJobEvent(job, { type: 'system', text: `迁移记录已写入：${join(migrationRecordRoot, `${plan.id}.json`)}` })
 }
 
+async function workerConfigStatus() {
+  const detectedOpenCode = await inspectOpenCodeService().catch(error => {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      schema: 1,
+      checkedAt: Date.now(),
+      detected: false,
+      url: 'http://127.0.0.1:49375',
+      credentialFile: expandHome('~/.config/opencode/service.json'),
+      username: 'opencode',
+      stateFile: expandHome('~/.local/state/opencode/service.json'),
+      configFile: expandHome('~/.config/opencode/service.json'),
+      source: 'error',
+      health: { ok: false, detail: message },
+      error: message,
+    }
+  })
+  const config = await readWorkerConfig(detectedOpenCode)
+  return { config, path: workerConfigPath, restartRequired: false, detectedOpenCode }
+}
+
 async function handleCompanionApi(request, response) {
   const cors = corsHeaders(request)
   if (cors === undefined) {
@@ -1744,7 +1775,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'autostart', 'gateway', 'feishu4dsh', 'sandbox-preferences', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'opencode-service', 'autostart', 'gateway', 'feishu4dsh', 'sandbox-preferences', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1867,6 +1898,14 @@ async function handleCompanionApi(request, response) {
     }
     return
   }
+  if (request.method === 'GET' && url.pathname === '/api/opencode/service') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await inspectOpenCodeService() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
   if (request.method === 'GET' && url.pathname === '/api/feishu4dsh') {
     try {
       sendJsonWithCors(request, response, 200, { ok: true, value: await inspectFeishu4dsh() })
@@ -1933,10 +1972,7 @@ async function handleCompanionApi(request, response) {
   }
   if (request.method === 'GET' && url.pathname === '/api/worker/config') {
     try {
-      sendJsonWithCors(request, response, 200, {
-        ok: true,
-        value: { config: await readWorkerConfig(), path: workerConfigPath, restartRequired: false },
-      })
+      sendJsonWithCors(request, response, 200, { ok: true, value: await workerConfigStatus() })
     } catch (error) {
       sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
     }
@@ -1950,7 +1986,15 @@ async function handleCompanionApi(request, response) {
     try {
       const body = await readBodyJson(request)
       const config = await saveWorkerConfig(body)
-      sendJsonWithCors(request, response, 200, { ok: true, value: { config, path: workerConfigPath, restartRequired: true } })
+      sendJsonWithCors(request, response, 200, {
+        ok: true,
+        value: {
+          config,
+          path: workerConfigPath,
+          restartRequired: true,
+          detectedOpenCode: await inspectOpenCodeService().catch(() => undefined),
+        },
+      })
     } catch (error) {
       sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
     }

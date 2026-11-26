@@ -33,6 +33,8 @@ export interface RunNextInput {
   readonly model?: AgentModelRef
   readonly workspacePath?: string
   readonly promptMetadata?: Readonly<Record<string, string>>
+  /** Called immediately after the queue claim succeeds, before agent execution. */
+  readonly onClaim?: (task: Task) => void
 }
 
 export interface RunNextResult {
@@ -83,6 +85,7 @@ export class TaskRunner {
   async runNext(input: RunNextInput): Promise<RunNextResult | undefined> {
     const claimed = await this.queue.claimNext(input)
     if (claimed === undefined) return undefined
+    input.onClaim?.(claimed.task)
 
     let agentSession: AgentSessionRef | undefined
     let agentEvents: readonly AgentEventEnvelope[] = []

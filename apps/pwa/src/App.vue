@@ -129,6 +129,7 @@ const chatError = ref('')
 const chatTaskId = ref<string | null>(null)
 const chatArtifacts = ref<readonly ArtifactListItem[]>([])
 const chatStreamMessageId = ref<string | null>(null)
+const chatLastFailure = ref<{ taskId: string; message: string } | null>(null)
 const seenGatewayEvents = new Set<string>()
 let chatAbortController: AbortController | undefined
 const coreStatus = ref<CoreStatus | null>(null)
@@ -300,7 +301,12 @@ async function saveWorker(restart: boolean): Promise<void> {
     workerConfig.value = workerConfigResponse.value.config
     if (restart && coreStatus.value?.installed.current !== null) {
       await runCoreAction('restart')
-      workerConfigMessage.value = '已保存并重启 core；worker 会在新 core 启动时应用配置。'
+      await refresh()
+      if (agentRuntime.value?.health.ok === true) {
+        workerConfigMessage.value = `已保存并重启 core；OpenCode health 正常（${agentRuntime.value.health.version ?? 'version unknown'}），worker 已应用配置。`
+      } else {
+        workerConfigError.value = `已保存并重启 core，但 OpenCode health 失败：${agentRuntime.value?.health.detail ?? 'unknown'}。任务会快速失败，请检查 OpenCode URL、用户名和凭据文件。`
+      }
     } else {
       workerConfigMessage.value = '已保存。需要重启 core 后生效。'
     }
@@ -474,6 +480,22 @@ async function installCompanionUpdateFromPage(): Promise<void> {
   }
 }
 
+async function waitForCoreReadiness(timeoutMs = 12_000): Promise<CoreStatus | null> {
+  const deadline = Date.now() + timeoutMs
+  let latest: CoreStatus | null = coreStatus.value
+  while (Date.now() < deadline) {
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 500))
+    try {
+      latest = await loadCoreStatus()
+      coreStatus.value = latest
+      if (latest.controlPlane.reachable && latest.broker.reachable) return latest
+    } catch {
+      // The companion may still be observing the core transition.
+    }
+  }
+  return latest
+}
+
 async function runCoreAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
   if (coreActionRunning.value !== '') return
   coreActionRunning.value = action
@@ -484,15 +506,36 @@ async function runCoreAction(action: 'start' | 'stop' | 'restart'): Promise<void
       ? '正在停止 core，若检测到外部 core 会先请求优雅退出…'
       : '正在重启 core，将先停止旧实例再启动，最长可能需要 20 秒…'
   try {
-    coreStatus.value = await coreAction(action)
+    const result = await coreAction(action)
+    coreStatus.value = result.status
+    let finalStatus = result.status
+    if (action !== 'stop' && !(finalStatus.controlPlane.reachable && finalStatus.broker.reachable)) {
+      finalStatus = await waitForCoreReadiness() ?? finalStatus
+      coreStatus.value = finalStatus
+    }
     await refresh()
-    coreActionMessage.value = action === 'stop'
-      ? '已发送停止请求。'
-      : action === 'restart'
-        ? '已发送重启请求；如果检测到外部 core，会先通过 admin shutdown 停止它再由 companion 接管。'
-        : coreStatus.value?.supervisor.external
-          ? '检测到 core 已在运行，但当前 companion 未监管它；点击重启可重新接管。'
-          : '已发送启动请求。'
+    const controlOk = finalStatus.controlPlane.reachable
+    const brokerOk = finalStatus.broker.reachable
+    if (action === 'stop') {
+      if (controlOk) {
+        coreError.value = '停止请求完成，但 control plane 仍可达；core 可能仍未退出。'
+      } else {
+        coreActionMessage.value = 'Core 已停止。'
+      }
+    } else if (controlOk && brokerOk) {
+      coreActionMessage.value = action === 'restart'
+        ? 'Core 已重启并通过 control-plane + broker health check。'
+        : finalStatus.supervisor.external
+          ? '检测到外部 core 正在运行，且 control-plane + broker 可达；点击重启可让 companion 重新接管。'
+          : 'Core 已启动并通过 control-plane + broker health check。'
+    } else {
+      const healthError = result.health.error ?? finalStatus.supervisor.lastError
+      const missing = [
+        controlOk ? '' : 'control-plane unreachable',
+        brokerOk ? '' : 'broker unreachable',
+      ].filter(Boolean).join('; ')
+      coreError.value = `Core 未通过健康检查：${missing}${healthError ? `；${healthError}` : ''}。请查看下方 core 日志，必要时停止后重新启动。`
+    }
   } catch (cause) {
     coreError.value = cause instanceof Error ? cause.message : String(cause)
   } finally {
@@ -751,6 +794,23 @@ function openWorkerVerification(): void {
   active.value = 'chat'
 }
 
+function useDetectedOpenCode(): void {
+  const detected = workerConfigResponse.value?.detectedOpenCode
+  if (workerConfig.value === null || detected === undefined || detected.detected !== true) return
+  workerConfig.value = {
+    ...workerConfig.value,
+    opencodeUrl: detected.url,
+    opencodeUsername: detected.username,
+    opencodePasswordFile: detected.credentialFile,
+  }
+  workerConfigError.value = ''
+  workerConfigMessage.value = '已填入检测到的 OpenCode 服务；点击“保存并重启 core”应用。'
+}
+
+function openAgentRuntimeDetails(): void {
+  active.value = 'agents'
+}
+
 function formatBytes(bytes?: number): string {
   if (bytes === undefined) return '-'
   if (bytes < 1024) return `${String(bytes)} B`
@@ -841,7 +901,8 @@ function handleGatewayEvent(event: GatewayServerEvent): void {
   if (taskEvent.type === 'task.failed') {
     const failedTaskId = taskEvent.taskId
     chatStreamMessageId.value = null
-    appendChat('system', `任务失败：${taskEvent.error.message}`)
+    chatLastFailure.value = { taskId: failedTaskId, message: taskEvent.error.message }
+    appendChat('system', `任务失败（${failedTaskId}）：${taskEvent.error.message}`)
     void refreshChatArtifacts(failedTaskId)
     chatTaskId.value = null
   }
@@ -852,6 +913,7 @@ async function submitChat(): Promise<void> {
   if (text === '' || chatSending.value) return
   chatSending.value = true
   chatError.value = ''
+  chatLastFailure.value = null
   chatInput.value = ''
   appendChat('user', text)
   chatStreamMessageId.value = null
@@ -1013,7 +1075,10 @@ onBeforeUnmount(() => {
             <tbody>
               <tr v-for="task in tasks" :key="task.taskId">
                 <td><span :class="['pill', task.status]">{{ task.status }}</span></td>
-                <td><strong>{{ task.excerpt }}</strong><br /><small>{{ task.taskId }}</small></td>
+                <td>
+                  <strong>{{ task.excerpt }}</strong><br /><small>{{ task.taskId }}</small>
+                  <p v-if="task.error" class="error-text small-note">错误：{{ task.error.message }} <span class="muted">({{ String((task.error.details as any)?.domainCode ?? task.error.code) }})</span></p>
+                </td>
                 <td>{{ task.priority }}</td>
                 <td>{{ relativeTime(task.updatedAt) }}</td>
               </tr>
@@ -1053,9 +1118,13 @@ onBeforeUnmount(() => {
               <div v-if="health?.worker?.lastTaskId"><span>last task</span><b>{{ health.worker.lastTaskId }}</b></div>
               <div v-if="health?.worker?.lastError"><span>last error</span><b class="error-text">{{ health.worker.lastError }}</b></div>
             </div>
+            <p class="muted small-note">
+              worker state 为 <code>idle</code> 表示当前没有任务在执行；任务处理中应显示 <code>running</code>。
+              如果任务失败后回到 idle，请看 last error / last task，而不是把 idle 当成“任务未被处理”。
+            </p>
             <div v-if="!agentRuntime.configured || !agentRuntime.health.ok" class="alert">
               <strong>Agent runtime 尚未就绪</strong>
-              <p>{{ agentRuntime.configured ? 'OpenCode 健康检查失败。请确认服务已启动，并检查 Settings 中的 URL 与凭据文件路径。' : 'Worker 未启用。请在 Settings 配置 OpenCode 和 worker，然后保存并重启 core。' }}</p>
+              <p>{{ agentRuntime.configured ? `OpenCode 健康检查失败：${agentRuntime.health.detail ?? 'unavailable'}。请确认服务已启动，并检查 Settings 中的 URL、用户名与凭据文件路径。` : 'Worker 未启用。请在 Settings 配置 OpenCode 和 worker，然后保存并重启 core。' }}</p>
               <button class="primary" @click="active = 'settings'">打开 Settings</button>
             </div>
           </article>
@@ -1221,6 +1290,18 @@ onBeforeUnmount(() => {
               <code>SHE_WORKER_ENABLED=1</code>、<code>SHE_OPENCODE_URL</code>、<code>SHE_OPENCODE_PASSWORD_FILE</code>、
               <code>SHE_WORKSPACE_PATH</code>。
             </p>
+          </div>
+          <div v-if="chatLastFailure" class="alert">
+            <strong>最近一次任务执行失败</strong>
+            <p>
+              {{ chatLastFailure.taskId }}：{{ chatLastFailure.message }}
+            </p>
+            <p class="muted small-note">
+              worker 显示 idle 只表示它当前没有在轮询/等待新任务，不表示任务没有被处理。
+              请到 Agents 查看 OpenCode health 和 last error；认证失败通常说明 Settings 中的 URL
+              或密码文件与正在运行的 OpenCode 服务不一致。
+            </p>
+            <button class="secondary" @click="openAgentRuntimeDetails">打开 Agents 查看 OpenCode 状态</button>
           </div>
           <div class="chat-messages">
             <p v-if="chatMessages.length === 0" class="muted">
@@ -1866,6 +1947,35 @@ onBeforeUnmount(() => {
             <p><b>启用 worker 意味着什么</b>：关闭时任务仍可提交并排队，但不会执行；启用后 core 启动 worker loop，按 poll interval 拉取 queued 任务。</p>
             <p><b>不在 sandbox 里</b>：当前 worker 和 OpenCode 服务都运行在宿主用户空间。Sandbox 页面创建的是独立执行环境，暂未成为 worker 的 runtime。</p>
             <p><b>快速验证</b>：保存并重启 core 后，打开 Chat 发一个只读验证任务（例如输出 cwd 和 `worker-ok`），观察 agent 事件与最终 report。</p>
+            <p><b>状态</b>：当前 worker {{ health?.worker?.enabled ? health.worker.state : 'disabled' }}<span v-if="health?.worker?.lastError">；last error: {{ health.worker.lastError }}</span></p>
+          </div>
+          <div v-if="workerConfigResponse?.detectedOpenCode" class="opencode-detection">
+            <div class="section-head">
+              <div>
+                <h3>检测到的本机 OpenCode 服务</h3>
+                <p class="muted small-note">
+                  读取 OpenCode `--service` 写出的 state 文件；只显示 URL、路径和 health，不显示密码。
+                </p>
+              </div>
+              <span :class="['pill', workerConfigResponse.detectedOpenCode.health.ok ? 'succeeded' : workerConfigResponse.detectedOpenCode.detected ? 'warn' : 'failed']">
+                {{ workerConfigResponse.detectedOpenCode.health.ok ? 'healthy' : workerConfigResponse.detectedOpenCode.detected ? 'detected / unhealthy' : 'not found' }}
+              </span>
+            </div>
+            <div class="health-grid">
+              <div><span>url</span><b>{{ workerConfigResponse.detectedOpenCode.url }}</b></div>
+              <div><span>source</span><b>{{ workerConfigResponse.detectedOpenCode.source }}</b></div>
+              <div><span>state file</span><b><code>{{ workerConfigResponse.detectedOpenCode.stateFile }}</code></b></div>
+              <div><span>credential file</span><b><code>{{ workerConfigResponse.detectedOpenCode.credentialFile }}</code>（只显示路径）</b></div>
+              <div><span>health</span><b :class="workerConfigResponse.detectedOpenCode.health.ok ? 'success-text' : 'error-text'">{{ workerConfigResponse.detectedOpenCode.health.ok ? (workerConfigResponse.detectedOpenCode.health.version ?? 'ok') : (workerConfigResponse.detectedOpenCode.health.detail ?? 'unavailable') }}</b></div>
+            </div>
+            <div class="job-actions">
+              <button class="secondary" :disabled="!workerConfigResponse.detectedOpenCode.detected || workerConfig === null" @click="useDetectedOpenCode">使用检测到的服务</button>
+              <button class="secondary" :disabled="loading" @click="refresh">重新检测</button>
+            </div>
+            <p class="muted small-note">
+              如果这里显示 `49374`，而当前配置仍是 `49375`，任务会送到错误端口或错误认证。
+              使用检测值后点击“保存并重启 core”。
+            </p>
           </div>
           <p v-if="workerConfigError" class="error-text">{{ workerConfigError }}</p>
           <p v-if="workerConfigMessage" class="success-text">{{ workerConfigMessage }}</p>

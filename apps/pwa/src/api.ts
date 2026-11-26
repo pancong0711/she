@@ -596,12 +596,12 @@ export interface CoreUpdateCheck {
   readonly manifest: unknown
 }
 
-export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.2-core.1/release-manifest.json'
+export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.3-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.4.8'
+export const COMPANION_RELEASE_VERSION = '0.4.9'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.4.8'
-export const COMPANION_RELEASE_TAG = 'v0.4.8-companion.1'
+export const COMPANION_MIN_VERSION = '0.4.9'
+export const COMPANION_RELEASE_TAG = 'v0.4.9-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`
@@ -617,17 +617,29 @@ export async function loadCoreStatus(signal?: AbortSignal): Promise<CoreStatus> 
   return payload.value
 }
 
-export async function coreAction(action: 'start' | 'stop' | 'restart'): Promise<CoreStatus> {
+export interface CoreActionResult {
+  readonly action: 'start' | 'stop' | 'restart'
+  readonly health: {
+    readonly ok?: boolean
+    readonly external?: boolean
+    readonly control?: unknown
+    readonly broker?: unknown
+    readonly error?: string
+  }
+  readonly status: CoreStatus
+}
+
+export async function coreAction(action: 'start' | 'stop' | 'restart'): Promise<CoreActionResult> {
   const response = await fetch(`${apiBase()}/api/core/${action}`, {
     method: 'POST',
     headers: localActionHeaders(),
     signal: AbortSignal.timeout(30_000),
   })
-  const payload = await response.json() as { ok: boolean; value?: { status?: CoreStatus }; error?: { message?: string } }
+  const payload = await response.json() as { ok: boolean; value?: CoreActionResult; error?: { message?: string } }
   if (!response.ok || !payload.ok || payload.value?.status === undefined) {
     throw new Error(payload.error?.message ?? `core action failed: HTTP ${response.status}`)
   }
-  return payload.value.status
+  return payload.value
 }
 
 export async function checkCoreUpdate(manifestUrl: string): Promise<CoreUpdateCheck> {
@@ -768,6 +780,34 @@ export interface WorkerModelConfig {
   readonly variant?: string
 }
 
+export interface OpenCodeServiceStatus {
+  readonly schema: 1
+  readonly checkedAt: number
+  readonly detected: boolean
+  readonly url: string
+  readonly credentialFile: string
+  readonly username: string
+  readonly stateFile: string
+  readonly configFile: string
+  readonly source: string
+  readonly servicePid?: number
+  readonly serviceVersion?: string
+  readonly health: {
+    readonly ok: boolean
+    readonly httpStatus?: number
+    readonly version?: string
+    readonly pid?: number
+    readonly detail?: string
+  }
+  readonly error?: string
+}
+
+export async function loadOpenCodeService(signal?: AbortSignal): Promise<OpenCodeServiceStatus> {
+  const payload = await getJson<{ ok: boolean; value?: OpenCodeServiceStatus; error?: { message?: string } }>('/api/opencode/service', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'OpenCode service discovery unavailable')
+  return payload.value
+}
+
 export interface WorkerConfig {
   readonly schema: 1
   readonly enabled: boolean
@@ -784,6 +824,7 @@ export interface WorkerConfigResponse {
   readonly config: WorkerConfig
   readonly path: string
   readonly restartRequired: boolean
+  readonly detectedOpenCode?: OpenCodeServiceStatus
 }
 
 export async function loadWorkerConfig(signal?: AbortSignal): Promise<WorkerConfigResponse> {

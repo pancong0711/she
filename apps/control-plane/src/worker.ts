@@ -67,6 +67,12 @@ export class TaskWorker {
             ownerId: 'control-plane-worker',
             workspacePath: this.options.workspacePath,
             ...(this.options.model === undefined ? {} : { model: this.options.model }),
+            onClaim: task => {
+              this.state = 'running'
+              this.lastTaskId = task.id
+              this.lastError = undefined
+              this.updatedAt = Date.now()
+            },
           })
           if (result !== undefined) {
             worked = true
