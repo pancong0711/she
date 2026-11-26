@@ -516,13 +516,50 @@ async function coreStatus() {
 async function packageCatalog() {
   const current = await readCurrentCoreVersion()
   const previous = await readPreviousCoreVersion()
-  const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-  const [pnpmResult, dockerVersion, dockerSecurity] = await Promise.all([
+  const platform = process.platform
+  const isWindows = platform === 'win32'
+  const isMac = platform === 'darwin'
+  const pnpmCommand = isWindows ? 'pnpm.cmd' : 'pnpm'
+  const shellCommand = isWindows ? 'powershell' : 'bash'
+  const shellArgs = isWindows ? ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'] : ['--version']
+  const [pnpmResult, gitResult, dockerVersion, dockerSecurity, shellResult, curlResult, tarResult, sha256sumResult, shasumResult, opencodeResult, npmResult, corepackResult] = await Promise.all([
     captureCommand(undefined, pnpmCommand, ['--version']),
+    captureCommand(undefined, 'git', ['--version']),
     captureCommand(undefined, 'docker', ['version', '--format', '{{.Server.Version}}']),
     captureCommand(undefined, 'docker', ['info', '--format', '{{json .SecurityOptions}}']),
+    captureCommand(undefined, shellCommand, shellArgs),
+    captureCommand(undefined, 'curl', ['--version']),
+    captureCommand(undefined, 'tar', ['--version']),
+    captureCommand(undefined, 'sha256sum', ['--version']),
+    captureCommand(undefined, 'shasum', ['-a', '256', '/dev/null']),
+    captureCommand(undefined, 'opencode', ['--version']),
+    captureCommand(undefined, 'npm', ['--version']),
+    captureCommand(undefined, 'corepack', ['--version']),
   ])
   const dockerRootless = dockerVersion.ok && dockerSecurity.ok && dockerSecurity.stdout.includes('rootless')
+  const nodeReady = nodeVersionSupported(process.versions.node)
+  const pnpmReady = pnpmResult.ok && pnpmVersionSupported(pnpmResult.stdout)
+  const checksumReady = sha256sumResult.ok || shasumResult.ok || (isWindows && shellResult.ok)
+  const bootstrapHelperReady = npmResult.ok || corepackResult.ok
+  const install = (mode, title, commands, note, url) => ({
+    mode,
+    title,
+    commands,
+    ...(url === undefined ? {} : { url }),
+    note,
+  })
+  const dockerInstall = install(
+    'instructions-only',
+    isMac ? '安装 Docker Desktop' : isWindows ? '安装 Docker Desktop / WSL2' : '安装 Docker Engine 或 rootless Docker',
+    isMac
+      ? ['# 安装并启动 Docker Desktop，然后验证', 'docker version']
+      : isWindows
+        ? ['# 安装 Docker Desktop（启用 WSL2 backend），然后验证', 'docker version']
+        : ['# 由你本人按官方文档安装 Docker Engine 或 rootless Docker', '# https://docs.docker.com/engine/install/', 'docker version'],
+    'SHE 不执行 sudo、不安装 Docker、不请求 root。依赖 docker 组访问时可能是 root-equivalent。',
+    isMac || isWindows ? 'https://docs.docker.com/desktop/' : 'https://docs.docker.com/engine/install/',
+  )
+
   return [
     {
       id: 'she-companion',
@@ -530,8 +567,17 @@ async function packageCatalog() {
       kind: 'component',
       installedVersion: companionVersion,
       state: 'installed',
+      requirement: 'required',
+      requiredFor: ['PWA host', '本地 API', 'core 启停'],
       management: 'launcher',
-      note: 'Upgrade via checksum-verified companion launcher; PWA never replaces the running companion.',
+      note: '稳定层。升级需要运行 checksum-verified companion launcher；PWA 不会在运行中替换 companion。',
+      install: install(
+        'managed',
+        '使用 companion launcher',
+        ['# 从 PWA 下载 start.sh / start.command / start.bat 后运行一次', '# 或按 Release 页面说明使用 install-companion.sh'],
+        'launcher 会校验 manifest 与 SHA-256，并安装到当前用户目录。',
+        'https://github.com/pancong0711/she/releases',
+      ),
     },
     {
       id: 'she-core',
@@ -540,27 +586,80 @@ async function packageCatalog() {
       installedVersion: current?.version ?? null,
       previousVersion: previous?.version ?? null,
       state: current === undefined ? 'not-installed' : 'installed',
+      requirement: 'required',
+      requiredFor: ['Tasks', 'Chat', 'Control plane', 'sandbox broker'],
       management: 'core-update',
       manifestUrl: defaultCoreManifestUrl,
-      note: 'Supports check/update with staging, SHA-256 verification, health check, and rollback.',
+      note: '首次安装必须完成 Core 更新；之后支持 staging、SHA-256 校验、health check 和自动回滚。',
+      install: install(
+        'managed',
+        '通过 Core 更新安装/启动',
+        ['# 打开 Install & Doctor → Core 版本与更新', '# 点击“检查更新”，首次会从“未安装”安装到当前 Release 版本'],
+        'core 安装后 control-plane 与 broker 由 companion 监管启动；不执行 sudo。',
+        defaultCoreManifestUrl,
+      ),
     },
     {
       id: 'node-runtime',
       name: 'Node.js runtime',
       kind: 'runtime',
       installedVersion: process.versions.node,
-      state: 'ready',
+      state: nodeReady ? 'ready' : 'unsupported',
+      requirement: 'required',
+      requiredFor: ['companion', 'core', 'worker'],
       management: 'instructions-only',
-      note: 'Required ^22.19.0 || >=24.0.0. SHE does not install Node or request root.',
+      note: '要求 ^22.19.0 || >=24.0.0。SHE 不自动安装 Node，也不请求 root。',
+      install: install(
+        'instructions-only',
+        isMac ? '使用官方安装包、nvm/fnm 或 Homebrew' : isWindows ? '使用官方安装包或 winget' : '使用官方安装包、nvm/fnm 或发行版包管理器',
+        isMac
+          ? ['# 任选一种，由你本人执行', 'brew install node@22', '# 或 https://nodejs.org/en/download', 'node --version']
+          : isWindows
+            ? ['# 由你本人执行', 'winget install OpenJS.NodeJS.LTS', 'node --version']
+            : ['# 任选一种，由你本人执行', 'sudo apt install nodejs npm   # Debian/Ubuntu 示例', '# 或使用 nvm/fnm/官方二进制', 'node --version'],
+        '建议使用 Node 24+ 或 22.19+；若使用系统包管理器，请先确认版本满足要求。',
+        'https://nodejs.org/en/download',
+      ),
     },
     {
       id: 'pnpm-runtime',
       name: 'pnpm',
       kind: 'runtime',
       installedVersion: pnpmResult.ok ? pnpmResult.stdout : null,
-      state: pnpmResult.ok ? 'ready' : 'missing',
+      state: pnpmReady ? 'ready' : 'missing',
+      requirement: 'required',
+      requiredFor: ['源码构建', '依赖安装', '开发/调试'],
       management: 'bootstrap',
-      note: 'Can be prepared user-locally via the bootstrap job without sudo.',
+      note: '要求 >=11.22.0。可通过“用户级环境准备”安装到当前用户目录，不需要 sudo。',
+      install: install(
+        'user-local',
+        '用户级准备 pnpm',
+        ['# 推荐直接点击下方“用户级准备 pnpm”', 'corepack prepare pnpm@11.22.0 --activate', '# 或 npm install --global --prefix "$HOME/.local" pnpm@11.22.0', 'pnpm --version'],
+        '该操作只写入当前用户目录；SHE 不执行 sudo。',
+        'https://pnpm.io/installation',
+      ),
+    },
+    {
+      id: 'git-runtime',
+      name: 'git',
+      kind: 'tool',
+      installedVersion: gitResult.ok ? gitResult.stdout : null,
+      state: gitResult.ok ? 'ready' : 'missing',
+      requirement: 'recommended',
+      requiredFor: ['源码克隆', '开发/更新'],
+      management: 'instructions-only',
+      note: '安装版 companion/core 可以不需要 git；从源码运行或更新仓库时需要。',
+      install: install(
+        'instructions-only',
+        isMac ? '安装 Xcode Command Line Tools 或 git' : isWindows ? '安装 Git for Windows' : '使用发行版包管理器安装 git',
+        isMac
+          ? ['xcode-select --install', '# 或 brew install git', 'git --version']
+          : isWindows
+            ? ['winget install --id Git.Git -e', 'git --version']
+            : ['sudo apt install git   # Debian/Ubuntu 示例', 'git --version'],
+        'SHE 只显示安装方法，由用户本人执行。',
+        isWindows ? 'https://git-scm.com/download/win' : 'https://git-scm.com/downloads',
+      ),
     },
     {
       id: 'docker-runtime',
@@ -568,13 +667,145 @@ async function packageCatalog() {
       kind: 'runtime',
       installedVersion: dockerVersion.ok ? dockerVersion.stdout : null,
       state: dockerVersion.ok ? (dockerRootless ? 'ready-rootless' : 'ready-root-equivalent-risk') : 'missing',
+      requirement: 'sandbox',
+      requiredFor: ['Sandbox', 'broker 容器', 'Agent Migration'],
       management: 'instructions-only',
       note: dockerRootless
-        ? 'Rootless Docker detected.'
-        : 'Docker is not rootless or unavailable. SHE does not install Docker or request root; follow user-provided platform instructions.',
+        ? '已检测到 rootless Docker。'
+        : dockerVersion.ok
+          ? 'Docker 可访问，但未检测到 rootless；docker 组权限可能是 root-equivalent。'
+          : 'Docker 不可用。基础 companion/core/Tasks 不受影响，但 Sandbox 和 Agent Migration 不可用。',
+      install: dockerInstall,
+    },
+    {
+      id: 'shell-runtime',
+      name: isWindows ? 'PowerShell' : 'bash',
+      kind: 'tool',
+      installedVersion: shellResult.ok ? (isWindows ? shellResult.stdout : shellResult.stdout.split('\n')[0]) : null,
+      state: shellResult.ok ? 'ready' : 'missing',
+      requirement: 'required',
+      requiredFor: isWindows ? ['PowerShell launcher', 'Windows 安装脚本'] : ['run-core.sh', '安装/更新脚本'],
+      management: 'instructions-only',
+      note: isWindows ? 'Windows 安装脚本需要 PowerShell。' : 'POSIX 下 core 启动和安装/更新脚本需要 bash。',
+      install: install(
+        'instructions-only',
+        isWindows ? '启用 PowerShell' : '安装 bash',
+        isWindows
+          ? ['# Windows 通常已内置 PowerShell；打开 PowerShell 验证', '$PSVersionTable.PSVersion']
+          : isMac
+            ? ['# macOS 通常自带 bash；如需新版', 'brew install bash', 'bash --version']
+            : ['sudo apt install bash   # Debian/Ubuntu 示例', 'bash --version'],
+        'SHE 只显示安装方法，由用户本人执行。',
+        isWindows ? 'https://learn.microsoft.com/powershell/' : 'https://www.gnu.org/software/bash/',
+      ),
+    },
+    {
+      id: 'curl-runtime',
+      name: 'curl',
+      kind: 'tool',
+      installedVersion: curlResult.ok ? curlResult.stdout.split('\n')[0] : null,
+      state: curlResult.ok ? 'ready' : 'missing',
+      requirement: 'required',
+      requiredFor: ['start.sh 下载', 'Release 安装器'],
+      management: 'instructions-only',
+      note: '一键 launcher 和安装器需要 curl 下载 manifest/bundle。',
+      install: install(
+        'instructions-only',
+        '安装 curl',
+        isMac
+          ? ['# macOS 通常自带 curl', 'curl --version']
+          : isWindows
+            ? ['# Windows 10+ 通常自带 curl；或', 'winget install curl.curl', 'curl --version']
+            : ['sudo apt install curl   # Debian/Ubuntu 示例', 'curl --version'],
+        'SHE 只显示安装方法，由用户本人执行。',
+        'https://curl.se/download.html',
+      ),
+    },
+    {
+      id: 'tar-runtime',
+      name: 'tar',
+      kind: 'tool',
+      installedVersion: tarResult.ok ? tarResult.stdout.split('\n')[0] : null,
+      state: tarResult.ok ? 'ready' : 'missing',
+      requirement: 'required',
+      requiredFor: ['bundle 解压', 'core/companion 安装'],
+      management: 'instructions-only',
+      note: '安装器和 core 更新会解压 tar.gz bundle。',
+      install: install(
+        'instructions-only',
+        '安装 tar',
+        isMac
+          ? ['# macOS 通常自带 tar', 'tar --version']
+          : isWindows
+            ? ['# Windows 10+ 通常自带 tar', 'tar --version']
+            : ['sudo apt install tar   # Debian/Ubuntu 示例', 'tar --version'],
+        'SHE 只显示安装方法，由用户本人执行。',
+        'https://www.gnu.org/software/tar/',
+      ),
+    },
+    {
+      id: 'checksum-runtime',
+      name: isWindows ? 'PowerShell Get-FileHash' : 'SHA-256 工具',
+      kind: 'tool',
+      installedVersion: checksumReady ? (sha256sumResult.ok ? 'sha256sum' : shasumResult.ok ? 'shasum' : 'Get-FileHash') : null,
+      state: checksumReady ? 'ready' : 'missing',
+      requirement: 'required',
+      requiredFor: ['bundle 完整性校验'],
+      management: 'instructions-only',
+      note: 'launcher、companion 安装器和 core 更新使用 SHA-256 校验下载内容。',
+      install: install(
+        'instructions-only',
+        isWindows ? '使用 PowerShell Get-FileHash' : '安装 coreutils / shasum',
+        isWindows
+          ? ['# Windows PowerShell 内置 Get-FileHash', 'Get-FileHash .\bundle.tar.gz -Algorithm SHA256']
+          : isMac
+            ? ['# macOS 通常自带 shasum', 'shasum -a 256 bundle.tar.gz']
+            : ['sudo apt install coreutils   # Debian/Ubuntu 示例', 'sha256sum bundle.tar.gz'],
+        'SHE 只显示安装方法，由用户本人执行。',
+        isWindows ? 'https://learn.microsoft.com/powershell/module/microsoft.powershell.utility/get-filehash' : 'https://www.gnu.org/software/coreutils/',
+      ),
+    },
+    {
+      id: 'node-bootstrap-tools',
+      name: 'npm / corepack',
+      kind: 'tool',
+      installedVersion: npmResult.ok ? `npm ${npmResult.stdout}` : corepackResult.ok ? `corepack ${corepackResult.stdout}` : null,
+      state: bootstrapHelperReady ? 'ready' : 'missing',
+      requirement: 'optional',
+      requiredFor: ['pnpm 用户级安装的备选路径'],
+      management: 'instructions-only',
+      note: '通常随 Node.js 提供。缺少时可能无法在用户目录自动安装 pnpm。',
+      install: install(
+        'instructions-only',
+        '随 Node.js 安装',
+        ['# npm/corepack 通常随 Node.js 一起安装', 'node --version', 'npm --version', 'corepack --version'],
+        '如果二者都缺失，请重新安装 Node.js 或手动安装 pnpm。',
+        'https://nodejs.org/en/download',
+      ),
+    },
+    {
+      id: 'opencode-runtime',
+      name: 'OpenCode agent runtime',
+      kind: 'agent',
+      installedVersion: opencodeResult.ok ? opencodeResult.stdout : null,
+      state: opencodeResult.ok ? 'ready' : 'unknown',
+      requirement: 'optional',
+      requiredFor: ['Agent Worker', 'PWA Chat 实际执行'],
+      management: 'external',
+      note: opencodeResult.ok
+        ? '检测到 opencode CLI。仍需在 Settings 配置 OpenCode URL、凭据文件路径和 workspace。'
+        : '未在 PATH 中检测到 opencode CLI。若你使用远程或已有 OpenCode 服务，只需在 Settings 配置 URL；SHE 不自动安装 agent runtime。',
+      install: install(
+        'external',
+        '按 OpenCode 官方文档安装并启动服务',
+        ['# 由你本人安装/启动 OpenCode，然后在 Settings 配置：', '# SHE_OPENCODE_URL / username / password file / workspace', 'opencode --version'],
+        'OpenCode 是外部 agent runtime，凭据只保存文件路径，不保存内容。',
+        'https://opencode.ai/docs/',
+      ),
     },
   ]
 }
+
 
 async function startCore(job) {
   if (coreChild !== null) return { alreadyRunning: true }

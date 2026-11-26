@@ -93,6 +93,7 @@ const coreUpdateCheck = ref<CoreUpdateCheck | null>(null)
 const coreUpdateError = ref('')
 const packages = ref<readonly PackageInfo[]>([])
 const packageError = ref('')
+const copiedPackageId = ref('')
 const preflight = ref<PreflightResult | null>(null)
 const workerConfigResponse = ref<Awaited<ReturnType<typeof loadWorkerConfig>> | null>(null)
 const workerConfig = ref<WorkerConfig | null>(null)
@@ -288,6 +289,24 @@ function jobEventText(event: JobEvent): string {
   if (event.type === 'check') return `[${event.status}] ${event.label}: ${event.detail}${event.remediation === undefined ? '' : `\n  → 修复：${event.remediation}`}`
   if (event.type === 'status') return `status: ${event.status}`
   return `done: ${event.status} (exit ${String(event.exitCode)})`
+}
+
+function packageStateClass(item: PackageInfo): string {
+  if (['missing', 'unsupported', 'not-installed'].includes(item.state)) return 'failed'
+  if (item.state.startsWith('ready') || item.state === 'installed') return 'succeeded'
+  return 'warn'
+}
+
+async function copyPackageCommands(item: PackageInfo): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(item.install.commands.join('\n'))
+    copiedPackageId.value = item.id
+    setTimeout(() => {
+      if (copiedPackageId.value === item.id) copiedPackageId.value = ''
+    }, 1500)
+  } catch {
+    copiedPackageId.value = ''
+  }
 }
 
 function relativeTime(at?: number): string {
@@ -873,38 +892,52 @@ onBeforeUnmount(() => {
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>软件包与运行时</h2>
-              <p class="muted">只读清单 + 已支持的用户级操作。系统级安装只提供方法，不请求 root。</p>
+              <h2>软件包、运行时与依赖</h2>
+              <p class="muted">
+                依赖分为 SHE 托管组件、基础运行时、sandbox/agent 运行时。除已白名单化的 pnpm/core 操作外，
+                下方命令只展示安装方法，由你本人确认后执行；SHE 不执行 sudo，不请求 root。
+              </p>
             </div>
             <button class="secondary" :disabled="loading" @click="refresh">Refresh</button>
           </div>
           <div class="package-grid">
-            <article v-for="item in packages" :key="item.id" class="package-card">
+            <article v-for="item in packages" :key="item.id" :class="['package-card', { 'package-missing': ['missing', 'unsupported', 'not-installed'].includes(item.state) }]">
               <div class="sandbox-head">
                 <div>
                   <strong>{{ item.name }}</strong>
-                  <small>{{ item.kind }} · {{ item.management }}</small>
+                  <small>{{ item.kind }} · {{ item.requirement }} · {{ item.management }}</small>
                 </div>
-                <span class="pill">{{ item.state }}</span>
+                <span :class="['pill', packageStateClass(item)]">{{ item.state }}</span>
               </div>
               <div class="sandbox-meta">
-                <span>installed <b>{{ item.installedVersion ?? 'not installed' }}</b></span>
+                <span>installed <b>{{ item.installedVersion ?? 'not detected' }}</b></span>
                 <span v-if="item.previousVersion">previous <b>{{ item.previousVersion }}</b></span>
               </div>
+              <p class="muted small-note">用于：{{ item.requiredFor.join(' · ') || '—' }}</p>
               <p class="muted small-note">{{ item.note }}</p>
-              <div v-if="item.management === 'launcher'" class="package-actions">
-                <a class="secondary" href="./start.bat" download>Windows launcher</a>
-                <a class="secondary" href="./start.command" download>macOS launcher</a>
-                <a class="secondary" href="./start.sh" download>Linux launcher</a>
-              </div>
-              <div v-else-if="item.management === 'core-update'" class="package-actions">
-                <button class="primary" @click="active = 'setup'">打开 Core 更新</button>
-              </div>
-              <div v-else-if="item.management === 'bootstrap'" class="package-actions">
-                <button class="primary" :disabled="jobRunning" @click="runJob('bootstrap')">用户级准备 pnpm</button>
-              </div>
-              <div v-else class="package-actions">
-                <span class="muted small-note">需要管理员权限的安装步骤由用户本人完成；SHE 不执行 sudo。</span>
+              <div class="package-install">
+                <div class="package-install-head">
+                  <strong>{{ item.install.title }}</strong>
+                  <span class="pill">{{ item.install.mode }}</span>
+                </div>
+                <p class="muted small-note">{{ item.install.note }}</p>
+                <pre v-if="item.install.commands.length > 0" class="package-commands"><code>{{ item.install.commands.join('\n') }}</code></pre>
+                <div class="package-actions">
+                  <button v-if="item.install.commands.length > 0" class="secondary" @click="copyPackageCommands(item)">
+                    {{ copiedPackageId === item.id ? '已复制' : '复制安装命令' }}
+                  </button>
+                  <a v-if="item.install.url" class="secondary" :href="item.install.url" target="_blank" rel="noreferrer">官方文档 ↗</a>
+                  <template v-if="item.management === 'launcher'">
+                    <a class="secondary" href="./start.bat" download>Windows launcher</a>
+                    <a class="secondary" href="./start.command" download>macOS launcher</a>
+                    <a class="secondary" href="./start.sh" download>Linux launcher</a>
+                  </template>
+                  <button v-else-if="item.management === 'core-update'" class="primary" @click="active = 'setup'">打开 Core 更新</button>
+                  <button v-else-if="item.management === 'bootstrap'" class="primary" :disabled="jobRunning" @click="runJob('bootstrap')">用户级准备 pnpm</button>
+                </div>
+                <p v-if="item.management === 'instructions-only'" class="muted small-note package-manual-note">
+                  系统/运行时安装由你本人执行；SHE 只做检测和说明，不调用 sudo。
+                </p>
               </div>
             </article>
           </div>

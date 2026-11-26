@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Expanded Packages into a dependency catalog with requirement/usage metadata, platform-specific install commands, copy buttons, official docs links, and entries for git/bash/curl/tar/SHA-256/OpenCode alongside Docker/Node/pnpm/companion/core.
 - Improved preflight diagnostics: required vs optional/sandbox capabilities, Docker ENOENT/permission/daemon guidance, remediation text, and explicit `succeeded-with-warnings` messaging in Install & Doctor.
 - Local AI agent discovery and containerization migration assistant: process/port/cwd scan, dry-run plans, explicit credential-directory read-only mounts, broker-validated host mounts, one-click sandbox migration jobs, rollback on partial failure, and PWA Agent Migration page.
 - Core SHE protocol v1 for gateway, agent, and sandbox boundaries.

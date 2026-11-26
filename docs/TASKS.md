@@ -97,6 +97,7 @@
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
 | T6.8 | 跨平台安装/更新向导与支持矩阵页面 | T6.4/T3.7 | [ ] | Linux 已验证；macOS/Windows 明确状态 |
 | T6.9 | 本机 AI agent 发现、容器化迁移计划、凭据目录只读挂载与迁移记录 | T6.3/T3.3/T3.5 | [x] | 发现不读凭据内容；根目录 workspace 阻断；broker host mount 负例测试；PWA 勾选/配置/执行 |
+| T6.4f | Packages 依赖目录与缺失依赖安装指引 | T6.4e | [x] | requirement/用途/状态/安装命令/官方文档；不自动执行系统安装 |
 
 ## M7 Companion / Core 分层与自更新
 
@@ -146,3 +147,5 @@
 - 2026-11-26：完成 T6.9 首版：companion 只读扫描本机 AI agent 进程/端口/cwd/配置目录，新增迁移计划与 `agent-migrate` allowlisted job；PWA 增加 Agent Migration 页面，可勾选服务、配置 new/reuse workspace、`/legacy` 只读、凭据目录只读挂载、镜像/网络/资源；broker 增加受约束 host mount 与 command 支持，自动回滚本次已创建 sandbox。`pnpm test` 61/61 通过。
 
 - 2026-11-26：改进 preflight 信息质量：新增 requirement/feature/remediation 字段，区分 required toolchain 与 sandbox/Docker 能力；Docker 缺失时显示 `sandboxReady=false`、具体原因和平台安装指引；bootstrap/doctor 的 job 即使退出 0 也显示 warning 数量，避免“succeeded”被误读为全部能力就绪。
+
+- 2026-11-26：完成 T6.4f：Packages 扩展为 12 项依赖目录，新增 Node/pnpm/git/bash/curl/tar/SHA-256/Docker/OpenCode 等状态、用途、requirement、平台化安装命令、复制按钮和官方文档链接；补齐 `docs/PACKAGES.md`。

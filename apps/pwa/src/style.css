@@ -146,7 +146,12 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .packages-page { display: grid; gap: 16px; }
 .package-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
 .package-card { border: 1px solid #1e293b; border-radius: 14px; padding: 16px; background: #02061788; }
-.package-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.package-card.package-missing { border-color: #7f1d1d; background: #450a0a33; }
+.package-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+.package-install { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #334155; }
+.package-install-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 6px; }
+.package-commands { max-height: 220px; overflow: auto; white-space: pre-wrap; background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.6; }
+.package-manual-note { margin-top: 10px; color: #fbbf24 !important; }
 @media (max-width: 860px) { .package-grid { grid-template-columns: 1fr; } }
 
 .chat-page { max-width: 980px; }

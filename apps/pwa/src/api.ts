@@ -292,16 +292,27 @@ export async function checkCoreUpdate(manifestUrl: string): Promise<CoreUpdateCh
   return payload.value
 }
 
+export interface PackageInstallInfo {
+  readonly mode: 'managed' | 'user-local' | 'instructions-only' | 'external' | string
+  readonly title: string
+  readonly commands: readonly string[]
+  readonly url?: string
+  readonly note: string
+}
+
 export interface PackageInfo {
   readonly id: string
   readonly name: string
-  readonly kind: 'component' | 'core' | 'runtime' | string
+  readonly kind: 'component' | 'core' | 'runtime' | 'tool' | 'agent' | string
   readonly installedVersion: string | null
   readonly previousVersion?: string | null
   readonly state: string
-  readonly management: 'launcher' | 'core-update' | 'bootstrap' | 'instructions-only' | string
+  readonly requirement: 'required' | 'recommended' | 'sandbox' | 'optional' | string
+  readonly requiredFor: readonly string[]
+  readonly management: 'launcher' | 'core-update' | 'bootstrap' | 'instructions-only' | 'external' | string
   readonly manifestUrl?: string
   readonly note: string
+  readonly install: PackageInstallInfo
 }
 
 export async function loadPackages(signal?: AbortSignal): Promise<readonly PackageInfo[]> {

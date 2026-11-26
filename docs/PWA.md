@@ -202,10 +202,11 @@ SHE_TOKEN_FILE
   - 按需加载 CPU/memory/PIDs stats；
   - broker 离线时显示启动提示；
 - Packages：
-  - companion/core/runtime 清单；
-  - companion 一键 launcher 下载；
-  - core 更新入口；
-  - Node/pnpm/Docker 状态与 instructions-only 边界；
+  - companion/core/runtime/tooling/agent runtime 清单；
+  - requirement 与用途说明；
+  - 缺失依赖的安装/修复方法、复制命令和官方文档链接；
+  - companion launcher、core 更新和 pnpm bootstrap 入口；
+  - Node/pnpm/git/bash/curl/tar/SHA-256/Docker/OpenCode 状态；
 - Settings：
   - companion URL；
   - 连接状态；
