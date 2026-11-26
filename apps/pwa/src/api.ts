@@ -307,12 +307,12 @@ export interface PackageInfo {
   readonly installedVersion: string | null
   readonly previousVersion?: string | null
   readonly state: string
-  readonly requirement: 'required' | 'recommended' | 'sandbox' | 'optional' | string
-  readonly requiredFor: readonly string[]
+  readonly requirement?: 'required' | 'recommended' | 'sandbox' | 'optional' | string
+  readonly requiredFor?: readonly string[]
   readonly management: 'launcher' | 'core-update' | 'bootstrap' | 'instructions-only' | 'external' | string
   readonly manifestUrl?: string
   readonly note: string
-  readonly install: PackageInstallInfo
+  readonly install?: PackageInstallInfo
 }
 
 export async function loadPackages(signal?: AbortSignal): Promise<readonly PackageInfo[]> {

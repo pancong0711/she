@@ -36,6 +36,7 @@ import {
   type JobEvent,
   type JobSummary,
   type PackageInfo,
+  type PackageInstallInfo,
   type PreflightResult,
   type WorkerConfig,
 } from './api'
@@ -297,9 +298,18 @@ function packageStateClass(item: PackageInfo): string {
   return 'warn'
 }
 
+function packageInstall(item: PackageInfo): PackageInstallInfo {
+  return item.install ?? {
+    mode: item.management,
+    title: '安装/修复说明',
+    commands: [],
+    note: '当前 companion 版本较旧，尚未返回安装方法；请升级 companion 后重新加载。',
+  }
+}
+
 async function copyPackageCommands(item: PackageInfo): Promise<void> {
   try {
-    await navigator.clipboard.writeText(item.install.commands.join('\n'))
+    await navigator.clipboard.writeText(packageInstall(item).commands.join('\n'))
     copiedPackageId.value = item.id
     setTimeout(() => {
       if (copiedPackageId.value === item.id) copiedPackageId.value = ''
@@ -913,20 +923,20 @@ onBeforeUnmount(() => {
                 <span>installed <b>{{ item.installedVersion ?? 'not detected' }}</b></span>
                 <span v-if="item.previousVersion">previous <b>{{ item.previousVersion }}</b></span>
               </div>
-              <p class="muted small-note">用于：{{ item.requiredFor.join(' · ') || '—' }}</p>
+              <p class="muted small-note">用于：{{ (item.requiredFor ?? []).join(' · ') || '—' }}</p>
               <p class="muted small-note">{{ item.note }}</p>
               <div class="package-install">
                 <div class="package-install-head">
-                  <strong>{{ item.install.title }}</strong>
-                  <span class="pill">{{ item.install.mode }}</span>
+                  <strong>{{ packageInstall(item).title }}</strong>
+                  <span class="pill">{{ packageInstall(item).mode }}</span>
                 </div>
-                <p class="muted small-note">{{ item.install.note }}</p>
-                <pre v-if="item.install.commands.length > 0" class="package-commands"><code>{{ item.install.commands.join('\n') }}</code></pre>
+                <p class="muted small-note">{{ packageInstall(item).note }}</p>
+                <pre v-if="packageInstall(item).commands.length > 0" class="package-commands"><code>{{ packageInstall(item).commands.join('\n') }}</code></pre>
                 <div class="package-actions">
-                  <button v-if="item.install.commands.length > 0" class="secondary" @click="copyPackageCommands(item)">
+                  <button v-if="packageInstall(item).commands.length > 0" class="secondary" @click="copyPackageCommands(item)">
                     {{ copiedPackageId === item.id ? '已复制' : '复制安装命令' }}
                   </button>
-                  <a v-if="item.install.url" class="secondary" :href="item.install.url" target="_blank" rel="noreferrer">官方文档 ↗</a>
+                  <a v-if="packageInstall(item).url" class="secondary" :href="packageInstall(item).url" target="_blank" rel="noreferrer">官方文档 ↗</a>
                   <template v-if="item.management === 'launcher'">
                     <a class="secondary" href="./start.bat" download>Windows launcher</a>
                     <a class="secondary" href="./start.command" download>macOS launcher</a>
