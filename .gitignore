@@ -38,3 +38,6 @@ artifacts/
 # Local scratch
 tmp/
 scratch/
+
+# Local session/compact archives (may contain private conversation data)
+.feishu4dsh/
