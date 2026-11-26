@@ -4,7 +4,7 @@ import HelpPanel from './components/HelpPanel.vue'
 import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
 import WorkspaceAuthorizationPanel from './components/WorkspaceAuthorizationPanel.vue'
 import GatewayPanel from './components/GatewayPanel.vue'
-import type { AgentRuntimeStatus, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
+import type { AgentRuntimeStatus, ArtifactListItem, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
   COMPANION_BUNDLE_URL,
@@ -16,6 +16,7 @@ import {
   INSTALL_COMMANDS,
   REPO_URL,
   applyCompanionUpdate,
+  artifactDownloadUrl,
   checkCompanionUpdate,
   checkCoreUpdate,
   coreAction,
@@ -31,6 +32,7 @@ import {
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
+  loadTaskArtifacts,
   loadWorkerConfig,
   restartCompanion,
   saveWorkerConfig,
@@ -102,6 +104,7 @@ const chatInput = ref('')
 const chatSending = ref(false)
 const chatError = ref('')
 const chatTaskId = ref<string | null>(null)
+const chatArtifacts = ref<readonly ArtifactListItem[]>([])
 const chatStreamMessageId = ref<string | null>(null)
 const seenGatewayEvents = new Set<string>()
 let chatAbortController: AbortController | undefined
@@ -558,6 +561,14 @@ function appendChatDelta(text: string): void {
   message.text += text
 }
 
+async function refreshChatArtifacts(taskId: string): Promise<void> {
+  try {
+    chatArtifacts.value = await loadTaskArtifacts(taskId)
+  } catch {
+    // Artifact listing is auxiliary; the task result remains usable without it.
+  }
+}
+
 function handleGatewayEvent(event: GatewayServerEvent): void {
   if (event.type === 'render') {
     const key = `render:${event.render.renderId}:${String(event.render.sequence)}`
@@ -580,15 +591,24 @@ function handleGatewayEvent(event: GatewayServerEvent): void {
     appendChat('system', `tool ${taskEvent.toolName}: ${taskEvent.status}`)
     return
   }
+  if (taskEvent.type === 'artifact.created') {
+    const artifact = { ...taskEvent.artifact, downloadPath: artifactDownloadUrl(taskEvent.artifact.id) }
+    chatArtifacts.value = [...chatArtifacts.value.filter(item => item.id !== artifact.id), artifact]
+    return
+  }
   if (taskEvent.type === 'task.completed') {
+    const completedTaskId = taskEvent.taskId
     chatStreamMessageId.value = null
     appendChat('system', '任务完成')
+    void refreshChatArtifacts(completedTaskId)
     chatTaskId.value = null
     return
   }
   if (taskEvent.type === 'task.failed') {
+    const failedTaskId = taskEvent.taskId
     chatStreamMessageId.value = null
     appendChat('system', `任务失败：${taskEvent.error.message}`)
+    void refreshChatArtifacts(failedTaskId)
     chatTaskId.value = null
   }
 }
@@ -601,6 +621,7 @@ async function submitChat(): Promise<void> {
   chatInput.value = ''
   appendChat('user', text)
   chatStreamMessageId.value = null
+  chatArtifacts.value = []
   try {
     const result = await sendTaskToShe(text)
     if (result.taskId !== undefined) chatTaskId.value = result.taskId
@@ -917,6 +938,15 @@ onBeforeUnmount(() => {
               <span>{{ message.role }}</span>
               <p>{{ message.text }}</p>
             </div>
+          </div>
+          <div v-if="chatArtifacts.length > 0" class="chat-artifacts">
+            <div class="section-head">
+              <h3>报告与产物</h3>
+              <span class="pill">{{ chatArtifacts.length }}</span>
+            </div>
+            <a v-for="artifact in chatArtifacts" :key="artifact.id" :href="artifactDownloadUrl(artifact.id)" target="_blank" rel="noreferrer">
+              {{ artifact.fileName }} · {{ formatBytes(artifact.bytes) }} ↗
+            </a>
           </div>
           <p v-if="chatError" class="error-text">{{ chatError }}</p>
           <div class="chat-compose">

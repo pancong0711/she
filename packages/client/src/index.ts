@@ -12,6 +12,7 @@ import type {
   GatewaySnapshot,
   GatewayWelcome,
   AgentRuntimeStatus,
+  ArtifactListItem,
   Result,
   SheError,
 } from '@she/protocol'
@@ -139,6 +140,33 @@ export class SheClient {
   async agents(signal?: AbortSignal): Promise<AgentRuntimeStatus> {
     const response = await this.requestJson<unknown>('GET', '/v1/agents', undefined, signal)
     return unwrapResult<AgentRuntimeStatus>(response, 'agent status failed')
+  }
+
+  async downloadArtifact(artifactId: string, signal?: AbortSignal): Promise<{
+    readonly bytes: Uint8Array
+    readonly contentType: string | undefined
+    readonly contentDisposition: string | undefined
+  }> {
+    this.assertOpen()
+    const response = await this.openRequest('GET', `/v1/artifacts/${encodeURIComponent(artifactId)}/download`, undefined, signal)
+    const chunks: Buffer[] = []
+    for await (const chunk of response) chunks.push(Buffer.from(chunk))
+    const bytes = Buffer.concat(chunks)
+    if (response.statusCode === undefined || response.statusCode < 200 || response.statusCode >= 300) {
+      let payload: unknown
+      try { payload = JSON.parse(bytes.toString('utf8')) } catch { payload = undefined }
+      throw errorFromPayload(payload, 'not_found', `artifact download failed: HTTP ${response.statusCode ?? 'unknown'}`)
+    }
+    return {
+      bytes,
+      contentType: typeof response.headers['content-type'] === 'string' ? response.headers['content-type'] : undefined,
+      contentDisposition: typeof response.headers['content-disposition'] === 'string' ? response.headers['content-disposition'] : undefined,
+    }
+  }
+
+  async artifacts(taskId: string, signal?: AbortSignal): Promise<readonly ArtifactListItem[]> {
+    const response = await this.requestJson<unknown>('GET', `/v1/artifacts?taskId=${encodeURIComponent(taskId)}`, undefined, signal)
+    return unwrapResult<readonly ArtifactListItem[]>(response, 'artifact list failed')
   }
 
   async *events(options: SubscribeOptions = {}): AsyncIterable<GatewayServerEvent> {

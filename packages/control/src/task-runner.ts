@@ -1,5 +1,8 @@
 /** End-to-end task execution: queue claim -> agent adapter -> terminal state. */
 
+import { createHash } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { AgentAdapter } from '@she/agent-sdk'
 import type {
   AgentEventEnvelope,
@@ -9,6 +12,7 @@ import type {
 } from '@she/protocol'
 import {
   TASK_TERMINAL_STATUSES,
+  type Artifact,
   type DomainError,
   type Task,
   type TaskStatus,
@@ -143,7 +147,13 @@ export class TaskRunner {
         } else if (outcome.failure !== undefined) {
           final = await this.settleFailure(running.task, outcome.failure, 'agent_execution_failed')
         } else if (outcome.turnEnd?.reason === 'completed') {
-          final = await this.transitionRequired(running.task, 'succeeded', 'agent_turn_completed')
+          const reportArtifactId = await this.persistReport(running.task, outcome.events, input.workspacePath)
+          final = await this.transitionRequired(
+            running.task,
+            'succeeded',
+            'agent_turn_completed',
+            reportArtifactId === undefined ? {} : { reportArtifactId },
+          )
         } else if (outcome.turnEnd?.reason === 'cancelled') {
           final = await this.transitionRequired(running.task, 'interrupted', 'agent_turn_cancelled')
         } else if (outcome.turnEnd?.reason === 'max-tokens') {
@@ -194,6 +204,56 @@ export class TaskRunner {
       agentSession,
       agentEvents,
       finalStatus: final.task.status,
+    }
+  }
+
+  private async persistReport(
+    task: Task,
+    events: readonly AgentEventEnvelope[],
+    workspacePath: string | undefined,
+  ): Promise<string | undefined> {
+    if (workspacePath === undefined || workspacePath.trim() === '') return undefined
+    const text = events
+      .filter((envelope): envelope is AgentEventEnvelope & { event: { kind: 'text-delta'; text: string } } => envelope.event.kind === 'text-delta')
+      .map(envelope => envelope.event.text)
+      .join('')
+    if (text.trim() === '') return undefined
+    try {
+      const now = this.deps.clock.now()
+      const header = `# SHE task report\n\n- task: ${task.id}\n- topic: ${task.topicId}\n- generated: ${new Date(now).toISOString()}\n\n`
+      const bytes = Buffer.from(header + text, 'utf8').subarray(0, 1_048_576)
+      const relative = join('.she', 'reports', `${task.id}.md`).replace(/\\/g, '/')
+      const reportPath = join(workspacePath, '.she', 'reports', `${task.id}.md`)
+      await mkdir(join(workspacePath, '.she', 'reports'), { recursive: true, mode: 0o700 })
+      await writeFile(reportPath, bytes, { mode: 0o600 })
+      const artifact: Artifact = {
+        id: this.deps.ids.next('artifact'),
+        taskId: task.id,
+        kind: 'report',
+        fileName: `${task.id}.md`,
+        bytes: bytes.byteLength,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        storageRef: relative,
+        createdAt: now,
+      }
+      await this.deps.artifacts.save(artifact)
+      await this.deps.events.append([{
+        eventId: this.deps.ids.next('event'),
+        aggregateType: 'artifact',
+        aggregateId: artifact.id,
+        type: 'artifact.created',
+        occurredAt: now,
+        payload: {
+          artifactId: artifact.id,
+          taskId: artifact.taskId,
+          kind: artifact.kind,
+          fileName: artifact.fileName,
+          bytes: artifact.bytes,
+        },
+      }])
+      return artifact.id
+    } catch {
+      return undefined
     }
   }
 

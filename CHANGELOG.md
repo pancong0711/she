@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Added task report artifacts: successful tasks persist Markdown reports, emit artifact events, and expose list/download APIs with Chat download links.
 - Audit fixes: reset supervisor restart budget after stable uptime, launch supervisor from Windows installer, and quote Windows/XDG autostart paths.
 - Gateway page with loopback-only feishu4dsh health probing and explicit external secret boundary.
 - Added Gateway configuration/status page with loopback-only feishu4dsh health probing and explicit external secret boundary.

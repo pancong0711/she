@@ -65,6 +65,8 @@ SHE_VERSION
 | POST | `/v1/interactions` | 卡片/表单交互请求，返回 `Result<GatewayInteractionResult>` |
 | GET | `/v1/snapshot` | cursor 过期或重连后的只读状态重建 |
 | GET | `/v1/agents` | OpenCode health、worker 配置和 workspace 授权只读视图 |
+| GET | `/v1/artifacts?taskId=...` | 任务报告/产物元数据 |
+| GET | `/v1/artifacts/:id/download` | 下载任务报告/产物 |
 | GET | `/v1/events?cursor=evt:N` | NDJSON 事件流 |
 
 认证：配置 token 时，所有请求都需要：

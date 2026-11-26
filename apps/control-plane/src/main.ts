@@ -221,6 +221,8 @@ async function main(): Promise<void> {
     clock,
     workerStatus,
     agentStatus,
+    artifacts: store.artifacts,
+    artifactRoot: workspacePath,
   })
   await server.start()
   process.stdout.write(`she-control-plane listening on ${config.socketPath}\n`)

@@ -2,7 +2,7 @@
 /** Stable core-bundle entrypoint used by she-companion. */
 
 import { spawn } from 'node:child_process'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,6 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const nodeBin = process.execPath
 const children = []
 let shuttingDown = false
+const bundleVersion = await readFile(resolve(here, 'VERSION'), 'utf8').then(value => value.trim()).catch(() => process.env.SHE_VERSION?.trim() || '0.0.0')
 
 async function findEntry(label, explicit, bundledName, devRelativePath) {
   const candidates = explicit
@@ -25,7 +26,7 @@ async function findEntry(label, explicit, bundledName, devRelativePath) {
 function start(label, entry) {
   const child = spawn(nodeBin, [entry], {
     cwd: here,
-    env: process.env,
+    env: { ...process.env, SHE_VERSION: bundleVersion },
     stdio: ['ignore', 'inherit', 'inherit'],
   })
   children.push({ label, child })

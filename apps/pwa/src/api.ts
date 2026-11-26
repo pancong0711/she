@@ -1,5 +1,6 @@
 import type {
   AgentRuntimeStatus,
+  ArtifactListItem,
   GatewayHealth,
   GatewaySnapshot,
   SandboxBrokerHealth,
@@ -63,6 +64,14 @@ export async function loadSnapshot(signal?: AbortSignal): Promise<SnapshotResult
     getResult<GatewaySnapshot>('/v1/snapshot', signal),
   ])
   return { health, snapshot }
+}
+
+export async function loadTaskArtifacts(taskId: string, signal?: AbortSignal): Promise<readonly ArtifactListItem[]> {
+  return await getResult<readonly ArtifactListItem[]>(`/v1/artifacts?taskId=${encodeURIComponent(taskId)}`, signal)
+}
+
+export function artifactDownloadUrl(artifactId: string): string {
+  return `${apiBase()}/v1/artifacts/${encodeURIComponent(artifactId)}/download`
 }
 
 export async function loadAgentRuntime(signal?: AbortSignal): Promise<AgentRuntimeStatus> {
@@ -478,11 +487,11 @@ export interface CoreUpdateCheck {
   readonly manifest: unknown
 }
 
-export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
+export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.3.3'
-export const COMPANION_MIN_VERSION = '0.3.3'
-export const COMPANION_RELEASE_TAG = 'v0.3.3-companion.1'
+export const COMPANION_RELEASE_VERSION = '0.3.4'
+export const COMPANION_MIN_VERSION = '0.3.4'
+export const COMPANION_RELEASE_TAG = 'v0.3.4-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

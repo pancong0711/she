@@ -385,6 +385,11 @@ export interface GatewayTaskSnapshot {
  * Read-only snapshot used when an event cursor has expired or a gateway needs
  * to rebuild task state after reconnecting.
  */
+export interface ArtifactListItem extends ArtifactRef {
+  /** Safe local control-plane download path. */
+  readonly downloadPath: string
+}
+
 export interface GatewaySnapshot {
   readonly protocolVersion: GatewayProtocolVersion
   readonly generatedAt: number

@@ -91,7 +91,7 @@
 | T6.4c3 | PWA 一键 launcher（start.bat / start.command / start.sh） | T6.4c2 | [x] | 下载后自动校验/安装/启动/打开浏览器；不请求 root | checksum/签名、无 root、可回滚 |
 | T6.4d | 特权环境（Docker/rootless/系统依赖）instructions-only 支持矩阵 | T6.4b | [x] | 只展示方法；不执行 sudo/不请求 root | 显式同意、checksum、审计、回滚 | PWA 点击触发并实时显示 stdout/stderr | 校验、权限确认、日志、回滚入口 |
 | T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [~] | 只允许叶子目录；不可绕过 broker | 授权注册表/PWA 页面完成；Agent Migration 绑定完成；worker 直接模式待统一 |
-| T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [~] |
+| T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [~] | 首版 report artifact 完成；任意工具输出/二进制产物待补 |
 | T6.6a | Agent worker + PWA Chat：提交、事件流、实时 text/tool 状态 | T6.6/M2 | [x] | worker+OpenCode+agent.delta 实测 |
 | T6.6b | PWA Settings：worker/OpenCode/workspace 配置与重启应用 | T6.6a | [x] | 0600 config；密码仅路径；core restart 后生效 | 与 CLI/gateway 共用同一控制面会话 |
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [~] | 不暴露/不读取飞书 secret 给 agent | 配置/health/secret boundary 页面完成；真机联调待 T4.6 |
@@ -171,3 +171,5 @@
 - 2026-11-26：完成 T6.10：新增 `/api/autostart` 与 Settings 登录自启动开关（Linux systemd --user/XDG、macOS LaunchAgent、Windows Startup）；安装版 companion 检测 `sourceCheckout=false` 并隐藏/阻断源码安装/构建/测试 job；Docker 安装指引按 Ubuntu/Debian/Fedora/Arch/macOS/Windows 生成具体命令。
 
 - 2026-11-26：T6.7 首版：新增 `/api/gateway` 与 PWA Gateway 页面；配置仅保存 loopback adapter health URL，显示 control-plane gateway.v1 状态与 adapter health；明确飞书 secret 由 feishu4dsh 持有。
+
+- 2026-11-26：T6.6 首版：TaskRunner 成功任务自动生成 Markdown report artifact（workspace/.she/reports），写 artifact repository 与 artifact.created 事件；control-plane 新增 artifact list/download API；PWA Chat 显示报告下载链接。

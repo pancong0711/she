@@ -1,8 +1,8 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { InMemoryEventStore } from '@she/control'
+import { InMemoryArtifactRepository, InMemoryEventStore } from '@she/control'
 import { SheClient, SheClientError } from '@she/client'
 import type { SheDomainEvent } from '@she/core'
 import {
@@ -38,6 +38,21 @@ async function harness() {
   const dir = await mkdtemp(join(tmpdir(), 'she-server-'))
   const socketPath = join(dir, 'control.sock')
   const eventStore = new InMemoryEventStore()
+  const artifacts = new InMemoryArtifactRepository()
+  const artifactRoot = join(dir, 'workspace')
+  await mkdir(join(artifactRoot, '.she', 'reports'), { recursive: true })
+  const reportBytes = Buffer.from('# SHE report\n\ncompleted\n', 'utf8')
+  await writeFile(join(artifactRoot, '.she', 'reports', 'task-1.md'), reportBytes)
+  await artifacts.save({
+    id: 'artifact-1',
+    taskId: 'task-1',
+    kind: 'report',
+    fileName: 'task-1.md',
+    bytes: reportBytes.byteLength,
+    sha256: 'a'.repeat(64),
+    storageRef: '.she/reports/task-1.md',
+    createdAt: 1_700_000_000_000,
+  })
   const command = GATEWAY_V1_FIXTURES.commandRequest.command as GatewayCommandInvocation
   const handlers = {
     async command(input: GatewayCommandInvocation) {
@@ -83,6 +98,8 @@ async function harness() {
     eventStore,
     workerStatus: () => ({ enabled: true, state: 'idle', updatedAt: 1_700_000_000_000 }),
     agentStatus: () => agentStatus,
+    artifacts,
+    artifactRoot,
     eventPollIntervalMs: 5,
     heartbeatIntervalMs: 10_000,
     clock: { now: () => 1_700_000_000_000 },
@@ -92,7 +109,7 @@ async function harness() {
     await server.close()
     await rm(dir, { recursive: true, force: true })
   })
-  return { socketPath, eventStore, client: new SheClient({ socketPath, token: 'test-token', timeoutMs: 1_000 }) }
+  return { socketPath, eventStore, artifacts, artifactRoot, client: new SheClient({ socketPath, token: 'test-token', timeoutMs: 1_000 }) }
 }
 
 afterEach(async () => {
@@ -137,6 +154,16 @@ describe('control-plane gateway.v1 server', () => {
       workspace: { leafAuthorized: true, readOnly: false, writable: true },
     })
     expect(JSON.stringify(status)).not.toContain('credentialContent')
+  })
+
+  it('lists and downloads persisted task report artifacts', async () => {
+    const { client } = await harness()
+    const list = await client.artifacts('task-1')
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ id: 'artifact-1', fileName: 'task-1.md', downloadPath: '/v1/artifacts/artifact-1/download' })
+    const download = await client.downloadArtifact('artifact-1')
+    expect(Buffer.from(download.bytes).toString('utf8')).toContain('# SHE report')
+    expect(download.contentType).toContain('text/markdown')
   })
 
   it('returns structured errors for authentication failures', async () => {

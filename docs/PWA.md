@@ -198,6 +198,7 @@ SHE_TOKEN_FILE
   - 凭据文件只显示路径；
   - worker workspace 的 realpath、r/w/x、readOnly 和叶子目录授权状态；
 - Chat：
+  - 任务完成后显示 Markdown 报告下载；
   - 通过 `/she submit` 布置任务；
   - 实时显示 agent text delta、tool call、完成/失败；
   - worker 状态和 disabled 提示；

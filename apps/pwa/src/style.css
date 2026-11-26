@@ -212,3 +212,8 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 /* User-level companion autostart */
 .autostart-block { margin-top: 20px; padding-top: 16px; border-top: 1px dashed #334155; }
 .autostart-block h3 { margin: 0; }
+
+/* Chat report artifacts */
+.chat-artifacts { margin-top: 16px; padding: 14px; border: 1px solid #1e293b; border-radius: 12px; background: #02061766; display: grid; gap: 8px; }
+.chat-artifacts h3 { margin: 0; font-size: 15px; }
+.chat-artifacts a { color: #38bdf8; text-decoration: none; overflow-wrap: anywhere; }

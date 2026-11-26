@@ -1,9 +1,9 @@
 /** HTTP/JSON-over-Unix-socket gateway.v1 server for the SHE control plane. */
 
-import { chmod, mkdir, unlink } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { chmod, mkdir, readFile, unlink } from 'node:fs/promises'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import type { Clock, EventStore, SheDomainEvent, StoredEvent } from '@she/core'
+import type { ArtifactRepository, Clock, EventStore, SheDomainEvent, StoredEvent } from '@she/core'
 import type {
   CapabilitySet,
   GatewayCommandInvocation,
@@ -18,6 +18,7 @@ import type {
   GatewayWelcome,
   GatewayWorkerHealth,
   AgentRuntimeStatus,
+  ArtifactListItem,
   SheError,
 } from '@she/protocol'
 import {
@@ -50,6 +51,8 @@ export interface ControlPlaneServerOptions {
   readonly maxBodyBytes?: number
   readonly workerStatus?: () => Promise<GatewayWorkerHealth> | GatewayWorkerHealth
   readonly agentStatus?: () => Promise<AgentRuntimeStatus> | AgentRuntimeStatus
+  readonly artifacts?: ArtifactRepository
+  readonly artifactRoot?: string
 }
 
 export class ControlPlaneHttpError extends Error {
@@ -287,6 +290,8 @@ export class ControlPlaneServer {
   private readonly maxBodyBytes: number
   private readonly workerStatus: (() => Promise<GatewayWorkerHealth> | GatewayWorkerHealth) | undefined
   private readonly agentStatus: (() => Promise<AgentRuntimeStatus> | AgentRuntimeStatus) | undefined
+  private readonly artifacts: ArtifactRepository | undefined
+  private readonly artifactRoot: string | undefined
   private httpServer: Server | undefined
   private readonly streams = new Set<ServerResponse>()
 
@@ -306,6 +311,8 @@ export class ControlPlaneServer {
     this.maxBodyBytes = options.maxBodyBytes ?? 1_048_576
     this.workerStatus = options.workerStatus
     this.agentStatus = options.agentStatus
+    this.artifacts = options.artifacts
+    this.artifactRoot = options.artifactRoot
     if (this.eventPollIntervalMs < 1) throw new Error('eventPollIntervalMs must be positive')
     if (this.eventBatchSize < 1) throw new Error('eventBatchSize must be positive')
   }
@@ -364,6 +371,60 @@ export class ControlPlaneServer {
           return
         }
         jsonWrite(response, 200, resultOk(await this.agentStatus()))
+        return
+      }
+      if (request.method === 'GET' && url.pathname === '/v1/artifacts') {
+        if (this.artifacts === undefined) {
+          jsonWrite(response, 404, resultErr(sheError('not_found', 'artifact store is not configured')))
+          return
+        }
+        const taskId = url.searchParams.get('taskId')?.trim() ?? ''
+        if (taskId === '') {
+          jsonWrite(response, 400, resultErr(sheError('invalid_request', 'taskId query parameter is required')))
+          return
+        }
+        const artifacts = await this.artifacts.listByTask(taskId)
+        const value: ArtifactListItem[] = artifacts.map(artifact => ({
+          id: artifact.id,
+          fileName: artifact.fileName,
+          bytes: artifact.bytes,
+          sha256: artifact.sha256,
+          taskId: artifact.taskId,
+          downloadPath: `/v1/artifacts/${encodeURIComponent(artifact.id)}/download`,
+        }))
+        jsonWrite(response, 200, resultOk(value))
+        return
+      }
+      if (request.method === 'GET' && /^\/v1\/artifacts\/[^/]+\/download$/.test(url.pathname)) {
+        if (this.artifacts === undefined || this.artifactRoot === undefined) {
+          jsonWrite(response, 404, resultErr(sheError('not_found', 'artifact download is not configured')))
+          return
+        }
+        const artifactId = decodeURIComponent(url.pathname.split('/')[3] ?? '')
+        const artifact = await this.artifacts.get(artifactId)
+        if (artifact === undefined) {
+          jsonWrite(response, 404, resultErr(sheError('not_found', `artifact not found: ${artifactId}`)))
+          return
+        }
+        const storageRef = artifact.storageRef.replace(/\\/g, '/')
+        const filePath = resolve(this.artifactRoot, storageRef)
+        const rel = relative(resolve(this.artifactRoot), filePath)
+        if (isAbsolute(storageRef) || rel.startsWith('..') || isAbsolute(rel)) {
+          jsonWrite(response, 403, resultErr(sheError('forbidden', 'artifact storage path escapes the workspace')))
+          return
+        }
+        try {
+          const bytes = await readFile(filePath)
+          response.writeHead(200, {
+            'content-type': 'text/markdown; charset=utf-8',
+            'content-length': bytes.byteLength,
+            'content-disposition': `attachment; filename="${artifact.fileName.replace(/["\\\r\n]/g, '_')}"`,
+            'cache-control': 'no-store',
+          })
+          response.end(bytes)
+        } catch {
+          jsonWrite(response, 404, resultErr(sheError('not_found', 'artifact file is missing')))
+        }
         return
       }
       if (request.method === 'POST' && url.pathname === '/v1/hello') {

@@ -70,7 +70,7 @@ pnpm companion
 
 # core bundle（供 companion 更新使用）
 pnpm build:core
-bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-root ~/.local/share/she/core
+bash scripts/install-core-bundle.sh artifacts/core/she-core-0.2.0.tar.gz --core-root ~/.local/share/she/core
 ```
 
 - 本地同源模式：`http://127.0.0.1:8787`
@@ -96,6 +96,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-
 - [0.1.0 公开包 Release](docs/RELEASE-0.1.0-PACKAGES.md)
 - [对 feishu4dsh 下一步建议的回复](docs/20261125-feishu4dsh-next-steps-response.md)
 - [SHE core bundle 0.1.0](docs/RELEASE-0.1.0-CORE.md)
+- [SHE core 0.2.0 发布说明](docs/RELEASE-0.2.0-CORE.md)
 - [SHE companion bundle 0.1.0](docs/RELEASE-0.1.0-COMPANION.md)
 - [Control-plane gateway.v1 server](docs/CONTROL-PLANE-SERVER.md)
 - [OpenCode agent adapter](docs/OPENCODE-ADAPTER.md)
@@ -117,10 +118,12 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-
 - [ADR-0003：页面请求、supervisor 执行的 companion 更新](docs/ADR-0003-supervised-companion-update.md)
 - [Companion 登录自启动](docs/AUTOSTART.md)
 - [Gateway 配置与 feishu4dsh 连接状态](docs/GATEWAY.md)
+- [Task Report Artifacts](docs/ARTIFACTS.md)
 - [SHE companion 0.3.0 发布说明](docs/RELEASE-0.3.0-COMPANION.md)
 - [SHE companion 0.3.1 发布说明](docs/RELEASE-0.3.1-COMPANION.md)
 - [SHE companion 0.3.2 发布说明](docs/RELEASE-0.3.2-COMPANION.md)
 - [SHE companion 0.3.3 发布说明](docs/RELEASE-0.3.3-COMPANION.md)
+- [SHE companion 0.3.4 发布说明](docs/RELEASE-0.3.4-COMPANION.md)
 - [ADR-0002：不请求、不执行 root](docs/ADR-0002-no-root-privilege-policy.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)

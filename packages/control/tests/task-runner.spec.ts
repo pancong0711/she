@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentAdapter } from '@she/agent-sdk'
 import type {
   AgentAdapterDescriptor,
@@ -112,6 +115,12 @@ class FakeAgent implements AgentAdapter {
   async dispose(_sessionId: string): Promise<void> {}
 }
 
+const cleanup: (() => Promise<void>)[] = []
+
+afterEach(async () => {
+  await Promise.all(cleanup.splice(0).map(run => run()))
+})
+
 function createHarness(behavior: FakeBehavior = 'success') {
   const clock = new FixedClock(1_000)
   const ids = new SequentialIdGenerator()
@@ -129,6 +138,7 @@ function createHarness(behavior: FakeBehavior = 'success') {
     requests,
     leases,
     events,
+    artifacts,
     service: new TaskService(deps),
     runner: new TaskRunner({ ...deps, agent: new FakeAgent(clock, behavior) }, { defaultLeaseTtlMs: 100 }),
   }
@@ -153,6 +163,28 @@ describe('TaskRunner', () => {
     expect(await leases.findByTaskId(submitted.task.id)).toBeUndefined()
     const page = await events.readAfter(null)
     expect(page.events.some(item => item.event.type === 'task.agent_event')).toBe(true)
+  })
+
+  it('persists a markdown report artifact for a successful task workspace', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'she-report-'))
+    cleanup.push(async () => rm(workspace, { recursive: true, force: true }))
+    const { service, runner, artifacts, events } = createHarness('success')
+    const submitted = await service.submit({
+      conversationKey: 'chat-1',
+      workspaceKey: 'workspace-1',
+      request: 'write a report',
+    })
+    const result = await runner.runNext({ topicId: submitted.topic.id, ownerId: 'worker-1', workspacePath: workspace })
+    expect(result?.finalStatus).toBe('succeeded')
+    expect(result?.task.reportArtifactId).toBeTruthy()
+    const list = await artifacts.listByTask(submitted.task.id)
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ kind: 'report', fileName: `${submitted.task.id}.md` })
+    const report = await readFile(join(workspace, list[0].storageRef), 'utf8')
+    expect(report).toContain('# SHE task report')
+    expect(report).toContain('working')
+    const page = await events.readAfter(null)
+    expect(page.events.some(item => item.event.type === 'artifact.created')).toBe(true)
   })
 
   it('marks the task failed and releases its lease when the adapter throws', async () => {

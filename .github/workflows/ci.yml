@@ -49,7 +49,8 @@ jobs:
       - name: Build and install core bundle
         run: |
           pnpm build:core
-          bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-root /tmp/she-core-install
+          CORE_BUNDLE="artifacts/core/$(node -e "process.stdout.write(require('./artifacts/core/release-manifest.json').bundle.file)")"
+          bash scripts/install-core-bundle.sh "$CORE_BUNDLE" --core-root /tmp/she-core-install
           test -x /tmp/she-core-install/current/run-core.sh
 
       - name: Build and install companion bundle

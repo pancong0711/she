@@ -27,7 +27,7 @@ async function sha256(path) {
 
 const args = parseArgs(process.argv.slice(2))
 const repoRoot = resolve(args.root ?? process.cwd())
-const packageJson = JSON.parse(await readFile(resolve(repoRoot, 'package.json'), 'utf8'))
+const packageJson = JSON.parse(await readFile(resolve(repoRoot, 'apps/control-plane/package.json'), 'utf8'))
 const commit = args.commit ?? (await execFileAsync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'])).stdout.trim()
 const bundle = args.bundle ? resolve(repoRoot, args.bundle) : undefined
 const bundleInfo = bundle === undefined ? undefined : {
