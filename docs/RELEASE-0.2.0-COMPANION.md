@@ -1,8 +1,8 @@
 # SHE companion 0.2.0 发布说明
 
-> Release：`v0.2.0-companion.1`
+> Release：`v0.2.0-companion.2`
 > 日期：2026-11-26
-> 状态：待创建/已发布后更新
+> 状态：已发布（compatibility release .2）
 
 ## 1. 为什么升级 companion 版本
 
@@ -31,7 +31,7 @@ install-companion.ps1
 下载地址：
 
 ```text
-https://github.com/pancong0711/she/releases/tag/v0.2.0-companion.1
+https://github.com/pancong0711/she/releases/tag/v0.2.0-companion.2
 ```
 
 ## 3. 包含内容
@@ -91,7 +91,7 @@ bash install-companion.sh she-companion-0.2.0.tar.gz \
 或：
 
 ```bash
-SHE_COMPANION_RELEASE_TAG=v0.2.0-companion.1 bash start.sh
+SHE_COMPANION_RELEASE_TAG=v0.2.0-companion.2 bash start.sh
 ```
 
 ## 6. 校验
@@ -105,3 +105,9 @@ SHE_COMPANION_RELEASE_TAG=v0.2.0-companion.1 bash start.sh
 - `/api/workspaces`、`/api/platform`、`/api/packages` 可用；
 - Pages 的 start.sh 下载新 tag；
 - 旧 0.1.0 安装可通过 launcher 升级到 0.2.0。
+
+## 7. 为什么有 companion.2
+
+首次发布 `.1` 后，GitHub Release 的 `companion-release-manifest.json` URL 出现 CDN 缓存与更新后的 bundle 不一致，launcher 校验 SHA-256 时发现 manifest 仍是旧 hash。
+
+Release 资产 URL 应视为不可变：修复方式不是覆盖同一 tag，而是发布新的 `v0.2.0-companion.2`，launcher 默认 tag 同步更新。

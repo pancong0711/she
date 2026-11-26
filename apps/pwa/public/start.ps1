@@ -3,7 +3,7 @@
 # starts the local companion, and opens the PWA. Never elevates or requests admin.
 $ErrorActionPreference = 'Stop'
 
-$Tag = if ($env:SHE_COMPANION_RELEASE_TAG) { $env:SHE_COMPANION_RELEASE_TAG } else { 'v0.2.0-companion.1' }
+$Tag = if ($env:SHE_COMPANION_RELEASE_TAG) { $env:SHE_COMPANION_RELEASE_TAG } else { 'v0.2.0-companion.2' }
 $Base = if ($env:SHE_COMPANION_RELEASE_BASE) { $env:SHE_COMPANION_RELEASE_BASE } else { "https://github.com/pancong0711/she/releases/download/$Tag" }
 $InstallRoot = if ($env:SHE_COMPANION_ROOT) { $env:SHE_COMPANION_ROOT } else { Join-Path $env:LOCALAPPDATA 'she\companion' }
 $BinDir = if ($env:SHE_BIN_DIR) { $env:SHE_BIN_DIR } else { Join-Path $env:LOCALAPPDATA 'she\bin' }

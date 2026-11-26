@@ -137,3 +137,7 @@ GATEWAY_V1_SERVER_EVENT
 - [ ] README / CHANGELOG / 兼容矩阵已更新；
 - [ ] 记录 SHA-256 与 commit；
 - [ ] 在 feishu4dsh 临时分支完成 fake server/只读闭环后再升级为正式依赖。
+
+## Release asset immutability
+
+不要把已发布 Release 的 manifest/bundle 当作可变文件反复覆盖。GitHub/CDN 可能缓存旧 manifest，导致 launcher 的 SHA-256 校验不一致。修复时发布新的 tag（例如 `v0.2.0-companion.2`），并更新 launcher 默认 tag。
