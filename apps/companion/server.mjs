@@ -16,6 +16,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
+import { dockerGuidance, summarizePreflight } from './preflight.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -180,8 +181,11 @@ function captureCommand(job, command, args) {
       if (job !== undefined) appendLog(job, 'stderr', text)
     })
     child.on('error', error => {
-      if (job !== undefined) appendJobEvent(job, { type: 'system', text: `spawn failed: ${error.message}` })
-      finish({ code: 127, ok: false, stdout: '', stderr: error.message })
+      const message = error?.code === 'ENOENT'
+        ? `command not found: ${command}`
+        : `failed to start ${command}: ${error.message}`
+      if (job !== undefined) appendJobEvent(job, { type: 'system', text: message })
+      finish({ code: 127, ok: false, stdout: '', stderr: message })
     })
     child.on('close', code => finish({
       code: code ?? 1,
@@ -211,54 +215,147 @@ function pnpmVersionSupported(version) {
 
 async function runPreflight(job) {
   const checks = []
-  const add = (status, label, detail) => {
-    const check = { type: 'check', status, label, detail }
+  const add = (status, label, detail, options = {}) => {
+    const check = {
+      type: 'check',
+      status,
+      label,
+      detail,
+      requirement: options.requirement ?? 'recommended',
+      ...(options.feature === undefined ? {} : { feature: options.feature }),
+      ...(options.remediation === undefined ? {} : { remediation: options.remediation }),
+    }
     checks.push(check)
     appendJobEvent(job, check)
   }
-  const checkPath = async (label, path) => {
+  const checkPath = async (label, path, options = {}) => {
     try {
       const info = await stat(path)
       const kind = info.isSocket() ? 'socket' : info.isFile() ? 'file' : info.isDirectory() ? 'directory' : 'path'
-      add('ok', label, `${path} (${kind})`)
+      add('ok', label, `${path} (${kind})`, options)
     } catch {
-      add('warn', label, `missing: ${path}`)
+      add('warn', label, `missing: ${path}`, {
+        ...options,
+        ...(options.remediation === undefined ? { remediation: '启动对应的 SHE core 组件后重新检查。' } : {}),
+      })
     }
   }
 
   const uid = typeof process.getuid === 'function' ? process.getuid() : undefined
-  add(uid === 0 ? 'fail' : 'ok', 'user', uid === undefined ? 'uid unavailable on this platform' : uid === 0 ? 'SHE companion must not run as root' : `uid=${String(uid)}; no sudo/root execution`)
+  add(
+    uid === 0 ? 'fail' : 'ok',
+    'user',
+    uid === undefined ? 'uid unavailable on this platform' : uid === 0 ? 'SHE companion must not run as root' : `uid=${String(uid)}; no sudo/root execution`,
+    { requirement: 'required', remediation: '使用普通用户重新运行 SHE companion；不要使用 sudo 或 root。' },
+  )
 
   const nodeVersion = process.versions.node
-  add(nodeVersionSupported(nodeVersion) ? 'ok' : 'fail', 'Node.js', `v${nodeVersion}; required ^22.19.0 || >=24.0.0`)
+  add(
+    nodeVersionSupported(nodeVersion) ? 'ok' : 'fail',
+    'Node.js',
+    `v${nodeVersion}; required ^22.19.0 || >=24.0.0`,
+    { requirement: 'required', remediation: '安装 Node.js ^22.19.0 或 >=24.0.0 后重启 companion。' },
+  )
 
   const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
   const pnpmResult = await captureCommand(job, pnpmCommand, ['--version'])
-  add(pnpmResult.ok && pnpmVersionSupported(pnpmResult.stdout) ? 'ok' : 'fail', 'pnpm', pnpmResult.ok ? `${pnpmResult.stdout}; required >=11.22.0` : pnpmResult.stderr || 'not found')
+  add(
+    pnpmResult.ok && pnpmVersionSupported(pnpmResult.stdout) ? 'ok' : 'fail',
+    'pnpm',
+    pnpmResult.ok ? `${pnpmResult.stdout}; required >=11.22.0` : (pnpmResult.stderr || 'not found'),
+    { requirement: 'required', remediation: '点击“用户级环境准备（不请求 root）”，或按文档安装 pnpm >=11.22.0。' },
+  )
 
   const gitResult = await captureCommand(job, 'git', ['--version'])
-  add(gitResult.ok ? 'ok' : 'warn', 'git', gitResult.ok ? gitResult.stdout : (gitResult.stderr || 'not installed; needed for clone/update'))
+  add(
+    gitResult.ok ? 'ok' : 'warn',
+    'git',
+    gitResult.ok ? gitResult.stdout : (gitResult.stderr || 'not installed; needed for clone/update'),
+    { requirement: 'recommended', remediation: '如需从源码克隆或更新仓库，请由你本人安装 git。' },
+  )
 
+  // A sandbox runtime is optional for companion/core/worker basics but
+  // required for broker containers, Sandboxes and Agent Migration.
   const dockerResult = await captureCommand(job, 'docker', ['version', '--format', '{{.Server.Version}}'])
-  const dockerSecurity = await captureCommand(job, 'docker', ['info', '--format', '{{json .SecurityOptions}}'])
-  if (!dockerResult.ok) {
-    add('warn', 'Docker runtime', dockerResult.stderr || 'not available; sandbox features will be degraded. Install/configure Docker yourself if needed; SHE will not request root.')
-  } else if (dockerSecurity.ok && dockerSecurity.stdout.includes('rootless')) {
-    add('ok', 'Docker runtime', `rootless Docker ${dockerResult.stdout}`)
+  let dockerSecurity
+  if (dockerResult.ok) {
+    dockerSecurity = await captureCommand(job, 'docker', ['info', '--format', '{{json .SecurityOptions}}'])
+    if (dockerSecurity.ok && dockerSecurity.stdout.includes('rootless')) {
+      add('ok', 'Docker sandbox runtime', `rootless Docker ${dockerResult.stdout}`, {
+        requirement: 'sandbox',
+        feature: 'sandbox',
+      })
+    } else {
+      add(
+        'warn',
+        'Docker sandbox runtime',
+        `Docker ${dockerResult.stdout} 可访问，但未检测到 rootless；通过 docker 组访问可能是 root-equivalent。`,
+        {
+          requirement: 'sandbox',
+          feature: 'sandbox',
+          remediation: '如需要更强隔离，由你本人改用 rootless Docker；SHE 不会伪装它是 rootless。',
+        },
+      )
+    }
   } else {
-    add('warn', 'Docker runtime', `Docker ${dockerResult.stdout} is accessible to this user but not detected as rootless; access may be root-equivalent. SHE does not request or execute root.`)
+    const guidance = dockerGuidance(dockerResult)
+    add('warn', 'Docker sandbox runtime', guidance.detail, {
+      requirement: 'sandbox',
+      feature: 'sandbox',
+      remediation: guidance.remediation,
+    })
   }
 
-  await checkPath('control-plane build', join(repoRoot, 'apps/control-plane/dist/main.js'))
-  await checkPath('broker build', join(repoRoot, 'apps/broker/dist/main.js'))
-  await checkPath('PWA build', join(distDir, 'index.html'))
-  await checkPath('control socket', controlSocketPath)
-  await checkPath('broker socket', brokerSocketPath)
+  await checkPath('control-plane build', join(repoRoot, 'apps/control-plane/dist/main.js'), {
+    requirement: 'development',
+    feature: 'control-plane',
+    remediation: '开发态运行 `pnpm build`；安装版应通过 Core 更新安装 core bundle。',
+  })
+  await checkPath('broker build', join(repoRoot, 'apps/broker/dist/main.js'), {
+    requirement: 'development',
+    feature: 'broker',
+    remediation: '开发态运行 `pnpm build`；安装版应通过 Core 更新安装 core bundle。',
+  })
+  await checkPath('PWA build', join(distDir, 'index.html'), {
+    requirement: 'development',
+    feature: 'pwa',
+    remediation: '开发态运行 `pnpm pwa:build`。',
+  })
+  await checkPath('control socket', controlSocketPath, {
+    requirement: 'runtime',
+    feature: 'control-plane',
+    remediation: '在 Install & Doctor 的 Core 版本与更新中安装/启动 core。',
+  })
+  await checkPath('broker socket', brokerSocketPath, {
+    requirement: 'runtime',
+    feature: 'broker',
+    remediation: '在 Install & Doctor 的 Core 版本与更新中安装/启动 core（broker 随 core 启动）。',
+  })
 
-  const ok = checks.filter(check => check.type === 'check' && check.status === 'fail').length === 0
-  lastPreflight = { at: Date.now(), ok, checks }
-  appendJobEvent(job, { type: 'system', text: ok ? 'preflight passed' : 'preflight failed; install/build actions may be unsafe to continue' })
-  return { ok, checks }
+  const outcome = summarizePreflight(checks, dockerResult.ok)
+  const { failures, warnings, ok, sandboxReady, summary } = outcome
+  lastPreflight = { at: Date.now(), ok, sandboxReady, checks, warnings, summary }
+  if (ok) {
+    appendJobEvent(job, { type: 'system', text: 'preflight passed: required toolchain is ready.' })
+    if (warnings.length > 0) {
+      appendJobEvent(job, { type: 'system', text: `preflight completed with ${String(warnings.length)} warning(s); optional/full capabilities may be unavailable.` })
+      for (const warning of warnings) {
+        appendJobEvent(job, {
+          type: 'system',
+          text: `${warning.label} 不可用或有风险：${warning.detail}${warning.remediation === undefined ? '' : ` 修复：${warning.remediation}`}`,
+        })
+      }
+    }
+  } else {
+    appendJobEvent(job, { type: 'system', text: 'preflight failed; fix required checks before continuing.' })
+    for (const failure of failures) {
+      appendJobEvent(job, {
+        type: 'system',
+        text: `${failure.label} 不满足要求：${failure.detail}${failure.remediation === undefined ? '' : ` 修复：${failure.remediation}`}`,
+      })
+    }
+  }
+  return { ok, sandboxReady, checks, warnings, failures, summary }
 }
 
 
@@ -660,7 +757,14 @@ async function executeJob(job) {
         ? await runCommand(job, 'powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(repoRoot, 'scripts/bootstrap-user.ps1'), 'install-pnpm'])
         : await runCommand(job, 'bash', [join(repoRoot, 'scripts/bootstrap-user.sh'), '--install-pnpm'])
       job.exitCode = result.code
-      if (result.ok) await runPreflight(job)
+      if (result.ok) {
+        const preflight = await runPreflight(job)
+        if (preflight.sandboxReady) {
+          appendJobEvent(job, { type: 'system', text: '用户级环境准备完成；基础工具链和 sandbox runtime 均可用。' })
+        } else {
+          appendJobEvent(job, { type: 'system', text: '用户级环境准备完成，但 Docker sandbox runtime 不可用。基础 companion/core/worker 仍可用；Sandbox、Agent Migration 和 broker 容器能力需要你本人安装/启动 Docker 后再检查。' })
+        }
+      }
     } else if (job.kind === 'install') {
       // Hard gate: never install dependencies before the local toolchain passes
       // the minimum preflight. This prevents a half-installed environment.

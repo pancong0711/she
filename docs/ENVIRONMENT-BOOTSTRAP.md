@@ -39,24 +39,45 @@
 
 ## 2. 当前 preflight 检查项
 
-| 检查 | 要求 | 失败级别 |
-|---|---|---|
-| Node.js | `^22.19.0 || >=24.0.0` | fail |
-| pnpm | `>=11.22.0` | fail |
-| git | 可用 | warn |
-| Docker | 可用 | warn |
-| control-plane build | `apps/control-plane/dist/main.js` 存在 | warn |
-| broker build | `apps/broker/dist/main.js` 存在 | warn |
-| PWA build | `apps/pwa/dist/index.html` 存在 | warn |
-| control socket | 可发现 | warn |
-| broker socket | 可发现 | warn |
+| 检查 | requirement | 失败级别 | 缺失影响 |
+|---|---|---|---|
+| user 非 root | required | fail | 阻断 |
+| Node.js `^22.19.0 || >=24.0.0` | required | fail | 阻断 |
+| pnpm `>=11.22.0` | required | fail | 阻断 |
+| git | recommended | warn | 源码克隆/更新降级 |
+| Docker sandbox runtime | sandbox | warn | Sandbox、Agent Migration、broker 容器不可用 |
+| control-plane/broker/PWA build | development | warn | 开发态构建不完整 |
+| control/broker socket | runtime | warn | 对应运行时未启动 |
 
 规则：
 
-- `fail` = 阻断安装/构建；
-- `warn` = 允许继续，但功能降级或需要先构建/启动服务；
-- `doctor` 作为只读检查；
-- `install` 自动执行同一 preflight，不能绕过。
+- `fail` = 阻断基础安装/构建；
+- `warn` = 动作可以成功，但对应能力不可用，必须显示 `feature` 和 `remediation`；
+- Docker **不是 companion/core/普通 Chat 的 required 项**，但它是 sandbox/broker/Agent Migration 的 sandbox 能力依赖；
+- `doctor` 作为只读检查；`install` 自动执行同一 preflight，不能绕过。
+
+`GET /api/preflight` 返回：
+
+```json
+{
+  "ok": true,
+  "sandboxReady": false,
+  "summary": { "requiredReady": true, "sandboxReady": false, "warnings": 3, "failures": 0 },
+  "checks": [
+    {
+      "type": "check",
+      "status": "warn",
+      "label": "Docker sandbox runtime",
+      "requirement": "sandbox",
+      "feature": "sandbox",
+      "detail": "docker 命令不存在或不在 PATH 中；Sandbox、Agent Migration 和 broker 容器能力不可用。",
+      "remediation": "由你本人安装 Docker Engine 或 rootless Docker..."
+    }
+  ]
+}
+```
+
+`ok=true` 只表示 required toolchain 可用；`sandboxReady=false` 表示容器能力不可用。
 
 ## 3. 安装流程
 
@@ -84,7 +105,6 @@ PWA 的实时日志会显示：
 [stdout] ...
 ```
 
-`GET /api/preflight` 返回最近一次 preflight 结果，供 UI 或诊断使用。
 
 ## 4. 为什么不自动安装 Node/pnpm/git/Docker
 
@@ -142,7 +162,7 @@ bootstrap
 用户级环境准备（不请求 root）
 ```
 
-执行后会再次跑 preflight，并实时显示结果。
+执行后会再次跑 preflight，并实时显示结果。若 Docker 缺失，job 仍可能以 `succeeded (exit 0)` 结束，因为 pnpm bootstrap 本身成功；但界面必须额外显示 `sandboxReady=false` 和 Docker 安装/启动指引。
 
 ## 6. 计划中的系统级 bootstrap
 

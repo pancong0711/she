@@ -19,6 +19,7 @@ import {
   loadCompanionHealth,
   loadCoreStatus,
   loadPackages,
+  loadPreflight,
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
@@ -35,6 +36,7 @@ import {
   type JobEvent,
   type JobSummary,
   type PackageInfo,
+  type PreflightResult,
   type WorkerConfig,
 } from './api'
 
@@ -91,6 +93,7 @@ const coreUpdateCheck = ref<CoreUpdateCheck | null>(null)
 const coreUpdateError = ref('')
 const packages = ref<readonly PackageInfo[]>([])
 const packageError = ref('')
+const preflight = ref<PreflightResult | null>(null)
 const workerConfigResponse = ref<Awaited<ReturnType<typeof loadWorkerConfig>> | null>(null)
 const workerConfig = ref<WorkerConfig | null>(null)
 const workerConfigError = ref('')
@@ -102,19 +105,21 @@ const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
 const tasks = computed(() => [...(snapshot.value?.tasks ?? [])].reverse())
 const runningTasks = computed(() => tasks.value.filter(task => ['dispatching', 'submitted', 'running'].includes(task.status)).length)
 const failedTasks = computed(() => tasks.value.filter(task => ['failed', 'needs_attention'].includes(task.status)).length)
+const jobWarnings = computed(() => jobEvents.value.filter((event): event is Extract<JobEvent, { type: 'check' }> => event.type === 'check' && event.status === 'warn'))
 const online = computed(() => health.value?.status === 'ok')
 const brokerOnline = computed(() => brokerHealth.value?.status === 'ok')
 const companionOnline = computed(() => companion.value !== null)
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
     loadCoreStatus(),
     loadPackages(),
     loadWorkerConfig(),
+    loadPreflight(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -155,6 +160,7 @@ async function refresh(): Promise<void> {
     packages.value = []
     packageError.value = packageResult.reason instanceof Error ? packageResult.reason.message : String(packageResult.reason)
   }
+  if (preflightResult.status === 'fulfilled') preflight.value = preflightResult.value
   if (workerConfigResult.status === 'fulfilled') {
     workerConfigResponse.value = workerConfigResult.value
     workerConfig.value = {
@@ -279,7 +285,7 @@ async function runJob(kind: string, options: Readonly<Record<string, unknown>> =
 function jobEventText(event: JobEvent): string {
   if (event.type === 'log') return event.text
   if (event.type === 'system') return event.text
-  if (event.type === 'check') return `[${event.status}] ${event.label}: ${event.detail}`
+  if (event.type === 'check') return `[${event.status}] ${event.label}: ${event.detail}${event.remediation === undefined ? '' : `\n  → 修复：${event.remediation}`}`
   if (event.type === 'status') return `status: ${event.status}`
   return `done: ${event.status} (exit ${String(event.exitCode)})`
 }
@@ -736,6 +742,55 @@ onBeforeUnmount(() => {
             </div>
             <p v-if="jobError" class="error-text">{{ jobError }}</p>
             <p v-if="job" class="muted">last job: {{ job.kind }} · {{ job.status }} · {{ job.id }}</p>
+            <p v-if="jobWarnings.length > 0" class="warn-text">
+              任务已完成，但有 {{ jobWarnings.length }} 个环境能力 warning；job 成功只代表该动作执行成功，不代表 Docker 等可选能力已就绪。
+            </p>
+          </div>
+
+          <div class="card wide-card environment-card">
+            <div class="section-head">
+              <div>
+                <h2>环境能力摘要</h2>
+                <p class="muted">基础工具链与容器能力分开判断；Docker 缺失不会阻止 companion/core 启动，但会使 Sandbox、Agent Migration 和 broker 容器不可用。</p>
+              </div>
+              <span v-if="preflight?.at" :class="['pill', preflight.ok ? (preflight.sandboxReady ? 'succeeded' : 'warn') : 'failed']">
+                {{ preflight.ok ? (preflight.sandboxReady ? 'full' : 'partial') : 'blocked' }}
+              </span>
+              <span v-else class="pill">not checked</span>
+            </div>
+            <div v-if="!preflight?.at" class="alert">
+              <strong>还没有环境检查结果</strong>
+              <p>点击上方“环境检查”获取 Node/pnpm/Docker/socket 的逐项能力判断。</p>
+            </div>
+            <template v-else>
+              <div class="health-grid">
+                <div><span>基础工具链</span><b>{{ preflight.ok ? 'ready' : 'blocked' }}</b></div>
+                <div><span>Sandbox / Docker</span><b>{{ preflight.sandboxReady ? 'ready' : 'unavailable' }}</b></div>
+                <div><span>warnings</span><b>{{ preflight.summary?.warnings ?? preflight.warnings?.length ?? 0 }}</b></div>
+                <div><span>failures</span><b>{{ preflight.summary?.failures ?? 0 }}</b></div>
+              </div>
+              <div v-if="preflight.sandboxReady === false" class="alert environment-warning">
+                <strong>未检测到可用的 Docker sandbox runtime</strong>
+                <p>
+                  这不影响 companion、core、Tasks 和普通 Chat；但 Sandboxes、Agent Migration 以及 broker 容器能力暂时不可用。
+                  用户级环境准备只安装 pnpm，不会安装 Docker，也不会执行 sudo。
+                </p>
+                <p v-for="warning in (preflight.warnings ?? []).filter(item => item.feature === 'sandbox')" :key="warning.label">
+                  {{ warning.detail }}<br />
+                  <span v-if="warning.remediation">修复：{{ warning.remediation }}</span>
+                </p>
+                <a class="secondary" href="https://docs.docker.com/engine/install/" target="_blank" rel="noreferrer">Docker 官方安装文档 ↗</a>
+              </div>
+              <details v-if="(preflight.warnings?.length ?? 0) > 0" class="preflight-details">
+                <summary>查看全部 {{ preflight.warnings?.length }} 个 warning</summary>
+                <ul>
+                  <li v-for="warning in preflight.warnings" :key="warning.label">
+                    <b>{{ warning.label }}</b>：{{ warning.detail }}
+                    <span v-if="warning.remediation"><br />修复：{{ warning.remediation }}</span>
+                  </li>
+                </ul>
+              </details>
+            </template>
           </div>
 
           <div class="card core-card">
@@ -777,8 +832,8 @@ onBeforeUnmount(() => {
           <div class="card console-card">
             <div class="console-head">
               <h2>实时安装/调试日志</h2>
-              <span :class="['pill', jobRunning ? 'running' : job?.status ?? 'stopped']">
-                {{ jobRunning ? `${jobKind} running` : job?.status ?? 'idle' }}
+              <span :class="['pill', jobRunning ? 'running' : jobWarnings.length > 0 ? 'warn' : job?.status ?? 'stopped']">
+                {{ jobRunning ? `${jobKind} running` : jobWarnings.length > 0 ? `${job?.status ?? 'done'} · ${jobWarnings.length} warnings` : job?.status ?? 'idle' }}
               </span>
             </div>
             <p v-if="jobEvents.length === 0" class="muted">点击左侧按钮后，命令输出会实时显示在这里。</p>

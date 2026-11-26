@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Improved preflight diagnostics: required vs optional/sandbox capabilities, Docker ENOENT/permission/daemon guidance, remediation text, and explicit `succeeded-with-warnings` messaging in Install & Doctor.
 - Local AI agent discovery and containerization migration assistant: process/port/cwd scan, dry-run plans, explicit credential-directory read-only mounts, broker-validated host mounts, one-click sandbox migration jobs, rollback on partial failure, and PWA Agent Migration page.
 - Core SHE protocol v1 for gateway, agent, and sandbox boundaries.
 - Task/Topic state machines, event cursor model, serial topic queue, leases, and recovery.

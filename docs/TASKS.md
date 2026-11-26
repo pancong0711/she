@@ -144,3 +144,5 @@
 - 2026-11-25：完成 T6.6b：PWA Settings 编辑 worker/OpenCode/workspace/model/poll/lease 配置，写入 0600 worker.json；companion 启动 core 时注入 SHE_* 环境变量；保存并重启 core 后 worker 实际执行任务成功。
 
 - 2026-11-26：完成 T6.9 首版：companion 只读扫描本机 AI agent 进程/端口/cwd/配置目录，新增迁移计划与 `agent-migrate` allowlisted job；PWA 增加 Agent Migration 页面，可勾选服务、配置 new/reuse workspace、`/legacy` 只读、凭据目录只读挂载、镜像/网络/资源；broker 增加受约束 host mount 与 command 支持，自动回滚本次已创建 sandbox。`pnpm test` 61/61 通过。
+
+- 2026-11-26：改进 preflight 信息质量：新增 requirement/feature/remediation 字段，区分 required toolchain 与 sandbox/Docker 能力；Docker 缺失时显示 `sandboxReady=false`、具体原因和平台安装指引；bootstrap/doctor 的 job 即使退出 0 也显示 warning 数量，避免“succeeded”被误读为全部能力就绪。

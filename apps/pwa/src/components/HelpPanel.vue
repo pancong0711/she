@@ -52,7 +52,7 @@ defineProps<{
         <dt>环境检查</dt>
         <dd>检查当前用户、Node.js、pnpm、git、Docker、构建产物和 socket 状态。只读，不安装。</dd>
         <dt>用户级环境准备</dt>
-        <dd>不请求 root，只在当前用户目录准备 pnpm 等无需管理员权限的组件；不会安装 Docker。</dd>
+        <dd>不请求 root，只在当前用户目录准备 pnpm 等无需管理员权限的组件；不会安装 Docker。若 Docker 缺失，job 仍可能成功，但 Sandbox / Agent Migration / broker 容器能力会标记为不可用，并显示安装指引。</dd>
         <dt>安装依赖</dt>
         <dd>先自动执行 preflight。Node/pnpm 等 fail 项存在时立即中止，不会进入半安装状态。</dd>
         <dt>构建 PWA / 构建全部 / 运行测试</dt>

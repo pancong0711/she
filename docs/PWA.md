@@ -209,6 +209,10 @@ SHE_TOKEN_FILE
 - Settings：
   - companion URL；
   - 连接状态；
+- Install & Doctor 环境能力摘要：
+  - 区分 required toolchain 与 sandbox/Docker 能力；
+  - Docker 缺失时显示可选能力影响和安装指引；
+  - job 成功但存在 warning 时明确标注，避免把 `succeeded` 误解为所有能力就绪。
 - Core 更新（Install & Doctor 内）：
   - current/previous 版本；
   - supervisor 状态；

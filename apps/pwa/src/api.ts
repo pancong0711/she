@@ -119,7 +119,16 @@ export interface JobSummary {
 export type JobEvent =
   | { readonly at: number; readonly type: 'log'; readonly stream: 'stdout' | 'stderr'; readonly text: string }
   | { readonly at: number; readonly type: 'system'; readonly text: string }
-  | { readonly at: number; readonly type: 'check'; readonly status: 'ok' | 'warn' | 'fail'; readonly label: string; readonly detail: string }
+  | {
+      readonly at: number
+      readonly type: 'check'
+      readonly status: 'ok' | 'warn' | 'fail'
+      readonly label: string
+      readonly detail: string
+      readonly requirement?: 'required' | 'recommended' | 'sandbox' | 'runtime' | 'development' | string
+      readonly feature?: string
+      readonly remediation?: string
+    }
   | { readonly at: number; readonly type: 'status'; readonly status: JobSummary['status'] }
   | { readonly at: number; readonly type: 'done'; readonly status: JobSummary['status']; readonly exitCode: number }
 
@@ -174,6 +183,36 @@ export async function* streamJobEvents(jobId: string, signal?: AbortSignal): Asy
   } finally {
     reader.releaseLock()
   }
+}
+
+export interface PreflightCheck {
+  readonly type: 'check'
+  readonly status: 'ok' | 'warn' | 'fail'
+  readonly label: string
+  readonly detail: string
+  readonly requirement: 'required' | 'recommended' | 'sandbox' | 'runtime' | 'development' | string
+  readonly feature?: string
+  readonly remediation?: string
+}
+
+export interface PreflightResult {
+  readonly at: number | null
+  readonly ok: boolean | null
+  readonly sandboxReady?: boolean
+  readonly checks: readonly PreflightCheck[]
+  readonly warnings?: readonly PreflightCheck[]
+  readonly summary?: {
+    readonly requiredReady: boolean
+    readonly sandboxReady: boolean
+    readonly warnings: number
+    readonly failures: number
+  }
+}
+
+export async function loadPreflight(signal?: AbortSignal): Promise<PreflightResult> {
+  const payload = await getJson<{ ok: boolean; value?: PreflightResult; error?: { message?: string } }>('/api/preflight', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'preflight unavailable')
+  return payload.value
 }
 
 export interface CoreStatus {
