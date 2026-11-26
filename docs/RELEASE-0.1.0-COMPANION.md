@@ -27,14 +27,14 @@ https://github.com/pancong0711/she/releases/download/v0.1.0-companion.2/companio
 Bundle SHA-256：
 
 ```text
-de6f77fbc37414957550780011941cd0b23176b6d4b7d150152b7b90d5f91ea2  she-companion-0.1.0.tar.gz
+76318df3c867bbc07717838feb310759eb0612a88130a9b31f435ba88db543ae  she-companion-0.1.0.tar.gz
 ```
 
 ## 2. 安装
 
 ```sh
 bash install-companion.sh she-companion-0.1.0.tar.gz \
-  --sha256 de6f77fbc37414957550780011941cd0b23176b6d4b7d150152b7b90d5f91ea2
+  --sha256 76318df3c867bbc07717838feb310759eb0612a88130a9b31f435ba88db543ae
 ```
 
 安装位置：
