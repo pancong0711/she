@@ -1759,9 +1759,8 @@ async function serveStatic(request, response) {
     if (!info.isFile()) throw new Error('not a file')
     const contentType = mime.get(extname(file)) ?? 'application/octet-stream'
     securityHeaders(response, contentType)
-    response.setHeader('cache-control', file.endsWith('index.html') || file.endsWith('sw.js')
-      ? 'no-cache'
-      : 'public, max-age=31536000, immutable')
+    const noCache = file.endsWith('index.html') || file.endsWith('sw.js') || file.endsWith('manifest.webmanifest') || /start\.(?:sh|command|ps1|bat)$/.test(file)
+    response.setHeader('cache-control', noCache ? 'no-cache' : 'public, max-age=31536000, immutable')
     response.writeHead(200)
     createReadStream(file).pipe(response)
   } catch {

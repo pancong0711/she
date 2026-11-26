@@ -159,3 +159,5 @@
 - 2026-11-26：T6.5 首版：新增 companion workspace 授权注册表 `~/.config/she/workspaces.json`（0600）与 `/api/workspaces` CRUD；校验 realpath、叶子目录、root/home/系统路径、r/w 权限；PWA 新增 Workspaces 页面。实际只读强制仍由 broker host mount 执行；Agent Migration 与 worker 绑定授权 ID 列为后续。
 
 - 2026-11-26：修复 companion 版本与 root/core 耦合导致的 launcher 不更新问题：companion bundle/manifest 改用 `apps/companion/package.json` 版本，升级到 0.2.0；launcher 默认 Release tag 更新为 `v0.2.0-companion.1`；PWA 增加最低 companion 版本提示；service worker 对导航和 start.* 改为 network-first，避免缓存旧 launcher。
+
+- 2026-11-26：发布 companion 0.2.1，修复 127.0.0.1 本地 PWA 与 Pages 版本割裂：start.* 和 manifest 使用 no-cache，service worker 对导航/launcher 使用 network-first；launcher 默认 tag 与最低 companion 版本同步更新。

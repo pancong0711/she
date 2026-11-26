@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Companion 0.2.1 adds no-cache headers for start scripts/manifest and network-first service worker updates, plus reliable launcher version checks and stale-process detection.
 - Companion release tag moved to `v0.2.0-companion.2` to avoid stale GitHub release manifest CDN content; release assets are treated as immutable.
 - Fixed launcher update detection (`-x` check on non-executable server.mjs) and added explicit stale-companion process detection to avoid silent EADDRINUSE failures.
 - Companion version is now decoupled from the root/core package version; new companion release `v0.2.0-companion.1` fixes stale launcher update detection.
