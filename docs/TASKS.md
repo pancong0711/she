@@ -90,7 +90,7 @@
 | T6.4c2 | signed companion installer 与平台安装向导 | T6.4c1/T7.4 | [x] |
 | T6.4c3 | PWA 一键 launcher（start.bat / start.command / start.sh） | T6.4c2 | [x] | 下载后自动校验/安装/启动/打开浏览器；不请求 root | checksum/签名、无 root、可回滚 |
 | T6.4d | 特权环境（Docker/rootless/系统依赖）instructions-only 支持矩阵 | T6.4b | [x] | 只展示方法；不执行 sudo/不请求 root | 显式同意、checksum、审计、回滚 | PWA 点击触发并实时显示 stdout/stderr | 校验、权限确认、日志、回滚入口 |
-| T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [~] | 只允许叶子目录；不可绕过 broker | 授权注册表/PWA 页面完成；迁移与 worker 强制绑定待接入 |
+| T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [~] | 只允许叶子目录；不可绕过 broker | 授权注册表/PWA 页面完成；Agent Migration 绑定完成；worker 直接模式待统一 |
 | T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [~] |
 | T6.6a | Agent worker + PWA Chat：提交、事件流、实时 text/tool 状态 | T6.6/M2 | [x] | worker+OpenCode+agent.delta 实测 |
 | T6.6b | PWA Settings：worker/OpenCode/workspace 配置与重启应用 | T6.6a | [x] | 0600 config；密码仅路径；core restart 后生效 | 与 CLI/gateway 共用同一控制面会话 |
@@ -164,3 +164,5 @@
 - 2026-11-26：发布 companion 0.2.1，修复 127.0.0.1 本地 PWA 与 Pages 版本割裂：start.* 和 manifest 使用 no-cache，service worker 对导航/launcher 使用 network-first；launcher 默认 tag 与最低 companion 版本同步更新。
 
 - 2026-11-26：完成 T7.8：新增 companion supervisor（退出码 75 重启、20 秒启动窗口、pending rollback）；PWA Settings 显示 companion 版本并支持页面内重启/停止/检查更新/安装并重启；更新仅接受 SHE GitHub Release manifest，校验 SHA-256，非 supervisor 模式禁用。实际验证 0.3.0→0.3.1 更新成功、故意启动失败回滚到 0.3.0。
+
+- 2026-11-26：完成 T6.5 迁移绑定：Agent Migration 的 reuse/legacy 来源必须选择 Workspaces 授权 ID；reuse 要求 read-write，new+/legacy 可用 read-only；计划与迁移记录保存 workspaceAuthorizationId；broker 继续二次校验并强制只读。PWA 迁移面板改为授权下拉选择。

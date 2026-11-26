@@ -400,9 +400,9 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.3.0'
-export const COMPANION_MIN_VERSION = '0.3.0'
-export const COMPANION_RELEASE_TAG = 'v0.3.0-companion.1'
+export const COMPANION_RELEASE_VERSION = '0.3.1'
+export const COMPANION_MIN_VERSION = '0.3.1'
+export const COMPANION_RELEASE_TAG = 'v0.3.1-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`
@@ -629,6 +629,7 @@ export interface AgentDiscovery {
 export interface MigrationAgentInput {
   readonly id: string
   readonly sourceWorkspacePath: string
+  readonly sourceWorkspaceAuthorizationId?: string
   readonly workspaceMode: 'new' | 'reuse'
   readonly newWorkspacePath?: string
   readonly legacyReadOnly: boolean
@@ -657,6 +658,7 @@ export interface MigrationPlanAgent {
   readonly running: boolean
   readonly pid: number | null
   readonly sourceWorkspacePath: string
+  readonly workspaceAuthorizationId?: string | null
   readonly workspaceMode: 'new' | 'reuse'
   readonly newWorkspacePath?: string
   readonly legacyReadOnly: boolean
@@ -701,6 +703,7 @@ export interface AgentMigrationRecord {
     readonly workspaceMode: 'new' | 'reuse'
     readonly newWorkspacePath?: string
     readonly sourceWorkspacePath: string
+    readonly workspaceAuthorizationId?: string | null
     readonly legacyReadOnly: boolean
     readonly credentialMounts: readonly { readonly source: string; readonly containerPath: string; readonly readOnly: true }[]
   }[]

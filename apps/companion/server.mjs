@@ -1339,7 +1339,8 @@ async function executeAgentMigration(job) {
   const request = job.input?.request
   if (request === undefined || typeof request !== 'object') throw new Error('migration request is required')
   appendJobEvent(job, { type: 'system', text: '正在重新扫描本机 AI agent 服务并校验迁移边界…' })
-  const { discovery, plan } = await discoverAndPlan({ request, managedWorkspaceRoot: migrationWorkspaceRoot })
+  const workspaceAuthorizations = await listWorkspaceAuthorizations(workspaceRegistryPath)
+  const { discovery, plan } = await discoverAndPlan({ request, managedWorkspaceRoot: migrationWorkspaceRoot, workspaceAuthorizations })
   appendJobEvent(job, { type: 'system', text: `发现 ${String(discovery.services.length)} 个候选条目，计划包含 ${String(plan.agents.length)} 个 agent。` })
   for (const warning of plan.warnings) {
     appendJobEvent(job, { type: 'system', text: `[${warning.severity}] ${warning.message}` })
@@ -1382,6 +1383,7 @@ async function executeAgentMigration(job) {
         kind: agent.kind,
         name: agent.name,
         sandboxName: agent.sandboxName,
+        workspaceAuthorizationId: agent.workspaceAuthorizationId ?? null,
         sandboxStatus: sandbox?.status ?? 'unknown',
         workspaceMode: agent.workspaceMode,
         ...(agent.newWorkspacePath === undefined ? {} : { newWorkspacePath: agent.newWorkspacePath }),
@@ -1637,7 +1639,8 @@ async function handleCompanionApi(request, response) {
     }
     try {
       const body = await readBodyJson(request)
-      const result = await discoverAndPlan({ request: body, managedWorkspaceRoot: migrationWorkspaceRoot })
+      const workspaceAuthorizations = await listWorkspaceAuthorizations(workspaceRegistryPath)
+      const result = await discoverAndPlan({ request: body, managedWorkspaceRoot: migrationWorkspaceRoot, workspaceAuthorizations })
       sendJsonWithCors(request, response, 200, { ok: true, value: result })
     } catch (error) {
       sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })

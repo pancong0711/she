@@ -6,6 +6,8 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Companion 0.3.1 binds Agent Migration workspace mounts to explicit authorization IDs and publishes the new release tag.
+- Agent Migration now binds reused/legacy workspace mounts to explicit Workspaces authorization IDs; read-only authorizations can only be legacy read-only mounts.
 - Added supervisor-managed companion restart/shutdown/update from the PWA, with version display, SHA-256 verification, and startup-failure rollback.
 - Companion 0.2.1 adds no-cache headers for start scripts/manifest and network-first service worker updates, plus reliable launcher version checks and stale-process detection.
 - Companion release tag moved to `v0.2.0-companion.2` to avoid stale GitHub release manifest CDN content; release assets are treated as immutable.

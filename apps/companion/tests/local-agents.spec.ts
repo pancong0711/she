@@ -82,6 +82,19 @@ describe('agent migration planning', () => {
     const plan = await buildMigrationPlan({
       discovery,
       managedWorkspaceRoot: workspaces,
+      workspaceAuthorizations: [{
+        id: 'ws-project',
+        label: 'project',
+        path: realProject,
+        realPath: realProject,
+        mode: 'read-write',
+        exists: true,
+        isDirectory: true,
+        readable: true,
+        writable: true,
+        leafAuthorized: true,
+        warnings: [],
+      }],
       request: {
         image: 'node:22-bookworm-slim',
         command: ['sleep', 'infinity'],
@@ -89,6 +102,7 @@ describe('agent migration planning', () => {
         agents: [{
           id: 'running:opencode:123',
           sourceWorkspacePath: realProject,
+          sourceWorkspaceAuthorizationId: 'ws-project',
           workspaceMode: 'new',
           legacyReadOnly: true,
           credentialPaths: [realCredentials],
@@ -127,12 +141,71 @@ describe('agent migration planning', () => {
     const plan = await buildMigrationPlan({
       discovery,
       managedWorkspaceRoot: workspaces,
+      workspaceAuthorizations: [{
+        id: 'ws-root',
+        label: 'root',
+        path: '/',
+        realPath: '/',
+        mode: 'read-write',
+        exists: true,
+        isDirectory: true,
+        readable: true,
+        writable: true,
+        leafAuthorized: false,
+        warnings: [],
+      }],
       request: {
-        agents: [{ id: 'running:opencode:123', sourceWorkspacePath: '/', workspaceMode: 'reuse' }],
+        agents: [{ id: 'running:opencode:123', sourceWorkspacePath: '/', sourceWorkspaceAuthorizationId: 'ws-root', workspaceMode: 'reuse' }],
       },
     })
     expect(plan.blocked).toBe(true)
-    expect(plan.errors.some(error => /根目录/.test(error.message))).toBe(true)
+    expect(plan.errors.some(error => /根目录|授权已失效/.test(error.message))).toBe(true)
+  })
+
+  it('rejects read-only authorization when reusing a workspace read-write', async () => {
+    const { home, project, workspaces } = await fixture()
+    const realHome = await realpath(home)
+    const realProject = await realpath(project)
+    const discovery = {
+      home: realHome,
+      services: [{
+        id: 'running:opencode:123',
+        kind: 'opencode',
+        name: 'OpenCode',
+        running: true,
+        pid: 123,
+        cwd: realProject,
+        ports: [],
+        warnings: [],
+        containerizable: true,
+      }],
+    }
+    const plan = await buildMigrationPlan({
+      discovery,
+      managedWorkspaceRoot: workspaces,
+      workspaceAuthorizations: [{
+        id: 'ws-readonly',
+        label: 'readonly',
+        path: realProject,
+        realPath: realProject,
+        mode: 'read-only',
+        exists: true,
+        isDirectory: true,
+        readable: true,
+        writable: false,
+        leafAuthorized: true,
+        warnings: [],
+      }],
+      request: {
+        agents: [{
+          id: 'running:opencode:123',
+          sourceWorkspaceAuthorizationId: 'ws-readonly',
+          workspaceMode: 'reuse',
+        }],
+      },
+    })
+    expect(plan.blocked).toBe(true)
+    expect(plan.errors.some(error => /read-write workspace 授权/.test(error.message))).toBe(true)
   })
 
   it('rejects credential directories outside the user home', async () => {
@@ -162,6 +235,7 @@ describe('agent migration planning', () => {
           id: 'running:opencode:123',
           sourceWorkspacePath: await realpath(project),
           workspaceMode: 'new',
+          legacyReadOnly: false,
           credentialPaths: [outside],
         }],
       },

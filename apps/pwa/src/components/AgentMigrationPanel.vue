@@ -4,6 +4,7 @@ import {
   applyAgentMigration,
   loadAgentDiscovery,
   loadAgentMigrations,
+  loadWorkspaces,
   planAgentMigration,
   streamJobEvents,
   type AgentDiscovery,
@@ -14,12 +15,14 @@ import {
   type JobSummary,
   type MigrationAgentInput,
   type MigrationRequest,
+  type WorkspaceAuthorization,
 } from '../api'
 
 defineProps<{ brokerOnline: boolean }>()
 
 interface AgentSettings {
   sourceWorkspacePath: string
+  workspaceAuthorizationId: string
   workspaceMode: 'new' | 'reuse'
   newWorkspacePath: string
   legacyReadOnly: boolean
@@ -45,6 +48,8 @@ const job = ref<JobSummary | null>(null)
 const jobEvents = ref<JobEvent[]>([])
 const records = ref<readonly AgentMigrationRecord[]>([])
 const recordsError = ref('')
+const workspaces = ref<readonly WorkspaceAuthorization[]>([])
+const workspaceError = ref('')
 
 const selectedServices = computed(() => (discovery.value?.services ?? []).filter(service => selected.value[service.id] === true))
 const diagnostics = computed(() => jobEvents.value.filter((event): event is Extract<JobEvent, { type: 'log' | 'system' }> => event.type === 'log' || event.type === 'system'))
@@ -55,6 +60,7 @@ function settingsFor(service: DiscoveredAgentService): AgentSettings {
   if (existing !== undefined) return existing
   const defaults: AgentSettings = {
     sourceWorkspacePath: service.cwd ?? '',
+    workspaceAuthorizationId: '',
     workspaceMode: 'new',
     newWorkspacePath: '',
     legacyReadOnly: service.cwd !== undefined,
@@ -62,6 +68,43 @@ function settingsFor(service: DiscoveredAgentService): AgentSettings {
   }
   settings.value = { ...settings.value, [service.id]: defaults }
   return defaults
+}
+
+function availableWorkspaces(service: DiscoveredAgentService): readonly WorkspaceAuthorization[] {
+  const config = settingsFor(service)
+  return workspaces.value.filter(item => config.workspaceMode === 'reuse' ? item.mode === 'read-write' : true)
+}
+
+function setWorkspaceMode(service: DiscoveredAgentService, mode: 'new' | 'reuse'): void {
+  const config = settingsFor(service)
+  config.workspaceMode = mode
+  const selectedWorkspace = workspaces.value.find(item => item.id === config.workspaceAuthorizationId)
+  if (mode === 'reuse' && selectedWorkspace !== undefined && selectedWorkspace.mode !== 'read-write') {
+    config.workspaceAuthorizationId = ''
+    config.sourceWorkspacePath = ''
+  }
+}
+
+function selectWorkspace(service: DiscoveredAgentService, id: string): void {
+  const config = settingsFor(service)
+  config.workspaceAuthorizationId = id
+  const workspace = workspaces.value.find(item => item.id === id)
+  if (workspace === undefined) return
+  config.sourceWorkspacePath = workspace.path
+  if (config.workspaceMode === 'reuse' && workspace.mode === 'read-only') {
+    config.workspaceMode = 'new'
+    config.legacyReadOnly = true
+  }
+}
+
+async function loadWorkspaceOptions(): Promise<void> {
+  workspaceError.value = ''
+  try {
+    workspaces.value = (await loadWorkspaces()).workspaces
+  } catch (cause) {
+    workspaces.value = []
+    workspaceError.value = cause instanceof Error ? cause.message : String(cause)
+  }
 }
 
 function credentialSuggestions(service: DiscoveredAgentService) {
@@ -97,6 +140,7 @@ function requestPayload(): MigrationRequest {
     return {
       id: service.id,
       sourceWorkspacePath: config.sourceWorkspacePath.trim(),
+      ...(config.workspaceAuthorizationId === '' ? {} : { sourceWorkspaceAuthorizationId: config.workspaceAuthorizationId }),
       workspaceMode: config.workspaceMode,
       ...(config.workspaceMode === 'new' && config.newWorkspacePath.trim() !== '' ? { newWorkspacePath: config.newWorkspacePath.trim() } : {}),
       legacyReadOnly: config.workspaceMode === 'new' && config.legacyReadOnly,
@@ -160,7 +204,7 @@ watch([selected, settings, image, commandText, networkMode, cpus, memoryMb, pids
 }, { deep: true })
 
 onMounted(async () => {
-  await Promise.all([scan(), loadRecords()])
+  await Promise.all([scan(), loadRecords(), loadWorkspaceOptions()])
 })
 </script>
 
@@ -225,14 +269,29 @@ onMounted(async () => {
           <p v-for="warning in service.warnings" :key="warning" class="warn-text">{{ warning }}</p>
 
           <div v-if="selected[service.id]" class="agent-settings">
-            <label>
-              来源工作目录
-              <input v-model="settingsFor(service).sourceWorkspacePath" placeholder="/home/user/projects/my-agent" />
-            </label>
             <div class="mode-row">
-              <label class="check-row"><input v-model="settingsFor(service).workspaceMode" type="radio" value="new" /> 新建工作空间</label>
-              <label class="check-row"><input v-model="settingsFor(service).workspaceMode" type="radio" value="reuse" /> 复用原目录（读写挂载）</label>
+              <label class="check-row"><input :checked="settingsFor(service).workspaceMode === 'new'" type="radio" value="new" @change="setWorkspaceMode(service, 'new')" /> 新建工作空间</label>
+              <label class="check-row"><input :checked="settingsFor(service).workspaceMode === 'reuse'" type="radio" value="reuse" @change="setWorkspaceMode(service, 'reuse')" /> 复用已授权目录（读写挂载）</label>
             </div>
+            <label v-if="settingsFor(service).workspaceMode === 'reuse' || settingsFor(service).legacyReadOnly">
+              已授权 workspace
+              <select v-model="settingsFor(service).workspaceAuthorizationId" @change="selectWorkspace(service, settingsFor(service).workspaceAuthorizationId)">
+                <option value="">请选择（需先加入 Workspaces 授权）</option>
+                <option v-for="workspace in availableWorkspaces(service)" :key="workspace.id" :value="workspace.id">
+                  {{ workspace.label }} · {{ workspace.mode }} · {{ workspace.path }}
+                </option>
+              </select>
+            </label>
+            <p v-if="settingsFor(service).workspaceAuthorizationId" class="muted small-note">
+              source: <code>{{ settingsFor(service).sourceWorkspacePath }}</code>
+            </p>
+            <p v-if="settingsFor(service).workspaceMode === 'reuse' || settingsFor(service).legacyReadOnly" class="muted small-note">
+              只读授权只能用于新建 workspace 的 /legacy 只读挂载；复用为读写 workspace 必须选择 read-write 授权。
+            </p>
+            <p v-if="workspaceError" class="error-text">{{ workspaceError }}</p>
+            <p v-if="workspaces.length === 0 && (settingsFor(service).workspaceMode === 'reuse' || settingsFor(service).legacyReadOnly)" class="warn-text">
+              还没有 workspace 授权。请先到 Workspaces 页面授权叶子目录。
+            </p>
             <label v-if="settingsFor(service).workspaceMode === 'new'">
               新工作空间路径（留空自动创建）
               <input v-model="settingsFor(service).newWorkspacePath" placeholder="留空 = ~/.local/share/she/workspaces/..." />

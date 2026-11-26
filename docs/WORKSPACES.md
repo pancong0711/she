@@ -104,8 +104,10 @@ POST body：
 当前限制：
 
 - worker 的直接 workspace 模式仍由 `SHE_WORKSPACE_PATH` 决定，不读取本注册表的 read-only 策略；
-- Agent Migration 页面尚未强制只从授权列表选择来源；
-- 后续会把迁移计划与授权 ID 绑定，确保 `read-only` 策略通过 broker 挂载强制生效。
+- Agent Migration 已要求来源目录从授权列表选择，并在计划中记录 `workspaceAuthorizationId`；
+- read-only 授权可在 Agent Migration 中用于新建 workspace 的 `/legacy` 只读挂载；
+- 复用为 `/workspace` 时必须选择 read-write 授权；
+- 后续仍需把 worker 直接模式与授权策略统一，才能对 worker 本身强制 read-only。
 
 因此 T6.5 标记为部分完成，不能把本页的 read-only 选择误解为已经对 worker 强制只读。
 
@@ -118,6 +120,6 @@ POST body：
 - [x] PWA 新增/删除/列表；
 - [x] warning 显示；
 - [x] broker 侧已有二次校验与只读强制；
-- [ ] Agent Migration 强制绑定授权 ID；
+- [x] Agent Migration 强制绑定授权 ID；
 - [ ] worker/sandbox 统一读取授权策略；
 - [ ] macOS/Windows 真机验收。

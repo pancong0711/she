@@ -480,7 +480,7 @@ function normalizeCommand(input) {
  * Validate a migration request and return a side-effect-free plan.
  * The caller receives no credential file contents.
  */
-export async function buildMigrationPlan({ request, discovery, managedWorkspaceRoot }) {
+export async function buildMigrationPlan({ request, discovery, managedWorkspaceRoot, workspaceAuthorizations = [] }) {
   const home = await realpath(discovery.home ?? homedir()).catch(() => resolve(discovery.home ?? homedir()))
   const errors = []
   const warnings = []
@@ -529,24 +529,32 @@ export async function buildMigrationPlan({ request, discovery, managedWorkspaceR
       agentWarnings.push('该条目不是运行中的服务，仅基于配置目录推断。')
     }
 
+    const workspaceMode = input?.workspaceMode === 'reuse' ? 'reuse' : 'new'
+    const legacyReadOnly = workspaceMode === 'new' && input?.legacyReadOnly !== false
+    const needsSourceAuthorization = workspaceMode === 'reuse' || legacyReadOnly
+    const authorizationId = normalizeString(input?.sourceWorkspaceAuthorizationId)
+    const authorization = (workspaceAuthorizations ?? []).find(item => item?.id === authorizationId)
     let sourceReal
-    const sourceInput = normalizeString(input?.sourceWorkspacePath) || service.cwd || ''
-    if (sourceInput === '') {
-      agentErrors.push('缺少来源工作目录；该 agent 未暴露 cwd，请手动填写。')
-    } else if (!isAbsolute(expandHome(sourceInput))) {
-      agentErrors.push('来源工作目录必须是绝对路径。')
-    } else {
-      sourceReal = await realpath(expandHome(sourceInput)).catch(() => undefined)
-      if (sourceReal === undefined) agentErrors.push(`来源工作目录不存在：${sourceInput}`)
-      else {
-        const sourceInfo = await stat(sourceReal).catch(() => undefined)
-        if (sourceInfo === undefined || !sourceInfo.isDirectory()) agentErrors.push('来源工作目录必须是目录。')
-        const forbidden = isForbiddenWorkspacePath(sourceReal, home)
-        if (forbidden !== undefined) agentErrors.push(`${forbidden}；禁止作为工作空间或只读旧目录挂载。`)
+    if (needsSourceAuthorization) {
+      if (authorizationId === '') {
+        agentErrors.push('来源目录必须先加入 Workspaces 授权，并在迁移配置中选择该授权。')
+      } else if (authorization === undefined) {
+        agentErrors.push(`未找到 workspace 授权：${authorizationId}`)
+      } else if (workspaceMode === 'reuse' && authorization.mode !== 'read-write') {
+        agentErrors.push('复用原目录需要 read-write workspace 授权。')
+      } else if (authorization.exists === false || authorization.leafAuthorized === false) {
+        agentErrors.push('所选 workspace 授权已失效或不是允许的叶子目录。')
+      } else {
+        sourceReal = await realpath(authorization.realPath ?? authorization.path).catch(() => undefined)
+        if (sourceReal === undefined) agentErrors.push('所选 workspace 授权目录不存在。')
+        else {
+          const sourceInfo = await stat(sourceReal).catch(() => undefined)
+          if (sourceInfo === undefined || !sourceInfo.isDirectory()) agentErrors.push('所选 workspace 授权必须是目录。')
+          const forbidden = isForbiddenWorkspacePath(sourceReal, home)
+          if (forbidden !== undefined) agentErrors.push(`${forbidden}；禁止作为工作空间或只读旧目录挂载。`)
+        }
       }
     }
-
-    const workspaceMode = input?.workspaceMode === 'reuse' ? 'reuse' : 'new'
     let newWorkspacePath
     if (workspaceMode === 'new') {
       const defaultRoot = resolve(expandHome(managedWorkspaceRoot))
@@ -618,23 +626,23 @@ export async function buildMigrationPlan({ request, discovery, managedWorkspaceR
     for (const message of agentWarnings) warnings.push({ code: 'agent-warning', severity: 'warning', message: `${service.name}: ${message}`, agentId: candidateId })
     if (agentErrors.length > 0) continue
 
-    const legacyReadOnly = workspaceMode === 'new' && input?.legacyReadOnly !== false
     plannedAgents.push({
       candidateId,
       kind: service.kind,
       name: service.name,
       running: service.running,
       pid: service.pid ?? null,
-      sourceWorkspacePath: sourceReal,
+      sourceWorkspacePath: sourceReal ?? '',
+      workspaceAuthorizationId: authorization?.id ?? null,
       workspaceMode,
       ...(workspaceMode === 'new' ? { newWorkspacePath } : {}),
       legacyReadOnly,
       credentialMounts,
       sandboxName,
       mounts: [
-        ...(workspaceMode === 'reuse'
+        ...(workspaceMode === 'reuse' && sourceReal !== undefined
           ? [{ source: sourceReal, target: { kind: 'workspace' }, readOnly: false }]
-          : legacyReadOnly
+          : legacyReadOnly && sourceReal !== undefined
             ? [{ source: sourceReal, target: { kind: 'legacy' }, readOnly: true }]
             : []),
         ...credentialMounts.map(mount => ({
@@ -694,8 +702,8 @@ export async function buildMigrationPlan({ request, discovery, managedWorkspaceR
   return plan
 }
 
-export async function discoverAndPlan({ request, managedWorkspaceRoot }) {
+export async function discoverAndPlan({ request, managedWorkspaceRoot, workspaceAuthorizations = [] }) {
   const discovery = await scanLocalAgents()
-  const plan = await buildMigrationPlan({ request, discovery, managedWorkspaceRoot })
+  const plan = await buildMigrationPlan({ request, discovery, managedWorkspaceRoot, workspaceAuthorizations })
   return { discovery, plan }
 }
