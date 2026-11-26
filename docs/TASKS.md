@@ -96,6 +96,7 @@
 | T6.6b | PWA Settings：worker/OpenCode/workspace 配置与重启应用 | T6.6a | [x] | 0600 config；密码仅路径；core restart 后生效 | 与 CLI/gateway 共用同一控制面会话 |
 | T6.7 | Gateway 配置与 feishu4dsh 连接状态页 | T6.3/M4 | [ ] | 不暴露/不读取飞书 secret 给 agent |
 | T6.8 | 跨平台安装/更新向导与支持矩阵页面 | T6.4/T3.7 | [ ] | Linux 已验证；macOS/Windows 明确状态 |
+| T6.9 | 本机 AI agent 发现、容器化迁移计划、凭据目录只读挂载与迁移记录 | T6.3/T3.3/T3.5 | [x] | 发现不读凭据内容；根目录 workspace 阻断；broker host mount 负例测试；PWA 勾选/配置/执行 |
 
 ## M7 Companion / Core 分层与自更新
 
@@ -141,3 +142,5 @@
 - 2026-11-25：完成 T6.4e：companion `/api/packages` 与 PWA Packages 页面，展示 companion/core/Node/pnpm/Docker 状态，并接入 launcher、core 更新和用户级 pnpm 准备入口。
 - 2026-11-25：完成 T6.6a：control-plane worker（OpenCode adapter）、task.agent_event 持久化、gateway agent.delta 映射、PWA Chat 实时对话/任务布置；fake OpenCode worker smoke 通过。
 - 2026-11-25：完成 T6.6b：PWA Settings 编辑 worker/OpenCode/workspace/model/poll/lease 配置，写入 0600 worker.json；companion 启动 core 时注入 SHE_* 环境变量；保存并重启 core 后 worker 实际执行任务成功。
+
+- 2026-11-26：完成 T6.9 首版：companion 只读扫描本机 AI agent 进程/端口/cwd/配置目录，新增迁移计划与 `agent-migrate` allowlisted job；PWA 增加 Agent Migration 页面，可勾选服务、配置 new/reuse workspace、`/legacy` 只读、凭据目录只读挂载、镜像/网络/资源；broker 增加受约束 host mount 与 command 支持，自动回滚本次已创建 sandbox。`pnpm test` 61/61 通过。

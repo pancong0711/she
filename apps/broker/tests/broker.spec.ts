@@ -1,5 +1,5 @@
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SandboxBrokerClient } from '@she/client'
@@ -87,6 +87,8 @@ async function harness() {
   const dir = await mkdtemp(join(tmpdir(), 'she-broker-'))
   cleanup.push(async () => rm(dir, { recursive: true, force: true }))
   const docker = new FakeDocker()
+  const homeDir = join(dir, 'home')
+  await mkdir(homeDir, { recursive: true })
   const service = new SandboxBrokerService({
     dataRoot: join(dir, 'sandboxes'),
     registryPath: join(dir, 'broker', 'registry.json'),
@@ -94,10 +96,11 @@ async function harness() {
     docker,
     mainActorId: 'main:test',
     brokerVersion: '0.1.0',
+    homeDir,
     now: () => 1_700_000_000_000,
   })
   await service.init()
-  return { dir, docker, service }
+  return { dir, docker, service, homeDir }
 }
 
 afterEach(async () => {
@@ -192,6 +195,46 @@ describe('sandbox broker service', () => {
       rootTaskId: 'task-root',
       text: 'nope',
     })).rejects.toMatchObject({ code: 'forbidden' })
+  })
+
+  it('supports validated workspace, legacy and credential host mounts', async () => {
+    const { dir, docker, service, homeDir } = await harness()
+    const workspace = join(dir, 'host-workspace')
+    const legacy = join(dir, 'legacy')
+    const credentials = join(homeDir, '.config', 'she-test')
+    await mkdir(workspace, { recursive: true })
+    await mkdir(legacy, { recursive: true })
+    await mkdir(credentials, { recursive: true })
+    await writeFile(join(workspace, 'README.md'), 'workspace', 'utf8')
+
+    await service.create(sandboxSpec('sbx-host-mount', {
+      command: ['sleep', 'infinity'],
+      hostMounts: [
+        { source: workspace, target: { kind: 'workspace' } },
+        { source: legacy, target: { kind: 'legacy' }, readOnly: true },
+        { source: credentials, target: { kind: 'home', path: '.config/she-test' }, readOnly: true },
+      ],
+    }))
+    const container = docker.containers.get('she-sbx-host-mount')
+    expect(container?.workspacePath).toBe(await realpath(workspace))
+    expect(container?.command).toEqual(['sleep', 'infinity'])
+    expect(container?.extraMounts).toEqual([
+      { source: await realpath(legacy), destination: '/legacy', readOnly: true },
+      { source: await realpath(credentials), destination: '/home/agent/.config/she-test', readOnly: true },
+    ])
+  })
+
+  it('rejects root and writable credential host mounts', async () => {
+    const { service, homeDir } = await harness()
+    await expect(service.create(sandboxSpec('sbx-root-mount', {
+      hostMounts: [{ source: '/', target: { kind: 'workspace' } }],
+    }))).rejects.toMatchObject({ code: 'forbidden' })
+
+    const credentials = join(homeDir, '.config', 'she-test')
+    await mkdir(credentials, { recursive: true })
+    await expect(service.create(sandboxSpec('sbx-writable-credentials', {
+      hostMounts: [{ source: credentials, target: { kind: 'home', path: '.config/she-test' }, readOnly: false }],
+    }))).rejects.toMatchObject({ code: 'invalid_request' })
   })
 
   it('serves the broker over a Unix socket via SandboxBrokerClient', async () => {

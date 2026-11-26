@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import HelpPanel from './components/HelpPanel.vue'
+import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
 import type { GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
@@ -37,13 +38,14 @@ import {
   type WorkerConfig,
 } from './api'
 
-type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'chat' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
+type Tab = 'dashboard' | 'tasks' | 'sandboxes' | 'chat' | 'migrate' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'sandboxes', label: 'Sandboxes' },
   { id: 'chat', label: 'Chat' },
+  { id: 'migrate', label: 'Agent Migration' },
   { id: 'setup', label: 'Install & Doctor' },
   { id: 'packages', label: 'Packages' },
   { id: 'gateway', label: 'Gateway' },
@@ -629,6 +631,10 @@ onBeforeUnmount(() => {
           </div>
           <p class="muted small-note">Ctrl/Cmd + Enter 发送。agent 输出来自 task.agent_event → gateway event 流。</p>
         </div>
+      </section>
+
+      <section v-else-if="active === 'migrate'">
+        <AgentMigrationPanel :broker-online="brokerOnline" />
       </section>
 
       <section v-else-if="active === 'setup'" class="setup-page">

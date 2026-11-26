@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Local AI agent discovery and containerization migration assistant: process/port/cwd scan, dry-run plans, explicit credential-directory read-only mounts, broker-validated host mounts, one-click sandbox migration jobs, rollback on partial failure, and PWA Agent Migration page.
 - Core SHE protocol v1 for gateway, agent, and sandbox boundaries.
 - Task/Topic state machines, event cursor model, serial topic queue, leases, and recovery.
 - SQLite persistence with schema migrations and ephemeral request spool.

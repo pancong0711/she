@@ -89,7 +89,7 @@ export class BrokerServer {
     this.capabilities = options.capabilities ?? makeCapabilitySet([
       'sandbox.create', 'sandbox.start', 'sandbox.stop', 'sandbox.restart',
       'sandbox.destroy', 'sandbox.inspect', 'sandbox.stats', 'sandbox.message',
-      'sandbox.registry', 'sandbox.audit',
+      'sandbox.registry', 'sandbox.audit', 'sandbox.host-mount', 'sandbox.command',
     ])
     this.maxBodyBytes = options.maxBodyBytes ?? 20 * 1024 * 1024
   }

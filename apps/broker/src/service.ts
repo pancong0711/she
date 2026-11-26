@@ -2,7 +2,8 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { access, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, isAbsolute, parse, relative, resolve } from 'node:path'
 import type { SandboxProvider } from '@she/sandbox-sdk'
 import type {
   ArtifactRef,
@@ -16,7 +17,7 @@ import type {
 } from '@she/protocol'
 import { BrokerError } from './errors.js'
 import { BrokerAuditLog, BrokerRegistryStore, type BrokerRegistry, type BrokerSandboxRecord } from './registry.js'
-import type { DockerInspectResult, DockerRuntime } from './docker-runtime.js'
+import type { DockerExtraMount, DockerInspectResult, DockerRuntime } from './docker-runtime.js'
 import { relativeTo, sandboxPaths, safeJoin, assertSafeRelative, assertSandboxName } from './paths.js'
 
 export interface BrokerServiceOptions {
@@ -26,6 +27,7 @@ export interface BrokerServiceOptions {
   readonly docker: DockerRuntime
   readonly mainActorId: string
   readonly brokerVersion?: string
+  readonly homeDir?: string
   readonly now?: () => number
 }
 
@@ -56,6 +58,114 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+interface ResolvedHostMounts {
+  readonly workspacePath: string
+  readonly workspaceReadOnly: boolean
+  readonly extraMounts: readonly DockerExtraMount[]
+}
+
+const FORBIDDEN_SYSTEM_PATHS = [
+  '/etc', '/usr', '/bin', '/sbin', '/lib', '/lib64', '/boot', '/dev',
+  '/proc', '/sys', '/run', '/var/run', '/var/lib/docker',
+]
+
+function samePath(left: string, right: string): boolean {
+  return process.platform === 'win32'
+    ? resolve(left).toLowerCase() === resolve(right).toLowerCase()
+    : resolve(left) === resolve(right)
+}
+
+function isWithin(parent: string, child: string): boolean {
+  const rel = relative(resolve(parent), resolve(child))
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+function assertUsableHostSource(realSource: string, home: string): void {
+  if (samePath(realSource, parse(realSource).root)) {
+    throw new BrokerError('forbidden', 'host mount source must not be a filesystem root')
+  }
+  if (samePath(realSource, home)) {
+    throw new BrokerError('forbidden', 'host mount source must not be the user home directory itself')
+  }
+  if (process.platform !== 'win32') {
+    for (const forbidden of FORBIDDEN_SYSTEM_PATHS) {
+      if (samePath(realSource, forbidden) || isWithin(forbidden, realSource)) {
+        throw new BrokerError('forbidden', `host mount source is a protected system path: ${forbidden}`)
+      }
+    }
+  }
+}
+
+function assertCommand(command: readonly string[] | undefined): readonly string[] | undefined {
+  if (command === undefined) return undefined
+  if (command.length > 32) throw new BrokerError('invalid_request', 'command has too many arguments')
+  let total = 0
+  for (const arg of command) {
+    if (typeof arg !== 'string' || arg.includes('\u0000')) {
+      throw new BrokerError('invalid_request', 'command arguments must be strings without NUL bytes')
+    }
+    total += Buffer.byteLength(arg)
+  }
+  if (total > 16 * 1024) throw new BrokerError('invalid_request', 'command is too large')
+  return [...command]
+}
+
+async function resolveHostMounts(
+  mounts: readonly import('@she/protocol').SandboxHostMount[] | undefined,
+  defaultWorkspacePath: string,
+  homeDir: string,
+): Promise<ResolvedHostMounts> {
+  if (mounts === undefined || mounts.length === 0) {
+    return { workspacePath: defaultWorkspacePath, workspaceReadOnly: false, extraMounts: [] }
+  }
+  if (mounts.length > 16) throw new BrokerError('invalid_request', 'too many host mounts')
+  const home = await realpath(homeDir).catch(() => resolve(homeDir))
+  const destinations = new Set<string>(['/workspace', '/inbox', '/outbox', '/home/agent', '/cache', '/tmp'])
+  let workspacePath = defaultWorkspacePath
+  let workspaceReadOnly = false
+  let sawWorkspace = false
+  let sawLegacy = false
+  const extraMounts: DockerExtraMount[] = []
+  for (const mount of mounts) {
+    if (typeof mount.source !== 'string' || mount.source.trim() === '' || !isAbsolute(mount.source)) {
+      throw new BrokerError('invalid_request', 'host mount source must be an absolute path')
+    }
+    const realSource = await realpath(mount.source).catch(() => {
+      throw new BrokerError('not_found', `host mount source does not exist: ${mount.source}`)
+    })
+    assertUsableHostSource(realSource, home)
+    const info = await stat(realSource)
+    if (!info.isDirectory()) throw new BrokerError('invalid_request', 'host mount source must be a directory in v1')
+    const readOnly = mount.readOnly !== false
+    if (mount.target.kind === 'workspace') {
+      if (sawWorkspace) throw new BrokerError('invalid_request', 'only one workspace host mount is allowed')
+      sawWorkspace = true
+      workspacePath = realSource
+      workspaceReadOnly = readOnly
+      continue
+    }
+    if (mount.target.kind === 'legacy') {
+      if (sawLegacy) throw new BrokerError('invalid_request', 'only one legacy host mount is allowed')
+      if (!readOnly) throw new BrokerError('invalid_request', 'legacy host mount must be read-only')
+      sawLegacy = true
+      const destination = '/legacy'
+      if (destinations.has(destination)) throw new BrokerError('invalid_request', 'duplicate host mount destination')
+      destinations.add(destination)
+      extraMounts.push({ source: realSource, destination, readOnly: true })
+      continue
+    }
+    if (mount.target.kind !== 'home') throw new BrokerError('invalid_request', 'unknown host mount target')
+    if (!isWithin(home, realSource)) throw new BrokerError('forbidden', 'credential host mount source must be inside the user home directory')
+    if (!readOnly) throw new BrokerError('invalid_request', 'credential host mounts are read-only in v1')
+    const relativeTarget = assertSafeRelative(mount.target.path, 'home mount target')
+    const destination = `/home/agent/${relativeTarget}`
+    if (destinations.has(destination)) throw new BrokerError('invalid_request', 'duplicate host mount destination')
+    destinations.add(destination)
+    extraMounts.push({ source: realSource, destination, readOnly: true })
+  }
+  return { workspacePath, workspaceReadOnly, extraMounts }
 }
 
 /**
@@ -110,7 +220,9 @@ export class SandboxBrokerService implements SandboxProvider {
     }
     if (spec.agentId.trim() === '') throw new BrokerError('invalid_request', 'agentId must not be empty')
     if (spec.image.trim() === '') throw new BrokerError('invalid_request', 'image must not be empty')
+    const command = assertCommand(spec.command)
     const paths = sandboxPaths(this.options.dataRoot, name)
+    const hostMounts = await resolveHostMounts(spec.hostMounts, paths.workspace, this.options.homeDir ?? homedir())
     const allowedCallers = spec.allowedCallers ?? ['main']
     const allowedTargets = spec.allowedTargets ?? []
     for (const value of [...allowedCallers, ...allowedTargets]) {
@@ -139,13 +251,16 @@ export class SandboxBrokerService implements SandboxProvider {
         role: spec.role,
         image: spec.image,
         networkMode: spec.networkMode,
-        workspacePath: paths.workspace,
+        workspacePath: hostMounts.workspacePath,
+        workspaceReadOnly: hostMounts.workspaceReadOnly,
         inboxPath: paths.inbox,
         outboxPath: paths.outbox,
         homePath: paths.home,
         cachePath: paths.cache,
         ...(spec.resources === undefined ? {} : { resources: spec.resources }),
         ...(spec.labels === undefined ? {} : { labels: spec.labels }),
+        ...(hostMounts.extraMounts.length === 0 ? {} : { extraMounts: hostMounts.extraMounts }),
+        ...(command === undefined ? {} : { command }),
       })
     } catch (error) {
       await this.options.docker.removeContainer(containerName).catch(() => undefined)

@@ -23,6 +23,8 @@ export type KnownSandboxCapability =
   | 'sandbox.message'
   | 'sandbox.registry'
   | 'sandbox.audit'
+  | 'sandbox.host-mount'
+  | 'sandbox.command'
 
 export type SandboxCapability = KnownSandboxCapability | (string & {})
 
@@ -45,6 +47,27 @@ export interface SandboxResources {
   readonly pids?: number
 }
 
+/**
+ * A host directory explicitly mounted into a sandbox.
+ *
+ * Host mounts are intentionally coarse and target-constrained: users can
+ * replace the sandbox workspace, expose one legacy directory read-only, or
+ * mirror a directory under the sandbox agent home. The broker resolves and
+ * validates every source with realpath before Docker sees it.
+ */
+export type SandboxHostMountTarget =
+  | { readonly kind: 'workspace' }
+  | { readonly kind: 'legacy' }
+  | { readonly kind: 'home'; readonly path: string }
+
+export interface SandboxHostMount {
+  /** Absolute host path. Root, critical system directories and home itself are rejected. */
+  readonly source: string
+  readonly target: SandboxHostMountTarget
+  /** Defaults to true. Workspace mounts are normally read-write. */
+  readonly readOnly?: boolean
+}
+
 export interface SandboxSpec {
   readonly name: string
   readonly role: SandboxRole
@@ -57,6 +80,10 @@ export interface SandboxSpec {
   readonly maxDelegationDepth?: number
   readonly labels?: Readonly<Record<string, string>>
   readonly extensions?: ExtensionBag
+  /** Optional command executed inside the container after the image. */
+  readonly command?: readonly string[]
+  /** Explicit host directory mounts, validated by the broker. */
+  readonly hostMounts?: readonly SandboxHostMount[]
 }
 
 export interface SandboxView {

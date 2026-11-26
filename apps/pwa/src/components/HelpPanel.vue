@@ -123,6 +123,17 @@ defineProps<{
     </article>
 
     <article class="card">
+      <h2>Agent Migration</h2>
+      <p>
+        Agent Migration 页面扫描本机已知 AI agent 的进程元数据、cwd、监听端口和配置目录是否存在，
+        不读取凭据内容，也不停止原进程。用户可以勾选服务，选择新建空 workspace 或复用原目录，
+        并可把原目录只读挂载到 <code>/legacy</code>、把显式勾选的配置目录只读挂载到容器 home。
+      </p>
+      <p>
+        计划会阻断根目录、用户 home 本身和受保护系统路径；执行时通过 broker 创建隔离 sandbox，
+        原服务保持运行。镜像必须由用户确认包含对应 agent runtime；SHE 不会猜测安装命令。
+      </p>
+
       <h2>Agent Chat 与 Worker</h2>
       <p>
         Chat 页面通过 control plane 的 `/she submit` 入队任务。要真正执行，需要以
@@ -152,6 +163,7 @@ defineProps<{
           <tr><td>Dashboard</td><td>control plane health、task/sandbox 计数、最近任务。</td></tr>
           <tr><td>Tasks</td><td>只读 task snapshot；Chat 提交后的任务也在这里显示。</td></tr>
           <tr><td>Chat</td><td>通过 `/she submit` 布置任务，实时显示 agent text delta、工具状态和完成/失败。</td></tr>
+          <tr><td>Agent Migration</td><td>发现本机 AI agent，dry-run 规划并迁移到 sandbox；只读凭据目录挂载，原进程不动。</td></tr>
           <tr><td>Sandboxes</td><td>broker 列表、状态、角色、image、按需 CPU/内存/PIDs。</td></tr>
           <tr><td>Packages</td><td>Companion/Core/Node/pnpm/Docker 运行时清单；companion launcher、core 更新和用户级 pnpm 准备已接入。</td></tr>
           <tr><td>Gateway</td><td>飞书等 channel adapter 配置：开发中，feishu4dsh 为第一个目标。</td></tr>
@@ -182,6 +194,7 @@ defineProps<{
       <p><a :href="REPO_URL" target="_blank" rel="noreferrer">GitHub 仓库</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/COMPANION-CORE-CONTRACT.md`" target="_blank" rel="noreferrer">Companion ↔ Core 契约</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/ENVIRONMENT-BOOTSTRAP.md`" target="_blank" rel="noreferrer">环境检查与安装边界</a></p>
+      <p><a :href="`${REPO_URL}/blob/main/docs/AGENT-MIGRATION.md`" target="_blank" rel="noreferrer">AI Agent 发现与容器化迁移</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/ADR-0002-no-root-privilege-policy.md`" target="_blank" rel="noreferrer">无 root 权限策略</a></p>
     </article>
   </div>

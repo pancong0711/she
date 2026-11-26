@@ -48,7 +48,37 @@ $XDG_DATA_HOME/she/sandboxes/<sandbox-name>/
   sandbox.json   # descriptor，0600
 ```
 
-不允许调用方指定任意宿主路径或 Docker 参数。
+默认模板下，调用方不能指定任意宿主路径或 Docker 参数。
+
+### 2.1 显式 host mount（v1 扩展）
+
+迁移工作台需要把用户明确选择的宿主机目录交给 sandbox，因此 `SandboxSpec` 增加受约束的
+`hostMounts` 和 `command`：
+
+```ts
+interface SandboxHostMount {
+  source: string
+  target:
+    | { kind: 'workspace' }
+    | { kind: 'legacy' }
+    | { kind: 'home'; path: string }
+  readOnly?: boolean
+}
+```
+
+broker 会先 `realpath` 再校验：
+
+- 拒绝文件系统根目录、用户 home 本身和受保护系统路径；
+- source 必须是已存在的目录；
+- `/workspace` 和 `/legacy` 各最多一个；
+- `/legacy` 强制只读；
+- home target 只能位于真实 home 内，且首版强制只读；
+- target 不允许冲突或逃逸；
+- 参数数量/长度有上限；
+- 不会把 source 文件内容写入 registry、audit 或日志。
+
+这不是“任意 host mount”接口：只能替换 workspace、增加一个 `/legacy` 只读目录，或把 home
+内配置目录只读镜像到 `/home/agent` 下。全部仍由 broker 唯一调用 Docker。
 
 ## 3. Docker Runtime
 
@@ -74,7 +104,8 @@ interface DockerRuntime {
 - `--cap-drop ALL`
 - `--security-opt no-new-privileges`
 - `--network none|bridge`
-- workspace `rw`
+- workspace `rw`（host mount 时可按显式只读设置）
+- 可选受约束 host mounts 与容器 command
 - inbox `ro`
 - outbox `rw`
 - home/cache 固定叶子挂载
@@ -174,7 +205,7 @@ client 只依赖 `@she/protocol` + Node 标准库。
 - 路径逃逸、symlink 逃逸、未授权 sender 负例；
 - Unix socket server + client 完整调用。
 
-当前测试：`pnpm test` **52/52**。
+当前测试：`pnpm test` **61/61**（包含 host mount 正例/根目录与可写凭据负例）。
 
 ## 9. 已知限制
 
@@ -184,6 +215,7 @@ client 只依赖 `@she/protocol` + Node 标准库。
 - 已由用户/管理员配置好的 rootless Docker 可直接使用；
 - 事件订阅 `subscribe()` 目前为空实现，后续补 broker event stream；
 - 资源限额/挂载模板需要真机安全验收；
+- host mount 首版只支持目录，不支持单文件凭据或隐藏路径；
 - 文件传输暂只支持 outbox 文件和文本 manifest，artifact 共享卷后续补；
 - 多 broker 实例共享同一 registry/数据根不支持。
 

@@ -192,6 +192,10 @@ SHE_TOKEN_FILE
   - 通过 `/she submit` 布置任务；
   - 实时显示 agent text delta、tool call、完成/失败；
   - worker 状态和 disabled 提示；
+- Agent Migration：
+  - 扫描本机运行中的 AI agent 进程、端口和 cwd；
+  - 勾选服务，配置 new/reuse workspace、`/legacy` 只读和凭据目录只读挂载；
+  - dry-run 计划、根目录阻断、实时迁移 job 与历史记录；
 - Sandboxes：
   - 通过 `/broker/v1/*` 代理访问 sandbox broker；
   - list/status/role/agent/image；
@@ -213,8 +217,6 @@ SHE_TOKEN_FILE
   - staging、切换、health check、自动回滚；
   - 实时更新日志。
 - 占位页：
-  - Sandboxes；
-  - Packages；
   - Gateway。
 
 ## 5. 安全边界

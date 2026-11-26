@@ -44,7 +44,7 @@ pnpm typecheck
 pnpm test
 ```
 
-当前进度：M0 基线完成；M1 完成（core/control、队列与租约、SQLite 持久化、TaskRunner + fake agent 闭环）；T4.0–T4.1 完成（feishu4dsh 对齐、`@she/client`）。
+当前进度：M0 基线完成；M1 完成（core/control、队列与租约、SQLite 持久化、TaskRunner + fake agent 闭环）；T4.0–T4.1 完成（feishu4dsh 对齐、`@she/client`）；PWA 已接入 Agent Worker/Chat 与本机 AI agent 容器化迁移工作台。
 
 ## PWA 本地控制台
 
@@ -107,6 +107,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.1.0.tar.gz --core-
 - [Companion ↔ Core 契约 v1](docs/COMPANION-CORE-CONTRACT.md)
 - [环境检查与安装边界](docs/ENVIRONMENT-BOOTSTRAP.md)
 - [Agent Worker 与 PWA Chat](docs/AGENT-WORKER.md)
+- [AI Agent 本机发现与容器化迁移](docs/AGENT-MIGRATION.md)
 - [ADR-0002：不请求、不执行 root](docs/ADR-0002-no-root-privilege-policy.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)
 - [对 feishu4dsh 第二轮反馈的回复](docs/20261125-feishu4dsh-feedback-response.md)

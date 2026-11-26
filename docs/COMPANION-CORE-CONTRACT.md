@@ -41,6 +41,13 @@ POST /api/core/stop
 POST /api/core/restart
 POST /api/core/update/check
 POST /api/core/update/apply-job (via /api/jobs kind=core-update)
+GET  /api/worker/config
+POST /api/worker/config
+GET  /api/agents/discover
+POST /api/agents/migrations/plan
+POST /api/agents/migrations/apply
+GET  /api/agents/migrations
+GET  /api/agents/migrations/:id
 ```
 
 `/api/health` 返回 companion 自身信息：
@@ -121,7 +128,12 @@ install
 build
 build-all
 test
+core-update
+agent-migrate
 ```
+
+`agent-migrate` 的 body 是迁移请求，companion 会重新扫描并校验计划后才通过 broker 创建 sandbox；
+原始凭据内容不会进入 job 输入、日志或迁移记录。
 
 约束：
 

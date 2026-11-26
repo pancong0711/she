@@ -375,3 +375,148 @@ export async function saveWorkerConfig(config: WorkerConfig): Promise<WorkerConf
   }
   return payload.value
 }
+
+export interface DiscoveredAgentService {
+  readonly id: string
+  readonly kind: string
+  readonly name: string
+  readonly running: boolean
+  readonly pid: number | null
+  readonly ppid: number | null
+  readonly command: string | null
+  readonly cwd?: string
+  readonly ports: readonly number[]
+  readonly warnings: readonly string[]
+  readonly containerizable: boolean
+}
+
+export interface AgentCredentialSuggestion {
+  readonly agentKind: string
+  readonly label: string
+  readonly path: string
+  readonly exists: boolean
+}
+
+export interface AgentDiscovery {
+  readonly scannedAt: number
+  readonly platform: string
+  readonly home: string
+  readonly docker: { readonly checked: boolean; readonly available: boolean }
+  readonly services: readonly DiscoveredAgentService[]
+  readonly credentialSuggestions: readonly AgentCredentialSuggestion[]
+  readonly safety: {
+    readonly readsProcessMetadataOnly: boolean
+    readonly readsFileContents: boolean
+    readonly killsProcesses: boolean
+    readonly executesSudo: boolean
+  }
+}
+
+export interface MigrationAgentInput {
+  readonly id: string
+  readonly sourceWorkspacePath: string
+  readonly workspaceMode: 'new' | 'reuse'
+  readonly newWorkspacePath?: string
+  readonly legacyReadOnly: boolean
+  readonly credentialPaths: readonly string[]
+}
+
+export interface MigrationRequest {
+  readonly agents: readonly MigrationAgentInput[]
+  readonly image: string
+  readonly command: readonly string[]
+  readonly networkMode: 'none' | 'egress'
+  readonly resources: { readonly cpus: number; readonly memoryMb: number; readonly pids: number }
+}
+
+export interface MigrationPlanMessage {
+  readonly code: string
+  readonly severity: 'info' | 'warning' | 'error'
+  readonly message: string
+  readonly agentId?: string
+}
+
+export interface MigrationPlanAgent {
+  readonly candidateId: string
+  readonly kind: string
+  readonly name: string
+  readonly running: boolean
+  readonly pid: number | null
+  readonly sourceWorkspacePath: string
+  readonly workspaceMode: 'new' | 'reuse'
+  readonly newWorkspacePath?: string
+  readonly legacyReadOnly: boolean
+  readonly credentialMounts: readonly { readonly source: string; readonly containerPath: string; readonly readOnly: true }[]
+  readonly sandboxName: string
+  readonly mounts: readonly unknown[]
+}
+
+export interface AgentMigrationPlan {
+  readonly schema: 1
+  readonly id: string
+  readonly createdAt: number
+  readonly agents: readonly MigrationPlanAgent[]
+  readonly image: string
+  readonly command: readonly string[]
+  readonly networkMode: 'none' | 'egress'
+  readonly resources: { readonly cpus: number; readonly memoryMb: number; readonly pids: number }
+  readonly warnings: readonly MigrationPlanMessage[]
+  readonly errors: readonly MigrationPlanMessage[]
+  readonly blocked: boolean
+  readonly steps: readonly string[]
+}
+
+export interface AgentDiscoveryPlanResult {
+  readonly discovery: AgentDiscovery
+  readonly plan: AgentMigrationPlan
+}
+
+export interface AgentMigrationRecord {
+  readonly schema: 1
+  readonly id: string
+  readonly createdAt: number
+  readonly finishedAt: number
+  readonly status: 'succeeded' | 'failed' | string
+  readonly image: string
+  readonly agents: readonly {
+    readonly candidateId: string
+    readonly kind: string
+    readonly name: string
+    readonly sandboxName: string
+    readonly sandboxStatus: string
+    readonly workspaceMode: 'new' | 'reuse'
+    readonly newWorkspacePath?: string
+    readonly sourceWorkspacePath: string
+    readonly legacyReadOnly: boolean
+    readonly credentialMounts: readonly { readonly source: string; readonly containerPath: string; readonly readOnly: true }[]
+  }[]
+}
+
+export async function loadAgentDiscovery(signal?: AbortSignal): Promise<AgentDiscovery> {
+  const payload = await getJson<{ ok: boolean; value?: AgentDiscovery; error?: { message?: string } }>('/api/agents/discover', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'agent discovery unavailable')
+  return payload.value
+}
+
+export async function planAgentMigration(request: MigrationRequest): Promise<AgentDiscoveryPlanResult> {
+  const response = await fetch(`${apiBase()}/api/agents/migrations/plan`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify(request),
+  })
+  const payload = await response.json() as { ok: boolean; value?: AgentDiscoveryPlanResult; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `migration plan failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
+export async function applyAgentMigration(request: MigrationRequest): Promise<JobSummary> {
+  return await startJob('agent-migrate', { request })
+}
+
+export async function loadAgentMigrations(signal?: AbortSignal): Promise<readonly AgentMigrationRecord[]> {
+  const payload = await getJson<{ ok: boolean; value?: readonly AgentMigrationRecord[]; error?: { message?: string } }>('/api/agents/migrations', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'migration records unavailable')
+  return payload.value
+}

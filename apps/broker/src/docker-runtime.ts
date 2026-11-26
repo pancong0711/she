@@ -7,6 +7,12 @@ import { BrokerError } from './errors.js'
 
 const execFileAsync = promisify(execFile)
 
+export interface DockerExtraMount {
+  readonly source: string
+  readonly destination: string
+  readonly readOnly: boolean
+}
+
 export interface DockerContainerSpec {
   readonly containerName: string
   readonly sandboxName: string
@@ -14,12 +20,16 @@ export interface DockerContainerSpec {
   readonly image: string
   readonly networkMode: SandboxNetworkMode
   readonly workspacePath: string
+  readonly workspaceReadOnly?: boolean
   readonly inboxPath: string
   readonly outboxPath: string
   readonly homePath: string
   readonly cachePath: string
   readonly resources?: SandboxResources
   readonly labels?: Readonly<Record<string, string>>
+  readonly extraMounts?: readonly DockerExtraMount[]
+  /** Command passed after the image. Arguments are never shell-interpreted. */
+  readonly command?: readonly string[]
 }
 
 export interface DockerInspectResult {
@@ -107,7 +117,7 @@ export class DockerCliRuntime implements DockerRuntime {
       '--cap-drop', 'ALL',
       '--security-opt', 'no-new-privileges',
       '--network', spec.networkMode === 'none' ? 'none' : 'bridge',
-      '--mount', `type=bind,src=${spec.workspacePath},dst=/workspace,rw`,
+      '--mount', `type=bind,src=${spec.workspacePath},dst=/workspace,${spec.workspaceReadOnly === true ? 'ro' : 'rw'}`,
       '--mount', `type=bind,src=${spec.inboxPath},dst=/inbox,ro`,
       '--mount', `type=bind,src=${spec.outboxPath},dst=/outbox,rw`,
       '--mount', `type=bind,src=${spec.homePath},dst=/home/agent,rw`,
@@ -119,8 +129,12 @@ export class DockerCliRuntime implements DockerRuntime {
     if (spec.resources?.cpus !== undefined) args.push('--cpus', String(spec.resources.cpus))
     if (spec.resources?.memoryMb !== undefined) args.push('--memory', `${String(spec.resources.memoryMb)}m`)
     if (spec.resources?.pids !== undefined) args.push('--pids-limit', String(spec.resources.pids))
+    for (const mount of spec.extraMounts ?? []) {
+      args.push('--mount', `type=bind,src=${mount.source},dst=${mount.destination},${mount.readOnly ? 'ro' : 'rw'}`)
+    }
     for (const [key, value] of Object.entries(spec.labels ?? {})) args.push('--label', `${key}=${value}`)
     args.push(spec.image)
+    for (const arg of spec.command ?? []) args.push(arg)
     await this.run(args)
   }
 

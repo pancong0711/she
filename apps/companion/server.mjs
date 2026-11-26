@@ -15,6 +15,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -34,6 +35,8 @@ const configHome = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.conf
 const dataHome = process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share')
 const coreRoot = process.env.SHE_CORE_ROOT?.trim() || join(dataHome, 'she', 'core')
 const workerConfigPath = process.env.SHE_WORKER_CONFIG_FILE?.trim() || join(configHome, 'she', 'worker.json')
+const migrationRecordRoot = process.env.SHE_MIGRATION_RECORD_ROOT?.trim() || join(dataHome, 'she', 'migrations')
+const migrationWorkspaceRoot = process.env.SHE_MIGRATION_WORKSPACE_ROOT?.trim() || join(dataHome, 'she', 'workspaces')
 const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
@@ -88,6 +91,7 @@ const JOB_KINDS = new Map([
   ['build-all', '构建全部'],
   ['test', '运行测试'],
   ['core-update', 'Core 更新'],
+  ['agent-migrate', 'AI agent 容器化迁移'],
 ])
 const jobs = new Map()
 let activeJobId = null
@@ -680,6 +684,9 @@ async function executeJob(job) {
     } else if (job.kind === 'core-update') {
       await executeCoreUpdate(job)
       job.exitCode = 0
+    } else if (job.kind === 'agent-migrate') {
+      await executeAgentMigration(job)
+      job.exitCode = 0
     } else {
       throw new Error(`unsupported job kind: ${job.kind}`)
     }
@@ -769,7 +776,7 @@ async function readBodyJson(request) {
   for await (const chunk of request) {
     const buffer = Buffer.from(chunk)
     size += buffer.byteLength
-    if (size > 64 * 1024) throw new Error('request body too large')
+    if (size > 256 * 1024) throw new Error('request body too large')
     chunks.push(buffer)
   }
   if (chunks.length === 0) return {}
@@ -785,6 +792,162 @@ function sendJsonWithCors(request, response, status, payload) {
   }
   response.writeHead(status, { ...cors, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
   response.end(JSON.stringify(payload))
+}
+
+function requestBrokerJson(method, requestPath, payload) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    let settled = false
+    const finish = (error, value) => {
+      if (settled) return
+      settled = true
+      if (error !== undefined) rejectPromise(error)
+      else resolvePromise(value)
+    }
+    readToken(brokerTokenFile).then(token => {
+      const body = payload === undefined ? undefined : Buffer.from(JSON.stringify(payload), 'utf8')
+      const brokerRequest = httpRequest({
+        socketPath: brokerSocketPath,
+        path: requestPath,
+        method,
+        headers: {
+          accept: 'application/json',
+          ...(body === undefined ? {} : { 'content-type': 'application/json', 'content-length': String(body.byteLength) }),
+          ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+        },
+        timeout: 30_000,
+      }, brokerResponse => {
+        const chunks = []
+        brokerResponse.on('data', chunk => chunks.push(Buffer.from(chunk)))
+        brokerResponse.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8')
+          let parsed
+          try { parsed = text === '' ? null : JSON.parse(text) } catch { parsed = null }
+          if ((brokerResponse.statusCode ?? 500) >= 400 || parsed?.ok === false) {
+            finish(new Error(parsed?.error?.message ?? `broker HTTP ${brokerResponse.statusCode ?? 500}`))
+            return
+          }
+          finish(undefined, parsed?.value ?? null)
+        })
+      })
+      brokerRequest.on('timeout', () => {
+        brokerRequest.destroy()
+        finish(new Error('broker request timed out'))
+      })
+      brokerRequest.on('error', error => finish(new Error(`broker unavailable: ${error.message}`)))
+      if (body === undefined) brokerRequest.end()
+      else brokerRequest.end(body)
+    }).catch(error => finish(error))
+  })
+}
+
+async function listMigrationRecords() {
+  try {
+    const entries = await import('node:fs/promises').then(fs => fs.readdir(migrationRecordRoot, { withFileTypes: true }))
+    const records = []
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+      try {
+        records.push(JSON.parse(await readFile(join(migrationRecordRoot, entry.name), 'utf8')))
+      } catch {}
+    }
+    return records.sort((left, right) => Number(right.createdAt ?? 0) - Number(left.createdAt ?? 0)).slice(0, 50)
+  } catch (error) {
+    if (error?.code === 'ENOENT') return []
+    throw error
+  }
+}
+
+async function executeAgentMigration(job) {
+  const request = job.input?.request
+  if (request === undefined || typeof request !== 'object') throw new Error('migration request is required')
+  appendJobEvent(job, { type: 'system', text: '正在重新扫描本机 AI agent 服务并校验迁移边界…' })
+  const { discovery, plan } = await discoverAndPlan({ request, managedWorkspaceRoot: migrationWorkspaceRoot })
+  appendJobEvent(job, { type: 'system', text: `发现 ${String(discovery.services.length)} 个候选条目，计划包含 ${String(plan.agents.length)} 个 agent。` })
+  for (const warning of plan.warnings) {
+    appendJobEvent(job, { type: 'system', text: `[${warning.severity}] ${warning.message}` })
+  }
+  if (plan.blocked) {
+    for (const error of plan.errors) appendJobEvent(job, { type: 'system', text: `[blocked] ${error.message}` })
+    throw new Error('migration plan is blocked; fix validation errors first')
+  }
+
+  const createdSandboxes = []
+  const results = []
+  try {
+    for (const agent of plan.agents) {
+      if (agent.workspaceMode === 'new') {
+        await mkdir(agent.newWorkspacePath, { recursive: true, mode: 0o700 })
+        appendJobEvent(job, { type: 'system', text: `已创建新工作空间：${agent.newWorkspacePath}` })
+      }
+      const spec = {
+        name: agent.sandboxName,
+        role: 'utility',
+        agentId: agent.kind,
+        image: plan.image,
+        networkMode: plan.networkMode,
+        resources: plan.resources,
+        allowedCallers: ['main'],
+        allowedTargets: [],
+        labels: {
+          'she.migration.id': plan.id,
+          'she.migration.agent': agent.kind,
+          'she.migration.source.pid': String(agent.pid ?? ''),
+        },
+        command: plan.command,
+        hostMounts: agent.mounts,
+      }
+      appendJobEvent(job, { type: 'system', text: `创建 sandbox ${agent.sandboxName}（${agent.name}）…` })
+      const sandbox = await requestBrokerJson('POST', '/v1/sandboxes', spec)
+      createdSandboxes.push(agent.sandboxName)
+      results.push({
+        candidateId: agent.candidateId,
+        kind: agent.kind,
+        name: agent.name,
+        sandboxName: agent.sandboxName,
+        sandboxStatus: sandbox?.status ?? 'unknown',
+        workspaceMode: agent.workspaceMode,
+        ...(agent.newWorkspacePath === undefined ? {} : { newWorkspacePath: agent.newWorkspacePath }),
+        sourceWorkspacePath: agent.sourceWorkspacePath,
+        legacyReadOnly: agent.legacyReadOnly,
+        credentialMounts: agent.credentialMounts,
+      })
+      appendJobEvent(job, { type: 'system', text: `sandbox ${agent.sandboxName} 已创建；原进程未修改。` })
+    }
+  } catch (error) {
+    appendJobEvent(job, { type: 'system', text: `迁移失败，回滚本次已创建的 sandbox：${error.message}` })
+    for (const sandboxName of createdSandboxes) {
+      try {
+        await requestBrokerJson('DELETE', `/v1/sandboxes/${encodeURIComponent(sandboxName)}?preserveData=true`)
+        appendJobEvent(job, { type: 'system', text: `已回滚 sandbox ${sandboxName}（保留数据目录）。` })
+      } catch (rollbackError) {
+        appendJobEvent(job, { type: 'system', text: `回滚 ${sandboxName} 失败：${rollbackError.message}` })
+      }
+    }
+    throw error
+  }
+
+  const record = {
+    schema: 1,
+    id: plan.id,
+    createdAt: plan.createdAt,
+    finishedAt: Date.now(),
+    status: 'succeeded',
+    image: plan.image,
+    command: plan.command,
+    networkMode: plan.networkMode,
+    resources: plan.resources,
+    warnings: plan.warnings,
+    agents: results,
+    originalProcesses: discovery.services.filter(service => plan.agents.some(agent => agent.candidateId === service.id)),
+    safety: {
+      originalProcessesUntouched: true,
+      credentialContentsRead: false,
+      credentialMountsReadOnly: true,
+    },
+  }
+  await mkdir(migrationRecordRoot, { recursive: true, mode: 0o700 })
+  await writeFile(join(migrationRecordRoot, `${plan.id}.json`), `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 })
+  appendJobEvent(job, { type: 'system', text: `迁移记录已写入：${join(migrationRecordRoot, `${plan.id}.json`)}` })
 }
 
 async function handleCompanionApi(request, response) {
@@ -849,7 +1012,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'packages', 'worker-config'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'packages', 'worker-config', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -925,6 +1088,61 @@ async function handleCompanionApi(request, response) {
       sendJsonWithCors(request, response, 200, { ok: true, value: { config, path: workerConfigPath, restartRequired: true } })
     } catch (error) {
       sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/agents/discover') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await scanLocalAgents() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/agents/migrations/plan') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      const result = await discoverAndPlan({ request: body, managedWorkspaceRoot: migrationWorkspaceRoot })
+      sendJsonWithCors(request, response, 200, { ok: true, value: result })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/agents/migrations/apply') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      const job = startJob('agent-migrate', { request: body })
+      sendJsonWithCors(request, response, 202, { ok: true, value: jobSummary(job) })
+    } catch (error) {
+      sendJsonWithCors(request, response, 409, { ok: false, error: { code: 'conflict', message: error.message, retryable: true } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/agents/migrations') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await listMigrationRecords() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && /^\/api\/agents\/migrations\/[^/]+$/.test(url.pathname)) {
+    try {
+      const recordId = decodeURIComponent(url.pathname.split('/').pop() ?? '')
+      if (!/^mig-[a-zA-Z0-9-]+$/.test(recordId)) throw new Error('invalid migration id')
+      const record = JSON.parse(await readFile(join(migrationRecordRoot, `${recordId}.json`), 'utf8'))
+      sendJsonWithCors(request, response, 200, { ok: true, value: record })
+    } catch (error) {
+      sendJsonWithCors(request, response, 404, { ok: false, error: { code: 'not_found', message: error.message, retryable: false } })
     }
     return
   }
