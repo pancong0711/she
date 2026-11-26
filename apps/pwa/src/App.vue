@@ -350,7 +350,7 @@ function packageInstall(item: PackageInfo): PackageInstallInfo {
     mode: item.management,
     title: '安装/修复说明',
     commands: [],
-    note: '当前 companion 版本较旧，尚未返回安装方法；请升级 companion 后重新加载。',
+    note: `当前本地 companion ${companion.value?.version ?? 'unknown'} 低于 PWA 期望的 ${COMPANION_MIN_VERSION}，因此 /api/packages 没有返回 install 字段。旧进程仍在运行；升级文件并不会自动替换它。`,
   }
 }
 
@@ -1081,6 +1081,22 @@ onBeforeUnmount(() => {
       </section>
 
       <section v-else-if="active === 'packages'" class="packages-page">
+        <div v-if="companionOutdated" class="alert companion-outdated-alert">
+          <strong>Packages 数据来自旧 companion，安装方法不可用</strong>
+          <p>
+            当前本地 companion：<b>{{ companion?.version ?? 'unknown' }}</b>，
+            PWA 期望至少：<b>{{ COMPANION_MIN_VERSION }}</b>。
+            Docker/Node 等卡片的安装命令需要新版 companion 的 <code>/api/packages</code> 返回 <code>install</code> 字段。
+          </p>
+          <p>
+            仅安装新 bundle 不会替换正在运行的旧进程。请先停止旧 companion，再重新运行新版 <code>start.sh</code>，
+            然后回到本页点击 Refresh。
+          </p>
+          <div class="package-actions">
+            <a class="primary" href="./start.sh" download>下载新版 start.sh</a>
+            <button class="secondary" :disabled="loading" @click="refresh">重新连接并刷新</button>
+          </div>
+        </div>
         <div v-if="packageError" class="alert">
           <strong>Package catalog 不可用</strong>
           <p>{{ packageError }}</p>
