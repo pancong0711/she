@@ -1269,12 +1269,30 @@ onBeforeUnmount(() => {
               <div class="health-grid">
                 <div><span>基础工具链</span><b>{{ preflight.ok ? 'ready' : 'blocked' }}</b></div>
                 <div><span>Sandbox / Docker</span><b>{{ preflight.sandboxReady ? 'ready' : 'unavailable' }}</b></div>
+                <div><span>headless persistence</span><b>{{ preflight.persistenceReady ? 'ready' : 'needs attention' }}</b></div>
                 <div><span>warnings</span><b>{{ preflight.summary?.warnings ?? preflight.warnings?.length ?? 0 }}</b></div>
                 <div><span>failures</span><b>{{ preflight.summary?.failures ?? 0 }}</b></div>
               </div>
               <div class="job-actions environment-actions">
                 <button class="secondary" :disabled="environmentChecking || jobRunning || !companionOnline" @click="recheckEnvironment">{{ environmentChecking ? '检查中…' : '重新检查环境' }}</button>
                 <button class="secondary" :disabled="jobRunning" @click="refreshPreflightOnly">仅刷新结果</button>
+              </div>
+              <div v-if="preflight.persistenceReady === false" class="alert environment-warning">
+                <strong>后台常驻/无登录运行未完全就绪</strong>
+                <p>
+                  rootless Docker、companion、OpenCode 和 feishu4dsh 若在部署机上长期运行，应使用用户级 systemd service，并启用 linger。
+                  仅手工运行 start.sh 或退出 SSH 后，用户服务可能停止。
+                </p>
+                <ul>
+                  <li v-for="warning in (preflight.warnings ?? []).filter(item => item.feature === 'persistence')" :key="warning.label">
+                    <b>{{ warning.label }}</b>：{{ warning.detail }}
+                    <span v-if="warning.remediation"><br />修复：{{ warning.remediation }}</span>
+                  </li>
+                </ul>
+                <div class="package-actions">
+                  <button class="primary" @click="active = 'settings'">打开 Companion 自启动设置</button>
+                  <button class="secondary" @click="active = 'packages'">查看 rootless Docker 持久化步骤</button>
+                </div>
               </div>
               <div v-if="preflight.sandboxReady === false" class="alert environment-warning">
                 <strong>未检测到可用的 Docker sandbox runtime</strong>

@@ -33,6 +33,6 @@ describe('preflight diagnostics', () => {
     ], false)
     expect(outcome.ok).toBe(true)
     expect(outcome.sandboxReady).toBe(false)
-    expect(outcome.summary).toEqual({ requiredReady: true, sandboxReady: false, warnings: 1, failures: 0 })
+    expect(outcome.summary).toEqual({ requiredReady: true, sandboxReady: false, persistenceReady: true, warnings: 1, failures: 0 })
   })
 })

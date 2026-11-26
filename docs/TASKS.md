@@ -99,6 +99,7 @@
 | T6.9 | 本机 AI agent 发现、容器化迁移计划、凭据目录只读挂载与迁移记录 | T6.3/T3.3/T3.5 | [x] | 发现不读凭据内容；根目录 workspace 阻断；broker host mount 负例测试；PWA 勾选/配置/执行 |
 | T6.10 | 用户级 companion 登录自启动与安装版开发者工具隐藏 | T6.4/T7.8 | [x] | 不写系统服务、不请求 root；安装版不执行源码依赖安装 |
 | T6.11 | Packages Sandbox 镜像下拉、默认资源和卡片等高滚动 | T6.4e | [x] | 镜像预设/自定义、默认网络/资源、本机镜像检测；Agent Migration 使用默认值 |
+| T6.12 | Headless persistence 环境检查：systemd --user、linger、companion autostart、OpenCode/Feishu health | T6.10/T6.3b | [x] | 无登录运行建议、修复命令、persistenceReady 摘要 |
 | T6.4f | Packages 依赖目录与缺失依赖安装指引 | T6.4e | [x] | requirement/用途/状态/安装命令/官方文档；不自动执行系统安装 |
 
 ## M7 Companion / Core 分层与自更新
@@ -178,3 +179,5 @@
 - 2026-11-26：修复 core update `version already installed`：Core 更新安装增加 `--force`，安装失败自动回滚；新增 control-plane `/v1/admin/shutdown` 与 companion 外部 core 检测，停止/重启可重新接管遗留 core；core 升级 0.2.1，companion 升级 0.3.6。
 
 - 2026-11-26：完成 T6.11：Packages 增加 Sandbox 镜像下拉（Node/Ubuntu/Debian/Alpine/Python + 自定义）、默认网络/CPU/内存/PIDs、本机镜像检测与 `docker pull` 提示；Agent Migration 自动读取默认值；Packages 卡片等高并支持内部滚动；Chat 增加单 worker 限制提示。
+
+- 2026-11-26：完成 T6.12：preflight 增加 systemd --user、linger、Companion 登录自启动、OpenCode health 和已配置 feishu4dsh health；环境摘要新增 headless persistence 状态和修复入口；新增 `docs/HEADLESS-PERSISTENCE.md`。

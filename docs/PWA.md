@@ -229,6 +229,9 @@ SHE_TOKEN_FILE
   - OS/arch/Node/shell/uid/WSL 与 Docker 模式；
   - Linux/macOS/Windows 支持矩阵，区分 verified / implemented-unverified / design-only / unsupported；
 - Install & Doctor 环境能力摘要：
+  - systemd --user、linger、companion autostart；
+  - headless persistence ready/needs-attention；
+  - OpenCode 和 feishu4dsh health；
   - 区分 required toolchain 与 sandbox/Docker 能力；
   - Docker 缺失时显示可选能力影响和安装指引；
   - job 成功但存在 warning 时明确标注，避免把 `succeeded` 误解为所有能力就绪。

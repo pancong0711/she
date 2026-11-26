@@ -12,7 +12,7 @@ import { access, mkdir, readFile, readlink, rename, rm, stat, symlink, unlink, w
 import { createServer, request as httpRequest } from 'node:http'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { homedir } from 'node:os'
+import { homedir, userInfo } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
@@ -349,6 +349,97 @@ async function runPreflight(job) {
     feature: 'broker',
     remediation: '在 Install & Doctor 的 Core 版本与更新中安装/启动 core（broker 随 core 启动）。',
   })
+
+  if (process.platform === 'linux') {
+    const userSystemd = await captureCommand(job, 'systemctl', ['--user', 'show-environment'])
+    add(
+      userSystemd.ok ? 'ok' : 'warn',
+      'systemd --user',
+      userSystemd.ok ? 'user systemd manager is available' : (userSystemd.stderr || 'systemctl --user unavailable'),
+      {
+        requirement: 'persistence',
+        feature: 'persistence',
+        remediation: '无桌面/远程部署需要可用的 user systemd；请由你本人检查登录会话和 systemd 配置。',
+      },
+    )
+    const username = userInfo().username
+    const linger = await captureCommand(job, 'loginctl', ['show-user', username, '-p', 'Linger'])
+    const lingerEnabled = linger.ok && /(?:^|\n)Linger=yes(?:\n|$)/.test(linger.stdout)
+    add(
+      lingerEnabled ? 'ok' : 'warn',
+      'headless persistence (linger)',
+      lingerEnabled ? `Linger=yes for ${username}` : (linger.ok ? linger.stdout.trim() || 'Linger=no' : (linger.stderr || 'loginctl unavailable')),
+      {
+        requirement: 'persistence',
+        feature: 'persistence',
+        remediation: `由你本人执行 sudo loginctl enable-linger "${username}"；否则退出 SSH/最后一个登录会话后，rootless Docker 和用户级 companion 服务可能停止。`,
+      },
+    )
+  }
+
+  try {
+    const auto = await autostartStatus(autostartOptionsFromEnv())
+    add(
+      auto.enabled ? 'ok' : 'warn',
+      'Companion login autostart',
+      `${auto.mode}${auto.path === null ? '' : `: ${auto.path}`}`,
+      {
+        requirement: 'persistence',
+        feature: 'persistence',
+        remediation: 'Settings → Companion 版本与生命周期 → 启用登录自启动。',
+      },
+    )
+  } catch (error) {
+    add('warn', 'Companion login autostart', error.message, {
+      requirement: 'persistence',
+      feature: 'persistence',
+      remediation: 'Settings → Companion 版本与生命周期 → 启用登录自启动。',
+    })
+  }
+
+  const controlProbe = await probeSocket(controlSocketPath, controlTokenFile)
+  if (controlProbe.reachable) {
+    try {
+      const agent = await requestControlJson('GET', '/v1/agents', undefined)
+      add(
+        agent?.health?.ok ? 'ok' : 'warn',
+        'OpenCode agent health',
+        agent?.health?.ok ? `OpenCode ${agent.health.version ?? 'healthy'}` : (agent?.health?.detail ?? 'agent health unavailable'),
+        {
+          requirement: 'agent',
+          feature: 'agent',
+          remediation: '启动 OpenCode 服务，并在 Settings 中检查 URL、用户名、凭据文件路径和 worker 配置。',
+        },
+      )
+    } catch (error) {
+      add('warn', 'OpenCode agent health', error.message, {
+        requirement: 'agent',
+        feature: 'agent',
+        remediation: '检查 core/control-plane 与 OpenCode 服务。',
+      })
+    }
+    try {
+      const gateway = await gatewayStatus()
+      if (gateway.config.enabled) {
+        add(
+          gateway.adapter.reachable ? 'ok' : 'warn',
+          'feishu4dsh adapter health',
+          gateway.adapter.reachable ? `HTTP ${String(gateway.adapter.httpStatus ?? 200)}` : (gateway.adapter.detail ?? 'unreachable'),
+          {
+            requirement: 'gateway',
+            feature: 'gateway',
+            remediation: '确认 feishu4dsh 已启动，并在 Gateway 页面配置 loopback health URL。',
+          },
+        )
+      }
+    } catch (error) {
+      add('warn', 'feishu4dsh adapter health', error.message, {
+        requirement: 'gateway',
+        feature: 'gateway',
+        remediation: '打开 Gateway 页面检查 adapter 配置。',
+      })
+    }
+  }
 
   const outcome = summarizePreflight(checks, dockerResult.ok)
   const { failures, warnings, ok, sandboxReady, summary } = outcome

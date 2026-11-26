@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Added headless persistence checks (systemd --user, linger, companion autostart, OpenCode/Feishu health) to environment preflight.
 - Expanded Docker rootless steps 12–17 with systemd --user, Docker context, rootless verification, linger, and headless deployment guidance.
 - Fixed Docker install guide API to include mirror alternatives, enabling the Packages install-source dropdown.
 - Fixed service worker caching live /api responses; companion shutdown now shows offline and environment/package data refreshes correctly.

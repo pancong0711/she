@@ -172,6 +172,8 @@ sudo loginctl enable-linger "$USER"
 
 ### 3.5 loginctl、linger 与无登录运行
 
+> 更完整的服务常驻矩阵见 `docs/HEADLESS-PERSISTENCE.md`。
+
 `systemctl --user` 管理的是**当前用户的 systemd user manager**，不是 root systemd。
 
 rootless Docker 服务是用户级服务，默认行为是：

@@ -33,14 +33,17 @@ export function dockerGuidance(commandResult, platform = process.platform) {
 export function summarizePreflight(checks, dockerAvailable) {
   const failures = checks.filter(check => check.status === 'fail')
   const warnings = checks.filter(check => check.status === 'warn')
+  const persistenceReady = !warnings.some(check => check.feature === 'persistence')
   return {
     failures,
     warnings,
     ok: failures.length === 0,
     sandboxReady: dockerAvailable === true,
+    persistenceReady,
     summary: {
       requiredReady: failures.length === 0,
       sandboxReady: dockerAvailable === true,
+      persistenceReady,
       warnings: warnings.length,
       failures: failures.length,
     },
