@@ -220,6 +220,61 @@ export async function loadPreflight(signal?: AbortSignal): Promise<PreflightResu
   return payload.value
 }
 
+export interface WorkspaceAuthorization {
+  readonly id: string
+  readonly label: string
+  readonly path: string
+  readonly realPath: string
+  readonly mode: 'read-only' | 'read-write'
+  readonly authorizedAt: number
+  readonly exists: boolean
+  readonly isDirectory: boolean
+  readonly readable: boolean
+  readonly writable: boolean
+  readonly leafAuthorized: boolean
+  readonly warnings: readonly string[]
+}
+
+export interface WorkspaceListResponse {
+  readonly path: string
+  readonly workspaces: readonly WorkspaceAuthorization[]
+}
+
+export async function loadWorkspaces(signal?: AbortSignal): Promise<WorkspaceListResponse> {
+  const payload = await getJson<{ ok: boolean; value?: WorkspaceListResponse; error?: { message?: string } }>('/api/workspaces', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'workspace list unavailable')
+  return payload.value
+}
+
+export async function authorizeWorkspace(input: {
+  readonly label: string
+  readonly path: string
+  readonly mode: 'read-only' | 'read-write'
+}): Promise<WorkspaceListResponse> {
+  const response = await fetch(`${apiBase()}/api/workspaces`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify(input),
+  })
+  const payload = await response.json() as { ok: boolean; value?: WorkspaceListResponse; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `workspace authorization failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
+export async function removeWorkspace(id: string): Promise<WorkspaceListResponse> {
+  const response = await fetch(`${apiBase()}/api/workspaces/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: localActionHeaders(),
+  })
+  const payload = await response.json() as { ok: boolean; value?: WorkspaceListResponse; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `workspace removal failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
 export interface PlatformSupportRow {
   readonly feature: string
   readonly linux: string

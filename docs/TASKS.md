@@ -90,7 +90,7 @@
 | T6.4c2 | signed companion installer 与平台安装向导 | T6.4c1/T7.4 | [x] |
 | T6.4c3 | PWA 一键 launcher（start.bat / start.command / start.sh） | T6.4c2 | [x] | 下载后自动校验/安装/启动/打开浏览器；不请求 root | checksum/签名、无 root、可回滚 |
 | T6.4d | 特权环境（Docker/rootless/系统依赖）instructions-only 支持矩阵 | T6.4b | [x] | 只展示方法；不执行 sudo/不请求 root | 显式同意、checksum、审计、回滚 | PWA 点击触发并实时显示 stdout/stderr | 校验、权限确认、日志、回滚入口 |
-| T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [ ] | 只允许叶子目录；不可绕过 broker |
+| T6.5 | Workspace 授权与只读/读写权限配置页 | T6.3 | [~] | 只允许叶子目录；不可绕过 broker | 授权注册表/PWA 页面完成；迁移与 worker 强制绑定待接入 |
 | T6.6 | Agent 对话/任务布置/报告与产物页面 | T6.3/M2 | [~] |
 | T6.6a | Agent worker + PWA Chat：提交、事件流、实时 text/tool 状态 | T6.6/M2 | [x] | worker+OpenCode+agent.delta 实测 |
 | T6.6b | PWA Settings：worker/OpenCode/workspace 配置与重启应用 | T6.6a | [x] | 0600 config；密码仅路径；core restart 后生效 | 与 CLI/gateway 共用同一控制面会话 |
@@ -155,3 +155,5 @@
 - 2026-11-26：完成 T6.3b：control-plane 新增 `GET /v1/agents` 与 `SheClient.agents()`，返回 OpenCode `/api/info` health、worker 配置、凭据文件路径（不返回内容）和 workspace realpath/r-w-x/readOnly/leafAuthorized 只读视图；PWA 新增 Agents 页面。
 
 - 2026-11-26：T6.8 部分完成：新增 companion `/api/platform` 平台探测（OS/arch/Node/shell/uid/WSL/Docker mode）与 Linux/macOS/Windows 支持矩阵；Install & Doctor 新增平台能力卡片，明确 verified / implemented-unverified / design-only / unsupported；新增 `docs/PLATFORM-SUPPORT.md`。
+
+- 2026-11-26：T6.5 首版：新增 companion workspace 授权注册表 `~/.config/she/workspaces.json`（0600）与 `/api/workspaces` CRUD；校验 realpath、叶子目录、root/home/系统路径、r/w 权限；PWA 新增 Workspaces 页面。实际只读强制仍由 broker host mount 执行；Agent Migration 与 worker 绑定授权 ID 列为后续。

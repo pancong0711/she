@@ -188,6 +188,10 @@ SHE_TOKEN_FILE
 - Tasks：
   - 只读任务表；
   - 状态、摘要、priority、更新时间；
+- Workspaces：
+  - 叶子目录授权注册表；
+  - read-only / read-write 权限意图；
+  - realpath、r/w、leafAuthorized 和 warning；
 - Agents：
   - OpenCode adapter health（版本/错误/checkedAt）；
   - worker 状态与最近 task/error；

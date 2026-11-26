@@ -163,6 +163,7 @@ defineProps<{
           <tr><td>Dashboard</td><td>control plane health、task/sandbox 计数、最近任务。</td></tr>
           <tr><td>Tasks</td><td>只读 task snapshot；Chat 提交后的任务也在这里显示。</td></tr>
           <tr><td>Agents</td><td>OpenCode health、worker 状态、workspace 只读授权视图；凭据只显示文件路径。</td></tr>
+          <tr><td>Workspaces</td><td>叶子目录授权注册表；记录 read-only/read-write 意图，拒绝 root/home/系统路径；实际挂载由 broker 二次校验。</td></tr>
           <tr><td>Chat</td><td>通过 `/she submit` 布置任务，实时显示 agent text delta、工具状态和完成/失败。</td></tr>
           <tr><td>Agent Migration</td><td>发现本机 AI agent，dry-run 规划并迁移到 sandbox；只读凭据目录挂载，原进程不动。</td></tr>
           <tr><td>Sandboxes</td><td>broker 列表、状态、角色、image、按需 CPU/内存/PIDs。</td></tr>
@@ -197,6 +198,7 @@ defineProps<{
       <p><a :href="`${REPO_URL}/blob/main/docs/ENVIRONMENT-BOOTSTRAP.md`" target="_blank" rel="noreferrer">环境检查与安装边界</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/AGENT-MIGRATION.md`" target="_blank" rel="noreferrer">AI Agent 发现与容器化迁移</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/PLATFORM-SUPPORT.md`" target="_blank" rel="noreferrer">平台能力与支持矩阵</a></p>
+      <p><a :href="`${REPO_URL}/blob/main/docs/WORKSPACES.md`" target="_blank" rel="noreferrer">Workspace 授权与叶子目录策略</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/ADR-0002-no-root-privilege-policy.md`" target="_blank" rel="noreferrer">无 root 权限策略</a></p>
     </article>
   </div>

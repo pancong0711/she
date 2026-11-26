@@ -17,6 +17,7 @@ import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
 import { dockerGuidance, summarizePreflight } from './preflight.mjs'
+import { authorizeWorkspace, listWorkspaceAuthorizations, removeWorkspaceAuthorization } from './workspaces.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -38,6 +39,7 @@ const coreRoot = process.env.SHE_CORE_ROOT?.trim() || join(dataHome, 'she', 'cor
 const workerConfigPath = process.env.SHE_WORKER_CONFIG_FILE?.trim() || join(configHome, 'she', 'worker.json')
 const migrationRecordRoot = process.env.SHE_MIGRATION_RECORD_ROOT?.trim() || join(dataHome, 'she', 'migrations')
 const migrationWorkspaceRoot = process.env.SHE_MIGRATION_WORKSPACE_ROOT?.trim() || join(dataHome, 'she', 'workspaces')
+const workspaceRegistryPath = process.env.SHE_WORKSPACE_REGISTRY?.trim() || join(configHome, 'she', 'workspaces.json')
 const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
@@ -1411,7 +1413,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'worker-config', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1550,6 +1552,54 @@ async function handleCompanionApi(request, response) {
       sendJsonWithCors(request, response, 200, { ok: true, value: await platformStatus() })
     } catch (error) {
       sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/workspaces') {
+    try {
+      sendJsonWithCors(request, response, 200, {
+        ok: true,
+        value: {
+          path: workspaceRegistryPath,
+          workspaces: await listWorkspaceAuthorizations(workspaceRegistryPath),
+        },
+      })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/workspaces') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      const workspace = await authorizeWorkspace(workspaceRegistryPath, body)
+      sendJsonWithCors(request, response, 200, {
+        ok: true,
+        value: { path: workspaceRegistryPath, workspace, workspaces: await listWorkspaceAuthorizations(workspaceRegistryPath) },
+      })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  const workspaceDeleteMatch = /^\/api\/workspaces\/([^/]+)$/.exec(url.pathname)
+  if (request.method === 'DELETE' && workspaceDeleteMatch !== null) {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      await removeWorkspaceAuthorization(workspaceRegistryPath, decodeURIComponent(workspaceDeleteMatch[1]))
+      sendJsonWithCors(request, response, 200, {
+        ok: true,
+        value: { path: workspaceRegistryPath, workspaces: await listWorkspaceAuthorizations(workspaceRegistryPath) },
+      })
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
     }
     return
   }

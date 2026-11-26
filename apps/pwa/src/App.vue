@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import HelpPanel from './components/HelpPanel.vue'
 import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
+import WorkspaceAuthorizationPanel from './components/WorkspaceAuthorizationPanel.vue'
 import type { AgentRuntimeStatus, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
@@ -44,12 +45,13 @@ import {
   type WorkerConfig,
 } from './api'
 
-type Tab = 'dashboard' | 'tasks' | 'agents' | 'sandboxes' | 'chat' | 'migrate' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
+type Tab = 'dashboard' | 'tasks' | 'agents' | 'workspaces' | 'sandboxes' | 'chat' | 'migrate' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'agents', label: 'Agents' },
+  { id: 'workspaces', label: 'Workspaces' },
   { id: 'sandboxes', label: 'Sandboxes' },
   { id: 'chat', label: 'Chat' },
   { id: 'migrate', label: 'Agent Migration' },
@@ -685,6 +687,10 @@ onBeforeUnmount(() => {
             </p>
           </article>
         </div>
+      </section>
+
+      <section v-else-if="active === 'workspaces'">
+        <WorkspaceAuthorizationPanel />
       </section>
 
       <section v-else-if="active === 'sandboxes'" class="sandbox-page">
