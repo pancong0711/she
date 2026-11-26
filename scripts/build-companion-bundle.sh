@@ -12,7 +12,7 @@ pnpm pwa:build
 rm -rf "$STAGE" "$ARCHIVE"
 mkdir -p "$STAGE/apps/companion" "$STAGE/apps/pwa" "$STAGE/scripts" "$STAGE/bin"
 
-cp apps/companion/server.mjs apps/companion/supervisor.mjs apps/companion/local-agents.mjs apps/companion/preflight.mjs apps/companion/workspaces.mjs apps/companion/companion-update.mjs apps/companion/docker-install.mjs apps/companion/autostart.mjs apps/companion/gateway.mjs apps/companion/package.json "$STAGE/apps/companion/"
+cp apps/companion/server.mjs apps/companion/supervisor.mjs apps/companion/local-agents.mjs apps/companion/preflight.mjs apps/companion/workspaces.mjs apps/companion/companion-update.mjs apps/companion/docker-install.mjs apps/companion/autostart.mjs apps/companion/gateway.mjs apps/companion/core-process.mjs apps/companion/package.json "$STAGE/apps/companion/"
 cp -a apps/pwa/dist "$STAGE/apps/pwa/dist"
 cp scripts/bootstrap-user.sh scripts/bootstrap-user.ps1 scripts/install-core-bundle.sh "$STAGE/scripts/"
 cp scripts/install-companion.sh scripts/install-companion.ps1 "$STAGE/scripts/"

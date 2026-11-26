@@ -1281,7 +1281,7 @@ onBeforeUnmount(() => {
             <p v-if="coreActionMessage" class="success-text">{{ coreActionMessage }}</p>
             <div v-if="coreStatus?.supervisor.external" class="alert environment-warning">
               <strong>检测到外部运行的 Core</strong>
-              <p>当前 control socket 可达，但 core 不是由这个 companion 进程作为子进程启动的。启动/停止/重启会通过受认证的 admin shutdown 让它退出并重新接管。</p>
+              <p>当前 control socket 可达，但 core 不是由这个 companion 进程作为子进程启动的。停止/重启会先调用受认证的 admin shutdown；旧 core 不支持该接口时，会回退到 Linux /proc socket-owner 检测并发送 SIGTERM，然后由当前 companion 重新接管。</p>
             </div>
             <div v-if="coreStatus && coreStatus.installed.current === null" class="alert core-install-alert">
               <strong>Core 尚未安装</strong>

@@ -22,6 +22,7 @@ import { compareVersions, validateCompanionManifest, validateCompanionManifestUr
 import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
 import { autostartOptionsFromEnv, autostartStatus, disableAutostart, enableAutostart } from './autostart.mjs'
 import { probeGatewayAdapter, readGatewayConfig, writeGatewayConfig } from './gateway.mjs'
+import { terminateUnixSocketOwner } from './core-process.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -1025,9 +1026,28 @@ async function stopCore(job) {
     const existing = await probeSocket(controlSocketPath, controlTokenFile)
     if (!existing.reachable) return { stopped: false, external: false }
     if (job !== undefined) appendJobEvent(job, { type: 'system', text: 'stopping external core process via control-plane admin shutdown' })
-    await requestControlJson('POST', '/v1/admin/shutdown', {})
-    const stopped = await waitForControlSocketDown()
-    return { stopped, external: true }
+    let adminShutdownError
+    try {
+      await requestControlJson('POST', '/v1/admin/shutdown', {})
+    } catch (error) {
+      adminShutdownError = error
+      if (job !== undefined) appendJobEvent(job, { type: 'system', text: `admin shutdown unavailable: ${error.message}; trying socket-owner recovery` })
+    }
+    let stopped = adminShutdownError === undefined ? await waitForControlSocketDown() : false
+    if (!stopped) {
+      const recovered = await terminateUnixSocketOwner(controlSocketPath)
+      if (job !== undefined) {
+        appendJobEvent(job, {
+          type: 'system',
+          text: recovered.found
+            ? `socket-owner recovery terminated pids=${recovered.terminated.join(',')} forced=${String(recovered.forced)}`
+            : 'no control-socket owner found during recovery',
+        })
+      }
+      stopped = await waitForControlSocketDown(5_000)
+    }
+    if (!stopped) throw new Error('could not stop the external core; stop the old core process manually and retry')
+    return { stopped: true, external: true, recovered: true }
   }
   if (job !== undefined) appendJobEvent(job, { type: 'system', text: 'stopping core' })
   const exited = new Promise(resolvePromise => child.once('exit', () => resolvePromise(true)))
