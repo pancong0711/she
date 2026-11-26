@@ -30,12 +30,14 @@ import {
   loadPackages,
   loadPlatformStatus,
   loadPreflight,
+  loadSandboxPreferences,
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
   loadTaskArtifacts,
   loadWorkerConfig,
   restartCompanion,
+  saveSandboxPreferences,
   saveWorkerConfig,
   setAutostart,
   shutdownCompanion,
@@ -58,6 +60,8 @@ import {
   type PackageInstallStep,
   type PlatformStatus,
   type PreflightResult,
+  type SandboxPreferences,
+  type SandboxPreferencesResponse,
   type WorkerConfig,
 } from './api'
 
@@ -124,6 +128,7 @@ const copiedPackageId = ref('')
 const copiedDockerGuide = ref(false)
 const copiedInstallAlternative = ref('')
 const preflight = ref<PreflightResult | null>(null)
+const preflightError = ref('')
 const platformStatus = ref<PlatformStatus | null>(null)
 const platformError = ref('')
 const workerConfigResponse = ref<Awaited<ReturnType<typeof loadWorkerConfig>> | null>(null)
@@ -138,6 +143,11 @@ const companionMessage = ref('')
 const autostart = ref<AutostartStatus | null>(null)
 const autostartError = ref('')
 const autostartBusy = ref(false)
+const sandboxPreferences = ref<SandboxPreferencesResponse | null>(null)
+const sandboxPreferenceForm = ref<SandboxPreferences | null>(null)
+const sandboxPreferenceError = ref('')
+const sandboxPreferenceMessage = ref('')
+const sandboxPreferenceSaving = ref(false)
 let timer: ReturnType<typeof setInterval> | undefined
 
 const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
@@ -152,7 +162,7 @@ const companionOutdated = computed(() => companion.value !== null && isVersionOl
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult, platformResult, autostartResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult, platformResult, autostartResult, sandboxPreferencesResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
@@ -163,6 +173,7 @@ async function refresh(): Promise<void> {
     loadAgentRuntime(),
     loadPlatformStatus(),
     loadAutostart(),
+    loadSandboxPreferences(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -203,7 +214,13 @@ async function refresh(): Promise<void> {
     packages.value = []
     packageError.value = packageResult.reason instanceof Error ? packageResult.reason.message : String(packageResult.reason)
   }
-  if (preflightResult.status === 'fulfilled') preflight.value = preflightResult.value
+  if (preflightResult.status === 'fulfilled') {
+    preflight.value = preflightResult.value
+    preflightError.value = ''
+  } else {
+    preflight.value = null
+    preflightError.value = preflightResult.reason instanceof Error ? preflightResult.reason.message : String(preflightResult.reason)
+  }
   if (agentRuntimeResult.status === 'fulfilled') {
     agentRuntime.value = agentRuntimeResult.value
     agentRuntimeError.value = ''
@@ -224,6 +241,15 @@ async function refresh(): Promise<void> {
   } else {
     autostart.value = null
     autostartError.value = autostartResult.reason instanceof Error ? autostartResult.reason.message : String(autostartResult.reason)
+  }
+  if (sandboxPreferencesResult.status === 'fulfilled') {
+    sandboxPreferences.value = sandboxPreferencesResult.value
+    sandboxPreferenceForm.value = { ...sandboxPreferencesResult.value.config, resources: { ...sandboxPreferencesResult.value.config.resources } }
+    sandboxPreferenceError.value = ''
+  } else {
+    sandboxPreferences.value = null
+    sandboxPreferenceForm.value = null
+    sandboxPreferenceError.value = sandboxPreferencesResult.reason instanceof Error ? sandboxPreferencesResult.reason.message : String(sandboxPreferencesResult.reason)
   }
   if (workerConfigResult.status === 'fulfilled') {
     workerConfigResponse.value = workerConfigResult.value
@@ -405,7 +431,11 @@ async function runCoreAction(action: 'start' | 'stop' | 'restart'): Promise<void
   if (coreActionRunning.value !== '') return
   coreActionRunning.value = action
   coreError.value = ''
-  coreActionMessage.value = ''
+  coreActionMessage.value = action === 'start'
+    ? '正在启动 core，通常需要 2–20 秒；请等待 health check 完成…'
+    : action === 'stop'
+      ? '正在停止 core，若检测到外部 core 会先请求优雅退出…'
+      : '正在重启 core，将先停止旧实例再启动，最长可能需要 20 秒…'
   try {
     coreStatus.value = await coreAction(action)
     await refresh()
@@ -430,6 +460,22 @@ async function runCoreUpdateCheck(): Promise<void> {
     coreUpdateCheck.value = await checkCoreUpdate(coreManifestUrl.value)
   } catch (cause) {
     coreUpdateError.value = cause instanceof Error ? cause.message : String(cause)
+  }
+}
+
+async function saveSandboxPreference(): Promise<void> {
+  if (sandboxPreferenceForm.value === null || sandboxPreferenceSaving.value) return
+  sandboxPreferenceSaving.value = true
+  sandboxPreferenceError.value = ''
+  sandboxPreferenceMessage.value = ''
+  try {
+    sandboxPreferences.value = await saveSandboxPreferences(sandboxPreferenceForm.value)
+    sandboxPreferenceForm.value = { ...sandboxPreferences.value.config, resources: { ...sandboxPreferences.value.config.resources } }
+    sandboxPreferenceMessage.value = 'Sandbox 默认镜像与资源配置已保存；Agent Migration 新计划会使用这些默认值。'
+  } catch (cause) {
+    sandboxPreferenceError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    sandboxPreferenceSaving.value = false
   }
 }
 
@@ -997,6 +1043,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <p class="muted small-note">Ctrl/Cmd + Enter 发送。agent 输出来自 task.agent_event → gateway event 流。</p>
+          <p class="warn-text small-note">当前只有一个 OpenCode worker；多 agent 按任务路由尚未启用。默认 sandbox 镜像/资源可在 Packages 的 Sandbox 镜像与默认资源中配置。</p>
         </div>
       </section>
 
@@ -1145,16 +1192,21 @@ onBeforeUnmount(() => {
               </span>
               <span v-else class="pill">not checked</span>
             </div>
-            <div v-if="!preflight?.at" class="alert">
+            <div v-if="!preflight?.at && !preflightError" class="alert">
               <strong>还没有环境检查结果</strong>
-              <p>点击上方“环境检查”获取 Node/pnpm/Docker/socket 的逐项能力判断。</p>
+              <p>点击“重新检查环境”获取 Node/pnpm/Docker/socket 的逐项能力判断。</p>
+              <button class="primary" :disabled="jobRunning" @click="runJob('doctor')">{{ jobRunning ? '检查中…' : '重新检查环境' }}</button>
             </div>
-            <template v-else>
+            <p v-if="preflightError" class="error-text">环境检查接口不可用：{{ preflightError }}</p>
+            <template v-if="preflight?.at">
               <div class="health-grid">
                 <div><span>基础工具链</span><b>{{ preflight.ok ? 'ready' : 'blocked' }}</b></div>
                 <div><span>Sandbox / Docker</span><b>{{ preflight.sandboxReady ? 'ready' : 'unavailable' }}</b></div>
                 <div><span>warnings</span><b>{{ preflight.summary?.warnings ?? preflight.warnings?.length ?? 0 }}</b></div>
                 <div><span>failures</span><b>{{ preflight.summary?.failures ?? 0 }}</b></div>
+              </div>
+              <div class="job-actions environment-actions">
+                <button class="secondary" :disabled="jobRunning || !companionOnline" @click="runJob('doctor')">{{ jobRunning ? '检查中…' : '重新检查环境' }}</button>
               </div>
               <div v-if="preflight.sandboxReady === false" class="alert environment-warning">
                 <strong>未检测到可用的 Docker sandbox runtime</strong>
@@ -1469,6 +1521,54 @@ onBeforeUnmount(() => {
                 </p>
               </div>
             </article>
+          </div>
+        </div>
+
+        <div class="card sandbox-preferences-card">
+          <div class="section-head">
+            <div>
+              <h2>Sandbox 镜像与默认资源</h2>
+              <p class="muted">这里是 Packages 中的 sandbox runtime 配置入口。Agent Migration 新计划会使用这里的默认镜像、网络和资源配置。</p>
+            </div>
+            <span class="pill">{{ sandboxPreferences?.localImages.length ?? 0 }} local images</span>
+          </div>
+          <p v-if="sandboxPreferenceError" class="error-text">{{ sandboxPreferenceError }}</p>
+          <p v-if="sandboxPreferenceMessage" class="success-text">{{ sandboxPreferenceMessage }}</p>
+          <div v-if="sandboxPreferenceForm && sandboxPreferences" class="sandbox-preferences-form">
+            <label>
+              默认镜像预设
+              <select v-model="sandboxPreferenceForm.defaultImage">
+                <option v-for="preset in sandboxPreferences.catalog" :key="preset.id" :value="preset.image">
+                  {{ preset.label }} — {{ preset.image }}
+                </option>
+                <option v-if="!sandboxPreferences.catalog.some(preset => preset.image === sandboxPreferenceForm?.defaultImage)" :value="sandboxPreferenceForm.defaultImage">
+                  自定义：{{ sandboxPreferenceForm.defaultImage }}
+                </option>
+              </select>
+            </label>
+            <label>
+              自定义镜像
+              <input v-model="sandboxPreferenceForm.defaultImage" placeholder="node:22-bookworm-slim" />
+            </label>
+            <label>
+              默认网络
+              <select v-model="sandboxPreferenceForm.networkMode">
+                <option value="egress">egress（访问模型/API）</option>
+                <option value="none">none（离线）</option>
+              </select>
+            </label>
+            <label>CPUs<input v-model.number="sandboxPreferenceForm.resources.cpus" type="number" min="0.1" max="64" step="0.1" /></label>
+            <label>Memory MB<input v-model.number="sandboxPreferenceForm.resources.memoryMb" type="number" min="128" max="131072" /></label>
+            <label>PIDs<input v-model.number="sandboxPreferenceForm.resources.pids" type="number" min="16" max="16384" /></label>
+          </div>
+          <p v-if="sandboxPreferences && sandboxPreferenceForm" class="muted small-note">
+            当前镜像{{ sandboxPreferences.localImages.includes(sandboxPreferenceForm.defaultImage) ? '已存在于本机' : '尚未在本机检测到' }}。
+            拉取命令：<code>docker pull {{ sandboxPreferenceForm.defaultImage }}</code>
+          </p>
+          <p v-if="sandboxPreferences" class="muted small-note">config: <code>{{ sandboxPreferences.path }}</code></p>
+          <div class="job-actions">
+            <button class="primary" :disabled="sandboxPreferenceSaving || sandboxPreferenceForm === null" @click="saveSandboxPreference">{{ sandboxPreferenceSaving ? '保存中…' : '保存 Sandbox 默认配置' }}</button>
+            <button class="secondary" :disabled="loading" @click="refresh">刷新镜像列表</button>
           </div>
         </div>
       </section>

@@ -155,6 +155,46 @@ export async function loadCompanionHealth(signal?: AbortSignal): Promise<Compani
   return payload.value
 }
 
+export interface SandboxImagePreset {
+  readonly id: string
+  readonly label: string
+  readonly image: string
+  readonly description: string
+}
+
+export interface SandboxPreferences {
+  readonly schema: 1
+  readonly defaultImage: string
+  readonly networkMode: 'none' | 'egress'
+  readonly resources: { readonly cpus: number; readonly memoryMb: number; readonly pids: number }
+}
+
+export interface SandboxPreferencesResponse {
+  readonly path: string
+  readonly config: SandboxPreferences
+  readonly catalog: readonly SandboxImagePreset[]
+  readonly localImages: readonly string[]
+}
+
+export async function loadSandboxPreferences(signal?: AbortSignal): Promise<SandboxPreferencesResponse> {
+  const payload = await getJson<{ ok: boolean; value?: SandboxPreferencesResponse; error?: { message?: string } }>('/api/sandbox/preferences', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'sandbox preferences unavailable')
+  return payload.value
+}
+
+export async function saveSandboxPreferences(input: SandboxPreferences): Promise<SandboxPreferencesResponse> {
+  const response = await fetch(`${apiBase()}/api/sandbox/preferences`, {
+    method: 'POST',
+    headers: localActionHeaders(),
+    body: JSON.stringify(input),
+  })
+  const payload = await response.json() as { ok: boolean; value?: SandboxPreferencesResponse; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `sandbox preferences save failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
 export interface GatewayConfig {
   readonly schema: 1
   readonly channel: 'feishu4dsh'
@@ -490,9 +530,9 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.2-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.4.1'
+export const COMPANION_RELEASE_VERSION = '0.4.2'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.4.1'
+export const COMPANION_MIN_VERSION = '0.4.2'
 export const COMPANION_RELEASE_TAG = 'v0.3.5-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
@@ -513,6 +553,7 @@ export async function coreAction(action: 'start' | 'stop' | 'restart'): Promise<
   const response = await fetch(`${apiBase()}/api/core/${action}`, {
     method: 'POST',
     headers: localActionHeaders(),
+    signal: AbortSignal.timeout(30_000),
   })
   const payload = await response.json() as { ok: boolean; value?: { status?: CoreStatus }; error?: { message?: string } }
   if (!response.ok || !payload.ok || payload.value?.status === undefined) {

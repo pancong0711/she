@@ -4,6 +4,7 @@ import {
   applyAgentMigration,
   loadAgentDiscovery,
   loadAgentMigrations,
+  loadSandboxPreferences,
   loadWorkspaces,
   planAgentMigration,
   streamJobEvents,
@@ -15,6 +16,7 @@ import {
   type JobSummary,
   type MigrationAgentInput,
   type MigrationRequest,
+  type SandboxPreferences,
   type WorkspaceAuthorization,
 } from '../api'
 
@@ -50,6 +52,7 @@ const records = ref<readonly AgentMigrationRecord[]>([])
 const recordsError = ref('')
 const workspaces = ref<readonly WorkspaceAuthorization[]>([])
 const workspaceError = ref('')
+const sandboxPreferences = ref<SandboxPreferences | null>(null)
 
 const selectedServices = computed(() => (discovery.value?.services ?? []).filter(service => selected.value[service.id] === true))
 const diagnostics = computed(() => jobEvents.value.filter((event): event is Extract<JobEvent, { type: 'log' | 'system' }> => event.type === 'log' || event.type === 'system'))
@@ -94,6 +97,19 @@ function selectWorkspace(service: DiscoveredAgentService, id: string): void {
   if (config.workspaceMode === 'reuse' && workspace.mode === 'read-only') {
     config.workspaceMode = 'new'
     config.legacyReadOnly = true
+  }
+}
+
+async function loadSandboxDefaults(): Promise<void> {
+  try {
+    sandboxPreferences.value = (await loadSandboxPreferences()).config
+    image.value = sandboxPreferences.value.defaultImage
+    networkMode.value = sandboxPreferences.value.networkMode
+    cpus.value = sandboxPreferences.value.resources.cpus
+    memoryMb.value = sandboxPreferences.value.resources.memoryMb
+    pids.value = sandboxPreferences.value.resources.pids
+  } catch {
+    sandboxPreferences.value = null
   }
 }
 
@@ -204,7 +220,7 @@ watch([selected, settings, image, commandText, networkMode, cpus, memoryMb, pids
 }, { deep: true })
 
 onMounted(async () => {
-  await Promise.all([scan(), loadRecords(), loadWorkspaceOptions()])
+  await Promise.all([scan(), loadRecords(), loadWorkspaceOptions(), loadSandboxDefaults()])
 })
 </script>
 
@@ -318,6 +334,7 @@ onMounted(async () => {
 
     <div v-if="discovery" class="card">
       <h2>容器设置</h2>
+      <p v-if="sandboxPreferences" class="muted small-note">默认值来自 Packages → Sandbox 镜像与默认资源；可在此覆盖。</p>
       <div class="settings-grid migration-grid">
         <label>镜像<input v-model="image" placeholder="node:22-bookworm-slim" /></label>
         <label>容器启动命令<input v-model="commandText" placeholder="sleep infinity" /></label>

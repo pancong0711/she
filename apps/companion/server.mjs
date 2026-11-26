@@ -23,6 +23,7 @@ import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
 import { autostartOptionsFromEnv, autostartStatus, disableAutostart, enableAutostart } from './autostart.mjs'
 import { probeGatewayAdapter, readGatewayConfig, writeGatewayConfig } from './gateway.mjs'
 import { terminateUnixSocketOwner } from './core-process.mjs'
+import { SANDBOX_IMAGE_PRESETS, readSandboxPreferences, writeSandboxPreferences } from './sandbox-preferences.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -50,6 +51,7 @@ const migrationRecordRoot = process.env.SHE_MIGRATION_RECORD_ROOT?.trim() || joi
 const migrationWorkspaceRoot = process.env.SHE_MIGRATION_WORKSPACE_ROOT?.trim() || join(dataHome, 'she', 'workspaces')
 const workspaceRegistryPath = process.env.SHE_WORKSPACE_REGISTRY?.trim() || join(configHome, 'she', 'workspaces.json')
 const gatewayConfigPath = process.env.SHE_GATEWAY_CONFIG_FILE?.trim() || join(configHome, 'she', 'gateway.json')
+const sandboxPreferencesPath = process.env.SHE_SANDBOX_PREFERENCES_FILE?.trim() || join(configHome, 'she', 'sandbox.json')
 const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
 const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
 const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
@@ -897,6 +899,17 @@ async function applyCompanionUpdate(manifestUrl) {
   return { from: companionVersion, to: checked.manifest.version, bundleSha256: download.sha256, restarting: true }
 }
 
+async function sandboxPreferencesStatus() {
+  const config = await readSandboxPreferences(sandboxPreferencesPath)
+  const imagesResult = await captureCommand(undefined, 'docker', ['images', '--format', '{{.Repository}}:{{.Tag}}'])
+  return {
+    path: sandboxPreferencesPath,
+    config,
+    catalog: SANDBOX_IMAGE_PRESETS,
+    localImages: imagesResult.ok ? imagesResult.stdout.split('\n').filter(Boolean).sort() : [],
+  }
+}
+
 async function gatewayStatus() {
   const config = await readGatewayConfig(gatewayConfigPath)
   const control = await probeSocket(controlSocketPath, controlTokenFile)
@@ -1624,7 +1637,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'autostart', 'gateway', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'autostart', 'gateway', 'sandbox-preferences', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1720,6 +1733,28 @@ async function handleCompanionApi(request, response) {
       const result = await applyCompanionUpdate(String(body.manifestUrl ?? '').trim())
       sendJsonWithCors(request, response, 200, { ok: true, value: result })
       scheduleCompanionExit(COMPANION_RESTART_EXIT_CODE, 500)
+    } catch (error) {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/sandbox/preferences') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await sandboxPreferencesStatus() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/sandbox/preferences') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      const body = await readBodyJson(request)
+      await writeSandboxPreferences(sandboxPreferencesPath, body)
+      sendJsonWithCors(request, response, 200, { ok: true, value: await sandboxPreferencesStatus() })
     } catch (error) {
       sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
     }

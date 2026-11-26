@@ -213,6 +213,7 @@ SHE_TOKEN_FILE
   - 按需加载 CPU/memory/PIDs stats；
   - broker 离线时显示启动提示；
 - Packages：
+  - Sandbox 镜像下拉、默认网络/资源、本机镜像检测；
   - companion/core/runtime/tooling/agent runtime 清单；
   - requirement 与用途说明；
   - 缺失依赖的安装/修复方法、复制命令和官方文档链接；

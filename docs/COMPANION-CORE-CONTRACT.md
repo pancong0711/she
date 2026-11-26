@@ -97,6 +97,8 @@ GET  /api/agents/migrations/:id
 
 `/api/gateway`：gateway.v1/feishu4dsh 连接状态与 loopback health URL 配置；不保存飞书 secret。
 
+`/api/sandbox/preferences`：sandbox 镜像预设、默认网络和资源；配置写入 0600，不自动拉取镜像。
+
 `/api/companion/*`：仅在 launcher supervisor 模式下提供重启、停止、检查和安装 companion 更新；更新先校验 SHE release manifest 与 bundle SHA-256，再退出 75 交给 supervisor 重启。
 
 `/api/core/status`：

@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Added Packages sandbox image presets/default resources, local image detection, Agent Migration defaults, equal-height scrollable package cards, and explicit single-worker Chat notice.
 - Added Linux /proc socket-owner fallback to terminate orphaned cores that predate /v1/admin/shutdown.
 - Added China Docker CE apt mirror alternatives (Aliyun/TUNA/USTC) with official signing-key fingerprint verification.
 - Docker rootless guide now uses Docker's official apt packages (`docker-ce-rootless-extras` + uidmap/slirp4netns/fuse-overlayfs) instead of requiring the rootless curl script.
