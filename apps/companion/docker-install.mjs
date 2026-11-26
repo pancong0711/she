@@ -21,55 +21,98 @@ function guide(title, steps, url, note) {
   return { title, steps, commands: steps.map(step => step.command), url, note }
 }
 
-function commonRootlessSteps(prerequisiteCommand) {
+function subuidSteps() {
   return [
     {
-      command: prerequisiteCommand,
-      explanation: '安装 rootless 所需依赖：uidmap/newuidmap、newgidmap、slirp4netns 和 fuse-overlayfs，用于用户命名空间和文件系统。',
-      requiresRoot: true,
-    },
-    {
-      command: 'grep -E "^\\$USER:" /etc/subuid /etc/subgid',
-      explanation: '检查当前用户是否已有 subordinate UID/GID 范围。Ubuntu 新建用户通常已由 adduser/usermod 自动分配；有类似 user:100000:65536 输出时跳过下一步。',
+      command: 'grep -E "^\$USER:" /etc/subuid /etc/subgid',
+      explanation: '先检查当前用户是否已有 subordinate UID/GID 映射范围。Ubuntu 新建用户通常已由 adduser/usermod 自动分配；有类似 user:100000:65536 输出时不需要执行下一行。',
     },
     {
       command: 'sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$USER"',
-      explanation: '仅当上一步没有输出、缺少 subordinate UID/GID 时执行。把一段普通 UID/GID 范围分配给当前用户，供 user namespace 映射容器内部 UID 使用；不是把当前用户变成 root。完成后需要重新登录。',
+      explanation: '仅当上一步没有输出、确实缺少范围时执行。这是 user namespace 的 UID/GID 映射池，不会让当前用户变成 root；执行后需要重新登录。',
       requiresRoot: true,
-      note: '很多 Ubuntu 用户已有默认 100000-165535 范围，此时不需要执行这一行。',
+      note: '很多 Ubuntu 用户已经有自动分配的 100000-165535 范围，不需要执行这一行。',
     },
-    {
-      command: 'curl -fsSL https://get.docker.com/rootless | sh',
-      explanation: '运行 Docker 官方 rootless 安装脚本，只把 rootless Docker 工具安装到当前用户目录。',
-      note: '该脚本由你本人执行；SHE 不会下载或运行管道脚本。',
-    },
-    {
-      command: 'export PATH="$HOME/bin:$PATH"',
-      explanation: '让当前 shell 找到刚安装的 rootless Docker CLI 和 dockerd-rootless-setuptool.sh。',
-    },
+  ]
+}
+
+function rootlessSetupSteps() {
+  return [
     {
       command: 'dockerd-rootless-setuptool.sh install',
-      explanation: '创建并启动用户级 dockerd rootless service，不修改 root Docker daemon。',
+      explanation: '使用 docker-ce-rootless-extras 提供的官方工具创建当前用户的 rootless Docker service；root Docker daemon 不会被使用。',
+    },
+    {
+      command: 'systemctl --user enable --now docker',
+      explanation: '启动并启用当前用户的 rootless Docker service。',
     },
     {
       command: 'docker context use rootless',
-      explanation: '把 Docker CLI 的 context 切换为当前用户的 rootless socket。',
+      explanation: '把 Docker CLI context 切换到当前用户的 rootless socket。',
     },
     {
       command: 'docker info --format \'{{json .SecurityOptions}}\'',
-      explanation: '验证输出包含 rootless；若没有，请检查 user systemd 和 subordinate UID/GID 配置。',
-    },
-    {
-      command: 'systemctl --user enable docker',
-      explanation: '可选：登录后自动启动 rootless Docker。',
-      optional: true,
+      explanation: '验证输出包含 rootless；若没有，检查 user systemd、subuid/subgid 和 rootless 依赖。',
     },
     {
       command: 'sudo loginctl enable-linger "$USER"',
-      explanation: '可选：让用户级服务在未登录时也运行。需要管理员权限，SHE 不代你执行。',
+      explanation: '可选：让 rootless Docker 在用户未登录时继续运行。需要管理员权限，SHE 不代你执行。',
       requiresRoot: true,
       optional: true,
     },
+  ]
+}
+
+function aptRootlessSteps(project, codenameExpression) {
+  return [
+    {
+      command: 'sudo apt-get update',
+      explanation: '刷新 apt 包索引。',
+      requiresRoot: true,
+    },
+    {
+      command: 'sudo apt-get install -y ca-certificates curl gnupg',
+      explanation: '安装添加 Docker apt 仓库所需的基础工具。',
+      requiresRoot: true,
+    },
+    {
+      command: 'sudo install -m 0755 -d /etc/apt/keyrings',
+      explanation: '创建 Docker apt 签名密钥目录。',
+      requiresRoot: true,
+    },
+    {
+      command: `sudo curl -fsSL https://download.docker.com/linux/${project}/gpg -o /etc/apt/keyrings/docker.asc`,
+      explanation: '下载 Docker 官方 apt 仓库签名密钥。',
+      requiresRoot: true,
+    },
+    {
+      command: 'sudo chmod a+r /etc/apt/keyrings/docker.asc',
+      explanation: '允许 apt 读取 Docker 签名密钥。',
+      requiresRoot: true,
+    },
+    {
+      command: `echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${project} ${codenameExpression} stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null`,
+      explanation: '添加 Docker 官方 apt 仓库，以便安装 docker-ce-rootless-extras 等 rootless 包。',
+      requiresRoot: true,
+    },
+    {
+      command: 'sudo apt-get update',
+      explanation: '刷新新加入的 Docker apt 仓库索引。',
+      requiresRoot: true,
+    },
+    {
+      command: 'sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras uidmap dbus-user-session fuse-overlayfs slirp4netns',
+      explanation: '通过 apt 安装 Docker CLI/engine、官方 rootless extras 以及 uidmap、slirp4netns、fuse-overlayfs 等 rootless 依赖。',
+      requiresRoot: true,
+    },
+    {
+      command: 'sudo systemctl disable --now docker.service docker.socket',
+      explanation: '可选：如果你只使用 rootless Docker，禁用系统 root Docker daemon，避免误用 root 权限的 Docker daemon；已有 root Docker 用途时跳过。',
+      requiresRoot: true,
+      optional: true,
+    },
+    ...subuidSteps(),
+    ...rootlessSetupSteps(),
   ]
 }
 
@@ -100,28 +143,46 @@ export function dockerInstallGuide(platform, osRelease = {}) {
 
   const id = String(osRelease.ID ?? '').toLowerCase()
   const like = String(osRelease.ID_LIKE ?? '').toLowerCase()
-  if (id === 'ubuntu' || like.includes('ubuntu') || id === 'debian' || like.includes('debian')) {
+  if (id === 'ubuntu' || like.includes('ubuntu')) {
     return guide(
-      '安装 rootless Docker（Debian/Ubuntu，由你本人执行）',
-      commonRootlessSteps('sudo apt-get update && sudo apt-get install -y uidmap dbus-user-session fuse-overlayfs slirp4netns'),
+      '通过 apt 安装 rootless Docker（Ubuntu，由你本人执行）',
+      aptRootlessSteps('ubuntu', '$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")'),
       'https://docs.docker.com/engine/security/rootless/',
-      '默认只安装 rootless Docker。不要把当前用户加入 docker 组；docker 组可能等价于 root 权限。',
+      '默认通过 apt 安装 rootless Docker；不要把当前用户加入 docker 组。许多 Ubuntu 用户已有 subordinate UID/GID，无需额外配置。',
+    )
+  }
+  if (id === 'debian' || like.includes('debian')) {
+    return guide(
+      '通过 apt 安装 rootless Docker（Debian，由你本人执行）',
+      aptRootlessSteps('debian', '$(. /etc/os-release && echo "$VERSION_CODENAME")'),
+      'https://docs.docker.com/engine/security/rootless/',
+      '默认通过 apt 安装 rootless Docker；不要把当前用户加入 docker 组。许多 Debian/Ubuntu 用户已有 subordinate UID/GID，无需额外配置。',
     )
   }
   if (id === 'fedora') {
     return guide(
-      '安装 rootless Docker（Fedora，由你本人执行）',
-      commonRootlessSteps('sudo dnf install -y shadow-utils fuse-overlayfs slirp4netns'),
+      '通过 dnf 安装 rootless Docker（Fedora，由你本人执行）',
+      [
+        { command: 'sudo dnf -y install dnf-plugins-core', explanation: '安装 dnf 仓库管理工具。', requiresRoot: true },
+        { command: 'sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo', explanation: '添加 Docker 官方 Fedora 仓库。', requiresRoot: true },
+        { command: 'sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras shadow-utils fuse-overlayfs slirp4netns', explanation: '安装 Docker、官方 rootless extras 和 rootless 依赖。', requiresRoot: true },
+        ...subuidSteps(),
+        ...rootlessSetupSteps(),
+      ],
       'https://docs.docker.com/engine/security/rootless/',
-      '默认只安装 rootless Docker。不要把当前用户加入 docker 组。',
+      '默认安装 rootless Docker；不要把当前用户加入 docker 组。',
     )
   }
   if (id === 'arch') {
     return guide(
       '安装 rootless Docker（Arch Linux，由你本人执行）',
-      commonRootlessSteps('sudo pacman -S --needed uidmap fuse-overlayfs slirp4netns'),
+      [
+        { command: 'sudo pacman -S --needed docker uidmap fuse-overlayfs slirp4netns', explanation: '安装 Docker、官方 rootless 工具和 rootless 依赖。', requiresRoot: true },
+        ...subuidSteps(),
+        ...rootlessSetupSteps(),
+      ],
       'https://wiki.archlinux.org/title/Docker',
-      '默认只安装 rootless Docker。不要把当前用户加入 docker 组。',
+      '默认安装 rootless Docker；不要把当前用户加入 docker 组。',
     )
   }
   return guide(

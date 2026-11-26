@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Docker rootless guide now uses Docker's official apt packages (`docker-ce-rootless-extras` + uidmap/slirp4netns/fuse-overlayfs) instead of requiring the rootless curl script.
 - Clarified subordinate UID/GID: Ubuntu users often already have ranges; only add them when the explicit check is empty.
 - Fixed core startup SQLite parent-directory creation and DB file permissions; companion now pre-creates the default DB directory before launching core.
 - Fixed core updates to force-reinstall an existing target version and roll back on installer failure.

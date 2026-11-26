@@ -7,7 +7,8 @@ describe('docker install guidance', () => {
   it('provides rootless Ubuntu commands and per-line explanations', () => {
     const guide = dockerInstallGuide('linux', { ID: 'ubuntu', VERSION_CODENAME: 'jammy' })
     const commands = guide.commands.join('\n')
-    expect(commands).toContain('get.docker.com/rootless')
+    expect(commands).toContain('docker-ce-rootless-extras')
+    expect(commands).not.toContain('curl -fsSL https://get.docker.com/rootless | sh')
     expect(commands).toContain('dockerd-rootless-setuptool.sh install')
     expect(commands).toContain('docker context use rootless')
     expect(commands).toContain('docker info')

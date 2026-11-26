@@ -87,40 +87,88 @@ sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$USER"
 - root Docker：daemon 以 root 运行，不需要 subordinate UID/GID，但用户要么使用 sudo，要么加入 docker 组；
 - rootless Docker：daemon 以普通用户运行，需要 user namespace/subuid/subgid，很多 Ubuntu 已自动配置，所以用户通常“感觉不到”这一步。
 
-## 3. Ubuntu/Debian rootless 安装步骤
+## 3. Ubuntu/Debian：通过 apt 安装 rootless Docker
 
-以下命令由用户本人逐行执行，Packages 页面会逐行解释：
+推荐使用 Docker 官方 apt 仓库安装 `docker-ce-rootless-extras`，而不是必须使用 `curl | sh`。
+
+### 3.1 添加 Docker 官方 apt 仓库
 
 ```bash
-sudo apt-get update && sudo apt-get install -y uidmap dbus-user-session fuse-overlayfs slirp4netns
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+```
+
+Debian 将 `ubuntu` 替换为 `debian`，仓库行使用 `$VERSION_CODENAME`。
+
+### 3.2 安装 rootless 包
+
+```bash
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras uidmap dbus-user-session fuse-overlayfs slirp4netns
+```
+
+- `docker-ce-rootless-extras` 是 Docker 官方 rootless 支持包；
+- `uidmap` 提供 `newuidmap` / `newgidmap`；
+- `slirp4netns` 和 `fuse-overlayfs` 提供 rootless 网络和文件系统支持；
+- 不需要把用户加入 `docker` 组。
+
+如果只想使用 rootless Docker，可选禁用系统 root daemon：
+
+```bash
+sudo systemctl disable --now docker.service docker.socket
+```
+
+已有 root Docker 用途时跳过这一步。
+
+### 3.3 检查 subuid/subgid 是否已存在
+
+```bash
 grep -E "^$USER:" /etc/subuid /etc/subgid
+```
+
+Ubuntu 新用户通常已经自动拥有类似：
+
+```text
+/etc/subuid:user:100000:65536
+/etc/subgid:user:100000:65536
+```
+
+有输出就**不需要**手动配置。
+
+只有没有输出时才执行：
+
+```bash
 sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$USER"
-curl -fsSL https://get.docker.com/rootless | sh
-export PATH="$HOME/bin:$PATH"
+```
+
+然后退出并重新登录。该范围是 user namespace 的 UID/GID 映射池，不是 root 权限。
+
+### 3.4 初始化用户级 rootless daemon
+
+```bash
 dockerd-rootless-setuptool.sh install
+systemctl --user enable --now docker
 docker context use rootless
 docker info --format '{{json .SecurityOptions}}'
 ```
 
-逐行说明：
+输出应包含：
 
-1. 安装 user namespace、slirp4netns 和 fuse-overlayfs 依赖；
-2. 检查当前用户是否有 subordinate UID/GID；
-3. 没有时分配 subordinate UID/GID（需要管理员操作，重新登录后生效）；
-4. 运行 Docker 官方 rootless 安装脚本；
-5. 把用户级 Docker 工具加入 PATH；
-6. 创建并启动用户级 rootless Docker service；
-7. 切换 Docker context；
-8. 验证输出包含 `rootless`。
+```text
+rootless
+```
 
-可选：
+可选未登录运行：
 
 ```bash
-systemctl --user enable docker
 sudo loginctl enable-linger "$USER"
 ```
 
-`enable-linger` 用于未登录时运行用户级服务，需要管理员权限；SHE 不代你执行。
+需要管理员权限，SHE 不代你执行。
 
 ## 4. Fedora / Arch
 
