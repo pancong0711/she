@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { parseCommandLine } from '../command'
 import {
   applyAgentMigration,
   loadAgentDiscovery,
@@ -37,7 +38,7 @@ const loading = ref(false)
 const error = ref('')
 const selected = ref<Record<string, boolean>>({})
 const settings = ref<Record<string, AgentSettings>>({})
-const image = ref('node:22-bookworm-slim')
+const image = ref('node:24-bookworm')
 const commandText = ref('sleep infinity')
 const networkMode = ref<'none' | 'egress'>('egress')
 const cpus = ref(1)
@@ -170,7 +171,7 @@ function requestPayload(): MigrationRequest {
   return {
     agents,
     image: image.value.trim(),
-    command: commandText.value.trim().split(/\s+/).filter(Boolean),
+    command: parseCommandLine(commandText.value),
     networkMode: networkMode.value,
     resources: { cpus: cpus.value, memoryMb: memoryMb.value, pids: pids.value },
   }
@@ -347,7 +348,7 @@ onMounted(async () => {
             <option v-if="!sandboxImageCatalog.some(preset => preset.image === image)" :value="image">自定义：{{ image }}</option>
           </select>
         </label>
-        <label>自定义镜像<input v-model="image" placeholder="node:22-bookworm-slim" /></label>
+        <label>自定义镜像<input v-model="image" placeholder="node:24-bookworm 或 your-agent:1.0.0" /></label>
         <label>容器启动命令<input v-model="commandText" placeholder="sleep infinity" /></label>
         <label>
           网络
@@ -360,8 +361,17 @@ onMounted(async () => {
         <label>Memory MB<input v-model.number="memoryMb" type="number" min="128" max="131072" /></label>
         <label>PIDs<input v-model.number="pids" type="number" min="16" max="16384" /></label>
       </div>
+      <p v-if="sandboxImageCatalog.find(preset => preset.image === image)" class="muted small-note">
+        {{ sandboxImageCatalog.find(preset => preset.image === image)?.description }}
+      </p>
+      <div class="container-setting-explain">
+        <p><b>镜像</b>：迁移不是“把本机进程搬进空容器”；原目录只读挂载到 <code>/legacy</code>，凭据目录只读挂载，容器仍需有对应 agent runtime。推荐用 Dockerfile 预构建并锁定版本，而不是每次启动安装。</p>
+        <p><b>启动命令</b>：追加在镜像后，不经过宿主 shell；<code>sleep infinity</code> 只保持容器运行。需要执行脚本时写 <code>sh -lc "exec /opt/agent/start.sh"</code>。</p>
+        <p><b>CPUs</b>：1.5 表示最多 1.5 个核的算力配额；<b>PIDs</b>：容器内最大进程/线程数，256 适合单 agent，编译/浏览器场景可提高。</p>
+        <p><b>网络 egress</b>：Docker bridge 仅提供出站访问，不发布入站端口；<code>none</code> 完全离线。角色/Agent ID 当前只是标签，不会自动建立 worker 路由。</p>
+      </div>
       <p class="muted small-note">
-        镜像需要包含对应 agent runtime；SHE 不自动猜测安装包。根目录、用户主目录本身、受保护系统目录不能作为工作空间或旧目录挂载。
+        根目录、用户主目录本身、受保护系统目录不能作为工作空间或旧目录挂载。Alpine 默认没有 bash，Node agent 优先选择 Node full 或 Ubuntu 预构建镜像。
       </p>
       <div class="job-actions">
         <button class="secondary" :disabled="planning || selectedServices.length === 0" @click="previewPlan">

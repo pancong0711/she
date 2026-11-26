@@ -101,6 +101,9 @@
 | T6.11 | Packages Sandbox 镜像下拉、默认资源和卡片等高滚动 | T6.4e | [x] | 镜像预设/自定义、默认网络/资源、本机镜像检测；Agent Migration 使用默认值 |
 | T6.12 | Headless persistence 环境检查：systemd --user、linger、companion autostart、OpenCode/Feishu health | T6.10/T6.3b | [x] | 无登录运行建议、修复命令、persistenceReady 摘要 |
 | T6.13 | Sandboxes 创建表单与 Agent Migration 镜像/网络/资源说明 | T6.3/T6.9 | [x] | PWA 调用 broker create；说明镜像/命令/网络/挂载/资源 |
+| T6.14 | Sandbox 启动命令解析、CPU/内存/PID/网络语义与 worker/agent 边界说明 | T6.13 | [x] | 引号命令不被错误拆分；worker 明确不在 sandbox；Chat 快速验证入口 |
+| T6.15 | feishu4dsh 安装前置检查与 PWA 受控 dsh 插件安装 | T6.7/T4.6 | [~] | 不读 secret；无 sudo；不自动装服务；真机联调待 T4.6 |
+| T6.16 | Agent Runtime Recipe：预构建 agent 镜像、digest 锁定与 sandbox 路由 | T6.13/T5.2 | [ ] | 不在只读 rootfs 自动安装；secret 不进镜像；失败回滚 |
 | T6.4f | Packages 依赖目录与缺失依赖安装指引 | T6.4e | [x] | requirement/用途/状态/安装命令/官方文档；不自动执行系统安装 |
 
 ## M7 Companion / Core 分层与自更新
@@ -184,3 +187,5 @@
 - 2026-11-26：完成 T6.12：preflight 增加 systemd --user、linger、Companion 登录自启动、OpenCode health 和已配置 feishu4dsh health；环境摘要新增 headless persistence 状态和修复入口；新增 `docs/HEADLESS-PERSISTENCE.md`。
 
 - 2026-11-26：T6.13：Sandboxes 页面新增新建表单并调用 broker `POST /v1/sandboxes`；Agent Migration 镜像改为 Packages 预设下拉+自定义；补充 `/legacy`、凭据只读、bridge/none、启动命令和资源建议说明。
+
+- 2026-11-26：T6.14/T6.15 首版：修复 PWA 启动命令引号解析；Sandboxes/Agent Migration 增加 CPU、memory、PIDs、bridge/egress、启动命令和镜像解释；Settings 明确 worker 在 core 宿主进程、不在 sandbox，并增加 Chat 快速验证入口；新增 `/api/feishu4dsh` 只读前置检查和 `feishu4dsh-install` 受控 dsh 插件安装 job；Gateway 增加安装/连接清单，明确安装插件不等于 SHE 已接通飞书（T4.6 仍待完成）；新增 `docs/AGENT-RUNTIME-RECIPES.md`。

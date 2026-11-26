@@ -138,13 +138,14 @@ defineProps<{
 
       <h2>Agent Chat 与 Worker</h2>
       <p>
-        Chat 页面通过 control plane 的 `/she submit` 入队任务。要真正执行，需要以
-        `SHE_WORKER_ENABLED=1` 启动 control plane，并配置 OpenCode URL、凭据文件和工作区。
-        如果 worker 未启用，任务会保持 queued，页面会明确显示。
+        Chat 页面通过 control plane 的 `/she submit` 入队任务。要真正执行，需要在 Settings
+        启用 worker，并配置 OpenCode URL、凭据文件和工作区。启用 worker 表示 core 内启动任务
+        claim loop；关闭时任务仍可排队但不会执行。
       </p>
       <p>
-        agent 输出通过 `task.agent_event → gateway event → /v1/events` 实时返回。
-        Chat 不是第二状态源；它与 CLI、飞书 gateway 共用同一个 control plane。
+        worker 和 OpenCode 当前运行在宿主用户空间，<strong>不在 sandbox 内</strong>；
+        新建 sandbox 也不会自动成为 worker runtime。验证时保存并重启 core，然后在 Chat 发送
+        一个只读任务，观察 agent 事件、任务状态和 report artifact。
       </p>
 
       <h2>Sandbox 模型</h2>
@@ -152,8 +153,11 @@ defineProps<{
         <li>所有 sandbox 数据位于当前用户可管理的 <code>$XDG_DATA_HOME/she/sandboxes</code>。</li>
         <li>broker 是唯一调用 Docker runtime 的组件，agent 不直接接触 Docker socket。</li>
         <li>每个 sandbox 有独立 workspace/inbox/outbox/home/cache/logs。</li>
+        <li>sandbox 默认是空容器：镜像决定使用什么 shell、Node/npm、git/curl 和 agent runtime。</li>
+        <li>CPUs 是 CPU 核数配额（1.5 = 1.5 核算力）；PIDs 是容器内最大进程/线程数。</li>
+        <li>egress 使用 Docker bridge 仅出站访问，不发布入站端口；none 完全离线。</li>
+        <li>agentId/role 目前只是元数据，不自动加入 worker 或多 agent 路由。</li>
         <li>用户已配置好的 rootless Docker 可以被使用，但 SHE 不负责初始化 rootless。</li>
-        <li>Sandboxes 页面只显示 broker registry 中的只读信息和按需 stats。</li>
       </ul>
     </article>
 
@@ -168,9 +172,9 @@ defineProps<{
           <tr><td>Workspaces</td><td>叶子目录授权注册表；记录 read-only/read-write 意图，拒绝 root/home/系统路径；实际挂载由 broker 二次校验。</td></tr>
           <tr><td>Chat</td><td>通过 `/she submit` 布置任务，实时显示 agent text delta、工具状态和完成/失败。</td></tr>
           <tr><td>Agent Migration</td><td>发现本机 AI agent，dry-run 规划并迁移到 sandbox；只读凭据目录挂载，原进程不动。</td></tr>
-          <tr><td>Sandboxes</td><td>broker 列表、状态、角色、image、按需 CPU/内存/PIDs。</td></tr>
+          <tr><td>Sandboxes</td><td>创建 sandbox、broker 列表、状态、image、按需 CPU/内存/PIDs；解释启动命令与镜像边界。</td></tr>
           <tr><td>Packages</td><td>Companion/Core/Node/pnpm/git/bash/curl/tar/SHA-256/Docker/OpenCode 依赖清单；显示用途、缺失影响、可复制安装方法和官方文档链接。</td></tr>
-          <tr><td>Gateway</td><td>control-plane gateway.v1 状态、feishu4dsh loopback health URL 与连接状态；飞书 secret 始终留在 feishu4dsh。</td></tr>
+          <tr><td>Gateway</td><td>feishu4dsh dsh 插件检测/受控安装、control-plane gateway.v1 状态、adapter health；飞书 secret 始终留在 feishu4dsh。</td></tr>
           <tr><td>Settings</td><td>companion URL、服务状态、worker/OpenCode/workspace 配置（密码仅保存路径）。</td></tr>
           <tr><td>Help</td><td>本页：概念、边界、操作说明和故障排查。</td></tr>
         </tbody>
@@ -190,6 +194,10 @@ defineProps<{
         <dd>确认 companion 正在运行，且页面是受支持的 origin；companion 只接受显式允许的浏览器来源。</dd>
         <dt>更新后页面像旧版</dt>
         <dd>service worker 可能缓存旧资源。强制刷新，或在 DevTools → Application → Service Workers 中 unregister 后重新加载。</dd>
+        <dt>安装了 feishu4dsh 是否就能连接飞书和 SHE？</dt>
+        <dd>不完全是。插件安装只完成飞书 ↔ feishu4dsh ↔ dsh 的通道准备；还要配置飞书应用凭据、启动用户服务，并由 feishu4dsh 实现 gateway.v1 adapter。SHE 不保存 secret，T4.6 真机联调仍未完成。</dd>
+        <dt>为什么新建 sandbox 里没有 agent？</dt>
+        <dd>Sandbox 只消费镜像；运行期 rootfs 是只读的。要让 agent 自带在镜像里，应预构建固定版本/digest 的 Agent Runtime Recipe，而不是每次启动 apt/npm 安装。</dd>
       </dl>
     </article>
 
@@ -199,6 +207,8 @@ defineProps<{
       <p><a :href="`${REPO_URL}/blob/main/docs/COMPANION-CORE-CONTRACT.md`" target="_blank" rel="noreferrer">Companion ↔ Core 契约</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/ENVIRONMENT-BOOTSTRAP.md`" target="_blank" rel="noreferrer">环境检查与安装边界</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/AGENT-MIGRATION.md`" target="_blank" rel="noreferrer">AI Agent 发现与容器化迁移</a></p>
+      <p><a :href="`${REPO_URL}/blob/main/docs/AGENT-RUNTIME-RECIPES.md`" target="_blank" rel="noreferrer">Agent Runtime Recipes（sandbox 自带 agent）</a></p>
+      <p><a :href="`${REPO_URL}/blob/main/docs/GATEWAY.md`" target="_blank" rel="noreferrer">Gateway 与 feishu4dsh 安装/连接边界</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/PLATFORM-SUPPORT.md`" target="_blank" rel="noreferrer">平台能力与支持矩阵</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/WORKSPACES.md`" target="_blank" rel="noreferrer">Workspace 授权与叶子目录策略</a></p>
       <p><a :href="`${REPO_URL}/blob/main/docs/ADR-0002-no-root-privilege-policy.md`" target="_blank" rel="noreferrer">无 root 权限策略</a></p>

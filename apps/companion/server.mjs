@@ -24,6 +24,7 @@ import { autostartOptionsFromEnv, autostartStatus, disableAutostart, enableAutos
 import { probeGatewayAdapter, readGatewayConfig, writeGatewayConfig } from './gateway.mjs'
 import { terminateUnixSocketOwner } from './core-process.mjs'
 import { SANDBOX_IMAGE_PRESETS, readSandboxPreferences, writeSandboxPreferences } from './sandbox-preferences.mjs'
+import { defaultFeishu4dshPaths, inspectFeishu4dsh, validateFeishu4dshPackageSpec, validateFeishu4dshProfile } from './feishu4dsh.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
@@ -111,6 +112,7 @@ const JOB_KINDS = new Map([
   ['test', '运行测试'],
   ['core-update', 'Core 更新'],
   ['agent-migrate', 'AI agent 容器化迁移'],
+  ['feishu4dsh-install', '安装/更新 feishu4dsh dsh 插件'],
 ])
 const jobs = new Map()
 let activeJobId = null
@@ -1338,6 +1340,19 @@ async function executeJob(job) {
     } else if (job.kind === 'agent-migrate') {
       await executeAgentMigration(job)
       job.exitCode = 0
+    } else if (job.kind === 'feishu4dsh-install') {
+      const profile = validateFeishu4dshProfile(job.input?.profile)
+      const packageSpec = validateFeishu4dshPackageSpec(job.input?.packageSpec)
+      appendJobEvent(job, { type: 'system', text: `installing feishu4dsh into dsh profile ${profile}` })
+      const dshCommand = defaultFeishu4dshPaths().dshCommand
+      const result = await runCommand(job, dshCommand, ['plugin', '--profile', profile, 'add', packageSpec])
+      job.exitCode = result.code
+      if (result.ok) {
+        appendJobEvent(job, {
+          type: 'system',
+          text: 'feishu4dsh plugin installed. Configure its 0600 env file and user service yourself; SHE does not read or store Feishu secrets.',
+        })
+      }
     } else {
       throw new Error(`unsupported job kind: ${job.kind}`)
     }
@@ -1729,7 +1744,7 @@ async function handleCompanionApi(request, response) {
       ok: true,
       value: {
         jobs: [...JOB_KINDS.keys()],
-        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'autostart', 'gateway', 'sandbox-preferences', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
+        api: ['health', 'version', 'capabilities', 'jobs', 'events', 'core-status', 'core-start-stop-restart', 'core-update-check', 'preflight', 'platform', 'packages', 'workspaces', 'worker-config', 'autostart', 'gateway', 'feishu4dsh', 'sandbox-preferences', 'companion-restart', 'companion-shutdown', 'companion-update-check', 'companion-update-apply', 'agents-discover', 'agent-migration-plan', 'agent-migration-apply', 'agent-migration-records'],
         streams: ['ndjson'],
         installs: ['job-based-allowlist'],
         privilege: { rootRequired: false, executesSudo: false, privilegedInstall: 'instructions-only' },
@@ -1849,6 +1864,14 @@ async function handleCompanionApi(request, response) {
       sendJsonWithCors(request, response, 200, { ok: true, value: await sandboxPreferencesStatus() })
     } catch (error) {
       sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/feishu4dsh') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await inspectFeishu4dsh() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
     }
     return
   }

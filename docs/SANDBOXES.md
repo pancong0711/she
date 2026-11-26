@@ -55,25 +55,61 @@ sleep infinity
 sh -lc 'exec node /opt/agent/server.js'
 ```
 
-## 4. 镜像与 agent runtime
+## 4. 镜像、命令与资源语义
 
-SHE 不会猜测 agent 的 npm/PyPI 包名和启动参数。
+### 启动命令
 
-若要自动安装，需要后续实现受审计的 **Agent Runtime Recipe**：
+启动命令追加在镜像之后，不经过宿主 shell。
 
-- 固定镜像 digest；
-- 固定 package/version；
-- 安装命令和校验；
-- 启动命令；
-- 凭据注入方式；
-- 失败回滚。
+```text
+sleep infinity
+sh -lc "exec /opt/agent/start.sh"
+```
 
-当前用户需要选择已包含 runtime 的镜像，或自行在容器内安装。
+- 留空 → 使用镜像自己的 ENTRYPOINT/CMD；
+- 需要 shell 语义时显式写 `sh -lc "..."` 或 `bash -lc "..."`；
+- PWA 只做 argv 解析，不展开宿主变量、glob、管道或命令替换。
 
-## 5. 限制
+### CPUs
+
+Docker `--cpus` 配额。`1.5` 表示最多使用 1.5 个核的算力，不是占满 1.5 个物理核。
+
+### Memory
+
+cgroup 内存硬上限，超过会 OOM kill。Node agent 通常至少 1 GiB；构建任务建议 2–4 GiB。
+
+### PIDs
+
+容器内允许存在的最大进程/线程数，对应 Docker `--pids-limit`。它限制的是 Linux task 数量，不是宿主机 PID。
+256 适合单个 Node agent；编译、多 worker、浏览器场景可提高到 512–2048。太小会出现 fork/resource 错误。
+
+### 网络
+
+- `egress` → Docker bridge，仅出站访问模型/API，不发布入站端口；
+- `none` → 完全无网络。
+
+## 5. 让 sandbox 自带 agent
+
+Sandbox 默认是空容器。要让 agent 随镜像一起出现，推荐预构建 agent 镜像，而不是在只读 rootfs 中启动时安装。
+
+```dockerfile
+FROM node:24-bookworm
+RUN npm install -g your-agent-package@1.2.3
+RUN useradd --create-home --uid 1000 agent
+USER agent
+WORKDIR /workspace
+CMD ["sleep", "infinity"]
+```
+
+完整设计见 [Agent Runtime Recipes](AGENT-RUNTIME-RECIPES.md)。
+
+当前限制：`agentId`/`role` 只是元数据，创建 sandbox 不会自动把它接入 worker 或多 agent 路由。
+
+## 6. 限制
 
 - 不自动拉取镜像；
-- 不自动停止/删除 container；
+- 不自动停止/删除/重启 container（broker API 已有，PWA 生命周期 UI 待补）；
 - 不自动安装 agent；
 - 首版创建表单不配置文件/凭据/workspace host mount；
-- sandbox 创建需要 broker 与 Docker/rootless Docker 可用。
+- sandbox 创建需要 broker 与 Docker/rootless Docker 可用；
+- worker 当前仍运行在宿主用户空间，不会自动使用新 sandbox。

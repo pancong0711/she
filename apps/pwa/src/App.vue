@@ -4,6 +4,7 @@ import HelpPanel from './components/HelpPanel.vue'
 import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
 import WorkspaceAuthorizationPanel from './components/WorkspaceAuthorizationPanel.vue'
 import GatewayPanel from './components/GatewayPanel.vue'
+import { parseCommandLine } from './command'
 import type { AgentRuntimeStatus, ArtifactListItem, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
@@ -99,7 +100,7 @@ const sandboxDraft = ref({
   name: `sbx-${crypto.randomUUID().slice(0, 8)}`,
   role: 'utility',
   agentId: 'opencode',
-  image: 'node:22-bookworm-slim',
+  image: 'node:24-bookworm',
   networkMode: 'egress',
   cpus: 1,
   memoryMb: 1024,
@@ -141,6 +142,7 @@ const packages = ref<readonly PackageInfo[]>([])
 const packageError = ref('')
 const copiedPackageId = ref('')
 const copiedDockerGuide = ref(false)
+const sandboxRecipeCopied = ref(false)
 const copiedInstallAlternative = ref('')
 const selectedDockerSource = ref('official')
 const preflight = ref<PreflightResult | null>(null)
@@ -566,7 +568,7 @@ async function submitSandbox(): Promise<void> {
       networkMode: draft.networkMode as 'none' | 'egress',
       resources: { cpus: draft.cpus, memoryMb: draft.memoryMb, pids: draft.pids },
       allowedCallers: ['main'],
-      ...(draft.command.trim() === '' ? {} : { command: draft.command.trim().split(/\s+/) }),
+      ...(draft.command.trim() === '' ? {} : { command: parseCommandLine(draft.command) }),
     })
     sandboxCreateOpen.value = false
     await refresh()
@@ -711,6 +713,42 @@ function relativeTime(at?: number): string {
   if (seconds < 60) return `${String(seconds)}s ago`
   if (seconds < 3600) return `${String(Math.round(seconds / 60))}m ago`
   return `${String(Math.round(seconds / 3600))}h ago`
+}
+
+const SANDBOX_AGENT_DOCKERFILE = `# 示例：预构建一个带 Node agent 的 sandbox 镜像
+# 必须锁定 agent 版本；不要把飞书/模型 secret 写进镜像。
+FROM node:24-bookworm
+
+# 基础工具：按 agent 实际需求增减
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# 示例占位：替换成你要用的 agent 包与固定版本
+RUN npm install -g your-agent-package@1.2.3
+
+# 容器内使用非 root 用户；workspace 由 broker 挂载到 /workspace
+RUN useradd --create-home --uid 1000 agent
+USER agent
+WORKDIR /workspace
+
+# 保持容器运行；由 SHE 或 docker exec 启动具体 agent
+CMD ["sleep", "infinity"]
+`
+
+async function copySandboxAgentDockerfile(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(SANDBOX_AGENT_DOCKERFILE)
+    sandboxRecipeCopied.value = true
+    setTimeout(() => { sandboxRecipeCopied.value = false }, 1500)
+  } catch {
+    sandboxRecipeCopied.value = false
+  }
+}
+
+function openWorkerVerification(): void {
+  chatInput.value = '请只输出当前工作目录和 worker-ok；不要修改任何文件。'
+  active.value = 'chat'
 }
 
 function formatBytes(bytes?: number): string {
@@ -1075,7 +1113,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div v-if="sandboxCreateOpen" class="sandbox-create-form">
-            <p class="muted">创建会调用 broker 的 `POST /v1/sandboxes`，需要 Docker/rootless Docker 可用。镜像必须包含你要运行的 agent/runtime；默认 `sleep infinity` 只用于验证挂载和保持容器运行。</p>
+            <p class="muted">创建会调用 broker 的 `POST /v1/sandboxes`，需要 Docker/rootless Docker 可用。新建 sandbox 默认是空容器：镜像决定里面有什么，SHE 不会在创建时向可写 rootfs 自动安装 agent。</p>
             <div class="settings-grid">
               <label>名称<input v-model="sandboxDraft.name" placeholder="sbx-main" /></label>
               <label>角色
@@ -1094,18 +1132,35 @@ onBeforeUnmount(() => {
                   <option v-if="sandboxPreferences && !sandboxPreferences.catalog.some(preset => preset.image === sandboxDraft.image)" :value="sandboxDraft.image">自定义：{{ sandboxDraft.image }}</option>
                 </select>
               </label>
-              <label>自定义镜像<input v-model="sandboxDraft.image" placeholder="node:22-bookworm-slim" /></label>
+              <label>自定义镜像<input v-model="sandboxDraft.image" placeholder="node:24-bookworm 或 your-agent:1.0.0" /></label>
               <label>网络
                 <select v-model="sandboxDraft.networkMode">
-                  <option value="egress">egress（访问模型/API）</option>
-                  <option value="none">none（离线）</option>
+                  <option value="egress">egress（Docker bridge，仅出站）</option>
+                  <option value="none">none（完全离线）</option>
                 </select>
               </label>
-              <label>启动命令<input v-model="sandboxDraft.command" placeholder="sleep infinity 或 sh -lc '...'" /></label>
+              <label>启动命令（shell 语法）<input v-model="sandboxDraft.command" placeholder="sleep infinity 或 sh -lc 'exec ...'" /></label>
               <label>CPUs<input v-model.number="sandboxDraft.cpus" type="number" min="0.1" max="64" step="0.1" /></label>
               <label>Memory MB<input v-model.number="sandboxDraft.memoryMb" type="number" min="128" max="131072" /></label>
               <label>PIDs<input v-model.number="sandboxDraft.pids" type="number" min="16" max="16384" /></label>
             </div>
+            <p v-if="sandboxPreferences" class="muted small-note">
+              {{ sandboxPreferences.catalog.find(preset => preset.image === sandboxDraft.image)?.description ?? '自定义镜像：其 shell、Node、git、curl 和 agent runtime 均由镜像提供。' }}
+            </p>
+            <div class="container-setting-explain">
+              <p><b>启动命令</b>：追加在镜像之后，不经过宿主 shell。`sleep infinity` 只保持容器运行；要执行 shell 脚本，写 `sh -lc "..."` 并显式加引号。留空表示使用镜像自己的 ENTRYPOINT/CMD。</p>
+              <p><b>CPUs 1.5</b>：Docker 的 CPU 配额，表示最多使用 1.5 个 CPU 核的算力（150%），不是“必须占用 1.5 核”。1 核建议给单个轻量 agent，编译任务可给 2–4。</p>
+              <p><b>Memory</b>：cgroup 内存上限；超过会 OOM kill。Node agent + 浏览器/构建工具通常至少 1 GiB，开发构建建议 2–4 GiB。</p>
+              <p><b>PIDs</b>：容器内允许存在的最大进程/线程数（Docker `--pids-limit`），用于防止 fork bomb。256 适合单 Node agent；需要多 worker、编译器或 Chrome 时可提高到 512–2048。太小会出现 `fork: Resource temporarily unavailable`。</p>
+              <p><b>egress / bridge</b>：容器可主动访问模型 API 和网络，但 SHE 不发布入站端口，外部不能直接访问容器；`none` 则完全无网络。角色和 Agent ID 目前是元数据，不会自动把该 sandbox 接入现有 worker。</p>
+            </div>
+            <details class="agent-recipe-help">
+              <summary>如何让 sandbox “自带 agent”？</summary>
+              <p>推荐做法是预先构建一个版本锁定的 agent 镜像，再到 Sandboxes 选择该镜像。不要每次启动都在只读 rootfs 里 apt/npm 安装；也不要把 secret 写进镜像。</p>
+              <button class="secondary" @click="copySandboxAgentDockerfile">{{ sandboxRecipeCopied ? '已复制' : '复制示例 Dockerfile' }}</button>
+              <pre><code>{{ SANDBOX_AGENT_DOCKERFILE }}</code></pre>
+              <p class="muted small-note">Node 24 full 和 Ubuntu 24.04 都有 bash；`node:24-bookworm` 还带 Node/npm、git、curl 等常用工具。Alpine 默认只有 sh/busybox，很多 agent 脚本会失败，除非 recipe 明确适配 musl。详细的 Agent Runtime Recipe 设计见 docs/AGENT-RUNTIME-RECIPES.md。</p>
+            </details>
             <p v-if="sandboxCreateError" class="error-text">{{ sandboxCreateError }}</p>
             <div class="job-actions">
               <button class="primary" :disabled="sandboxCreating || !brokerOnline" @click="submitSandbox">{{ sandboxCreating ? '创建中…' : '创建 Sandbox' }}</button>
@@ -1681,7 +1736,7 @@ onBeforeUnmount(() => {
             </label>
             <label>
               自定义镜像
-              <input v-model="sandboxPreferenceForm.defaultImage" placeholder="node:22-bookworm-slim" />
+              <input v-model="sandboxPreferenceForm.defaultImage" placeholder="node:24-bookworm 或 your-agent:1.0.0" />
             </label>
             <label>
               默认网络
@@ -1803,9 +1858,15 @@ onBeforeUnmount(() => {
         <div class="worker-settings">
           <h2>Agent Worker / OpenCode</h2>
           <p class="muted">
-            worker 通过 control plane 执行 `/she submit` 任务。这里只保存 OpenCode 凭据文件路径，
-            不保存密码内容；需要重启 core 后生效。
+            worker 是 core 内的任务执行循环，不是 sandbox。启用 worker 表示 core 会从队列 claim 任务，
+            然后调用这里配置的外部 OpenCode HTTP 服务；任务实际使用的 workspace 是下面的 Workspace path。
+            sandbox 与 worker 目前还没有自动绑定。这里只保存 OpenCode 凭据文件路径，不保存密码内容；修改后需要重启 core。
           </p>
+          <div class="container-setting-explain">
+            <p><b>启用 worker 意味着什么</b>：关闭时任务仍可提交并排队，但不会执行；启用后 core 启动 worker loop，按 poll interval 拉取 queued 任务。</p>
+            <p><b>不在 sandbox 里</b>：当前 worker 和 OpenCode 服务都运行在宿主用户空间。Sandbox 页面创建的是独立执行环境，暂未成为 worker 的 runtime。</p>
+            <p><b>快速验证</b>：保存并重启 core 后，打开 Chat 发一个只读验证任务（例如输出 cwd 和 `worker-ok`），观察 agent 事件与最终 report。</p>
+          </div>
           <p v-if="workerConfigError" class="error-text">{{ workerConfigError }}</p>
           <p v-if="workerConfigMessage" class="success-text">{{ workerConfigMessage }}</p>
           <div v-if="workerConfig" class="settings-grid">
@@ -1824,6 +1885,7 @@ onBeforeUnmount(() => {
           <div class="job-actions">
             <button class="secondary" :disabled="workerConfigSaving || workerConfig === null" @click="saveWorker(false)">保存</button>
             <button class="primary" :disabled="workerConfigSaving || workerConfig === null || coreStatus?.installed.current === null" @click="saveWorker(true)">保存并重启 core</button>
+            <button class="secondary" :disabled="health?.worker?.enabled !== true" @click="openWorkerVerification">打开 Chat 快速验证</button>
           </div>
         </div>
       </section>

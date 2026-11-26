@@ -5,18 +5,32 @@ import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 
 export const SANDBOX_IMAGE_PRESETS = [
-  { id: 'node22', label: 'Node 22 slim', image: 'node:22-bookworm-slim', description: '通用 Node/agent 基础镜像，体积适中。' },
-  { id: 'node24', label: 'Node 24 slim', image: 'node:24-bookworm-slim', description: '较新的 Node.js 运行时。' },
-  { id: 'ubuntu2404', label: 'Ubuntu 24.04', image: 'ubuntu:24.04', description: '通用 Ubuntu 环境，需自行安装 agent/runtime。' },
-  { id: 'debian12', label: 'Debian 12 slim', image: 'debian:bookworm-slim', description: '轻量通用 Debian 环境。' },
-  { id: 'alpine320', label: 'Alpine 3.20', image: 'alpine:3.20', description: '最小镜像，适合 utility 或网络工具。' },
-  { id: 'python312', label: 'Python 3.12 slim', image: 'python:3.12-slim', description: 'Python agent/tool 基础镜像。' },
+  {
+    id: 'node24-full',
+    label: 'Node 24 full（推荐 agent 基础镜像）',
+    image: 'node:24-bookworm',
+    description: '包含 Node/npm、bash、git、curl 和常见构建工具；适合作为预构建 agent 镜像的基础。镜像不是 agent 本身。',
+    recommendedForAgents: true,
+  },
+  {
+    id: 'node22-full',
+    label: 'Node 22 full（兼容性优先）',
+    image: 'node:22-bookworm',
+    description: '与 Node 24 full 类似，适合依赖较旧 Node ABI 的 agent；仍建议锁定镜像 digest。',
+    recommendedForAgents: true,
+  },
+  { id: 'node24', label: 'Node 24 slim', image: 'node:24-bookworm-slim', description: '有 bash/coreutils/apt 和 Node/npm，但缺少 git、curl 等常见工具；agent 需要额外安装。' },
+  { id: 'node22', label: 'Node 22 slim', image: 'node:22-bookworm-slim', description: '体积较小的 Node 基础镜像；需要先确认 agent 的 shell、git、curl 和原生依赖。' },
+  { id: 'ubuntu2404', label: 'Ubuntu 24.04', image: 'ubuntu:24.04', description: '通用 Linux 环境，bash/apt 完整；不预装 Node，Node agent 需要自定义 Dockerfile 安装 Node。' },
+  { id: 'debian12', label: 'Debian 12 slim', image: 'debian:bookworm-slim', description: '轻量通用 Debian 环境；保留 bash/apt，但没有 Node。' },
+  { id: 'alpine320', label: 'Alpine 3.20（谨慎）', image: 'alpine:3.20', description: '使用 sh/busybox，默认没有 bash/glibc；只适合明确兼容 musl 的 recipe。' },
+  { id: 'python312', label: 'Python 3.12 slim', image: 'python:3.12-slim', description: 'Python agent/tool 基础镜像；不含 Node。' },
 ]
 
 export function defaultSandboxPreferences() {
   return {
     schema: 1,
-    defaultImage: 'node:22-bookworm-slim',
+    defaultImage: 'node:24-bookworm',
     networkMode: 'egress',
     resources: { cpus: 1, memoryMb: 1024, pids: 256 },
   }

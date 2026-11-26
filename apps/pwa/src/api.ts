@@ -210,6 +210,57 @@ export async function saveSandboxPreferences(input: SandboxPreferences): Promise
   return payload.value
 }
 
+export const FEISHU4DSH_SOURCE_URL = 'git+https://github.com/pancong0711/feishu4dsh.git'
+
+export interface Feishu4dshStatus {
+  readonly schema: 1
+  readonly checkedAt: number
+  readonly dsh: {
+    readonly command: string
+    readonly available: boolean
+    readonly version: string | null
+    readonly detail?: string
+  }
+  readonly profile: {
+    readonly name: string
+    readonly directory: string
+    readonly packageFile: string
+    readonly initialized: boolean
+    readonly pluginInstalled: boolean
+    readonly dependencySpec: string | null
+  }
+  readonly envFile: {
+    readonly path: string
+    readonly exists: boolean
+    readonly mode?: number
+    readonly appIdConfigured: boolean
+    readonly appSecretConfigured: boolean
+    readonly permissionsOk?: boolean
+    readonly note: string
+  }
+  readonly service: {
+    readonly unitExists: boolean
+    readonly enabled: boolean
+    readonly active: boolean
+    readonly systemdAvailable: boolean
+    readonly detail?: string
+  }
+  readonly prerequisitesReady: boolean
+  readonly commands: {
+    readonly installPlugin: string
+    readonly installService: string
+    readonly enableService: string
+    readonly logs: string
+  }
+  readonly notes: readonly string[]
+}
+
+export async function loadFeishu4dshStatus(signal?: AbortSignal): Promise<Feishu4dshStatus> {
+  const payload = await getJson<{ ok: boolean; value?: Feishu4dshStatus; error?: { message?: string } }>('/api/feishu4dsh', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'feishu4dsh status unavailable')
+  return payload.value
+}
+
 export interface GatewayConfig {
   readonly schema: 1
   readonly channel: 'feishu4dsh'
@@ -547,10 +598,10 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.2-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.4.7'
+export const COMPANION_RELEASE_VERSION = '0.4.8'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.4.7'
-export const COMPANION_RELEASE_TAG = 'v0.3.5-companion.1'
+export const COMPANION_MIN_VERSION = '0.4.8'
+export const COMPANION_RELEASE_TAG = 'v0.4.8-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

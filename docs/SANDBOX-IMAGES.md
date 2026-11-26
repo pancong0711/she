@@ -23,15 +23,18 @@ Packages 页面需要成为 sandbox runtime 的统一入口，包括：
 当前内置：
 
 ```text
-node:22-bookworm-slim
+node:24-bookworm        # 推荐 agent 基础镜像（Node/npm/bash/git/curl）
+node:22-bookworm        # 兼容性优先的 Node full
 node:24-bookworm-slim
-ubuntu:24.04
+node:22-bookworm-slim
+ubuntu:24.04            # bash/apt 完整，但不预装 Node
 debian:bookworm-slim
-alpine:3.20
+alpine:3.20             # 默认 sh/busybox；agent 需明确适配
 python:3.12-slim
 ```
 
-也可以输入自定义镜像。
+也可以输入自定义镜像。完整 shell/工具差异和外置 agent 镜像方案见
+[Agent Runtime Recipes](AGENT-RUNTIME-RECIPES.md)。
 
 ## 3. API
 
@@ -86,4 +89,5 @@ Agent Migration 打开时读取这些默认值，用户仍可对单次计划覆�
 - 镜像是否包含具体 agent runtime 仍由用户确认；
 - image digest 锁定、镜像扫描和权限验证尚未实现；
 - 未与 sandbox broker 的 image allowlist 绑定；
-- 多 agent 分发需要后续 target-agent 路由。
+- 多 agent 分发需要后续 target-agent 路由；
+- 运行期 `apt/npm` 安装不适合作为常规 agent 预装方式；使用预构建镜像。

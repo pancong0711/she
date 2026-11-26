@@ -254,3 +254,8 @@ input:focus { outline: 2px solid #0ea5e9; outline-offset: 1px; }
 .container-setting-explain { margin: 12px 0; padding: 12px; border-radius: 10px; background: #02061766; border: 1px solid #1e293b; }
 .container-setting-explain p { margin: 6px 0; color: #94a3b8; font-size: 12px; line-height: 1.6; }
 .container-setting-explain b { color: #cbd5e1; }
+
+.agent-recipe-help { margin: 12px 0; padding: 12px; border: 1px dashed #475569; border-radius: 10px; background: #02061766; }
+.agent-recipe-help summary { cursor: pointer; color: #fbbf24; font-weight: 600; }
+.agent-recipe-help p { color: #94a3b8; font-size: 12px; line-height: 1.6; }
+.agent-recipe-help pre { max-height: 360px; overflow: auto; }
