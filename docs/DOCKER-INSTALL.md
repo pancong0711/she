@@ -29,6 +29,64 @@ sudo usermod -aG docker "$USER"
 
 Docker 是 sandbox/broker 容器能力依赖，不是 core 启动硬依赖。
 
+## 2.1 subordinate UID/GID 是什么
+
+Linux 容器里可能有多个用户：
+
+```text
+root
+daemon
+www-data
+...
+```
+
+rootless Docker 不能真的在宿主机上使用 root，而是通过 **user namespace** 把这些容器内 UID/GID 映射到当前普通用户拥有的一段“备用 UID/GID”上。
+
+这段备用范围就是 subordinate UID/GID：
+
+```text
+/etc/subuid: user:100000:65536
+/etc/subgid: user:100000:65536
+```
+
+含义：
+
+- `user`：宿主用户名；
+- `100000`：范围起点；
+- `65536`：可用 ID 数量。
+
+它们不是普通登录用户，也不会出现在 `who` 中；只是 user namespace 的映射池。`newuidmap` / `newgidmap`（来自 `uidmap` 包）负责安全地建立映射。
+
+### Ubuntu 是否已经自动配置
+
+很多 Ubuntu 系统在创建用户时已经自动分配了 subordinate UID/GID。先检查：
+
+```bash
+grep -E "^$USER:" /etc/subuid /etc/subgid
+```
+
+如果看到类似：
+
+```text
+/etc/subuid:user:100000:65536
+/etc/subgid:user:100000:65536
+```
+
+就**不需要**再执行 `usermod --add-subuids`。
+
+只有没有输出时才执行：
+
+```bash
+sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$USER"
+```
+
+然后退出并重新登录。
+
+所以“管理员直接安装 Docker”在两种情况下不同：
+
+- root Docker：daemon 以 root 运行，不需要 subordinate UID/GID，但用户要么使用 sudo，要么加入 docker 组；
+- rootless Docker：daemon 以普通用户运行，需要 user namespace/subuid/subgid，很多 Ubuntu 已自动配置，所以用户通常“感觉不到”这一步。
+
 ## 3. Ubuntu/Debian rootless 安装步骤
 
 以下命令由用户本人逐行执行，Packages 页面会逐行解释：

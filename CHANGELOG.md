@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Clarified subordinate UID/GID: Ubuntu users often already have ranges; only add them when the explicit check is empty.
 - Fixed core startup SQLite parent-directory creation and DB file permissions; companion now pre-creates the default DB directory before launching core.
 - Fixed core updates to force-reinstall an existing target version and roll back on installer failure.
 - Added authenticated control-plane admin shutdown so companion can recover external/orphaned core processes.

@@ -30,12 +30,13 @@ function commonRootlessSteps(prerequisiteCommand) {
     },
     {
       command: 'grep -E "^\\$USER:" /etc/subuid /etc/subgid',
-      explanation: '检查当前用户是否已有 subordinate UID/GID 范围；没有输出时执行下一步。',
+      explanation: '检查当前用户是否已有 subordinate UID/GID 范围。Ubuntu 新建用户通常已由 adduser/usermod 自动分配；有类似 user:100000:65536 输出时跳过下一步。',
     },
     {
       command: 'sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$USER"',
-      explanation: '为当前用户分配 subordinate UID/GID。这是一次性管理员操作；完成后需要重新登录。',
+      explanation: '仅当上一步没有输出、缺少 subordinate UID/GID 时执行。把一段普通 UID/GID 范围分配给当前用户，供 user namespace 映射容器内部 UID 使用；不是把当前用户变成 root。完成后需要重新登录。',
       requiresRoot: true,
+      note: '很多 Ubuntu 用户已有默认 100000-165535 范围，此时不需要执行这一行。',
     },
     {
       command: 'curl -fsSL https://get.docker.com/rootless | sh',
