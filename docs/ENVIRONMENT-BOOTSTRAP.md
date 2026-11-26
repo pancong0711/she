@@ -82,7 +82,7 @@
 ## 3. 安装流程
 
 ```text
-用户点击“安装依赖”
+源码开发时用户点击“安装源码依赖”
   → companion POST /api/jobs { kind: install }
   → runPreflight()
   → 若有 fail：

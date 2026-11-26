@@ -214,13 +214,15 @@ SHE_TOKEN_FILE
   - 区分 required toolchain 与 sandbox/Docker 能力；
   - Docker 缺失时显示可选能力影响和安装指引；
   - job 成功但存在 warning 时明确标注，避免把 `succeeded` 误解为所有能力就绪。
-- Core 更新（Install & Doctor 内）：
+- Core 安装/更新（Install & Doctor 内）：
+  - Core 未安装时直接显示“安装 Core”按钮；
   - current/previous 版本；
   - supervisor 状态；
-  - 启动/停止/重启 core；
+  - 已安装后才启用启动/停止/重启 core；
   - manifest URL 检查；
   - staging、切换、health check、自动回滚；
-  - 实时更新日志。
+  - 实时更新日志；
+- 构建 PWA / 构建 TypeScript 包 / 运行测试等源码开发工具收进“开发者工具”折叠区。
 - 占位页：
   - Gateway。
 

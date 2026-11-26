@@ -244,6 +244,24 @@ async function runCoreUpdateCheck(): Promise<void> {
   }
 }
 
+async function installCore(): Promise<void> {
+  if (jobRunning.value) return
+  coreUpdateError.value = ''
+  try {
+    const check = await checkCoreUpdate(coreManifestUrl.value)
+    coreUpdateCheck.value = check
+    if (!check.needsUpdate) {
+      coreUpdateError.value = check.current === null
+        ? 'manifest 没有返回可安装的 Core 版本。'
+        : `当前 Core 已是 ${check.current}，无需安装。`
+      return
+    }
+    await applyCoreUpdate()
+  } catch (cause) {
+    coreUpdateError.value = cause instanceof Error ? cause.message : String(cause)
+  }
+}
+
 async function applyCoreUpdate(): Promise<void> {
   coreUpdateError.value = ''
   await runJob('core-update', { manifestUrl: coreManifestUrl.value })
@@ -510,6 +528,9 @@ onBeforeUnmount(() => {
               : 'GitHub Pages 只是静态 PWA。安装、sandbox、agent 和本地控制面都在你的电脑上运行。' }}
           </p>
           <div class="hero-actions">
+            <button v-if="companionOnline && coreStatus?.installed.current === null" class="primary" :disabled="jobRunning" @click="installCore">
+              {{ jobRunning ? '安装中…' : '安装 Core' }}
+            </button>
             <button class="primary" @click="active = 'setup'">打开 Install & Doctor</button>
             <a class="secondary" :href="REPO_URL" target="_blank" rel="noreferrer">打开 GitHub 仓库</a>
           </div>
@@ -764,11 +785,20 @@ onBeforeUnmount(() => {
             <div class="job-actions">
               <button class="primary" :disabled="jobRunning" @click="runJob('doctor')">环境检查</button>
               <button class="secondary" :disabled="jobRunning" @click="runJob('bootstrap')">用户级环境准备（不请求 root）</button>
-              <button class="secondary" :disabled="jobRunning" @click="runJob('install')">安装依赖（自动预检）</button>
-              <button class="secondary" :disabled="jobRunning" @click="runJob('build')">构建 PWA</button>
-              <button class="secondary" :disabled="jobRunning" @click="runJob('build-all')">构建全部</button>
-              <button class="secondary" :disabled="jobRunning" @click="runJob('test')">运行测试</button>
             </div>
+            <details class="developer-tools">
+              <summary>开发者工具（仅源码仓库使用）</summary>
+              <p class="muted small-note">
+                这些按钮执行 pnpm 脚本，只用于 SHE 源码开发/调试。正常安装用户不需要点击；
+                安装版 companion 不包含完整源码目录。
+              </p>
+              <div class="job-actions">
+                <button class="secondary" :disabled="jobRunning" @click="runJob('install')">安装源码依赖</button>
+                <button class="secondary" :disabled="jobRunning" @click="runJob('build')">构建 PWA 前端</button>
+                <button class="secondary" :disabled="jobRunning" @click="runJob('build-all')">构建 TypeScript 包</button>
+                <button class="secondary" :disabled="jobRunning" @click="runJob('test')">运行测试</button>
+              </div>
+            </details>
             <p v-if="jobError" class="error-text">{{ jobError }}</p>
             <p v-if="job" class="muted">last job: {{ job.kind }} · {{ job.status }} · {{ job.id }}</p>
             <p v-if="jobWarnings.length > 0" class="warn-text">
@@ -824,8 +854,13 @@ onBeforeUnmount(() => {
 
           <div class="card core-card">
             <p class="eyebrow">CORE RUNTIME</p>
-            <h2>Core 版本与更新</h2>
+            <h2>Core 安装、版本与更新</h2>
             <p v-if="coreError" class="error-text">{{ coreError }}</p>
+            <div v-if="coreStatus && coreStatus.installed.current === null" class="alert core-install-alert">
+              <strong>Core 尚未安装</strong>
+              <p>Companion 只是本地宿主。Tasks、Chat、control-plane 和 broker 需要 Core bundle；首次使用请先安装 Core。</p>
+              <button class="primary" :disabled="jobRunning" @click="installCore">{{ jobRunning ? '安装中…' : '安装 Core' }}</button>
+            </div>
             <div class="health-grid">
               <div><span>supervisor</span><b>{{ coreStatus?.supervisor.state ?? 'unknown' }}</b></div>
               <div><span>pid</span><b>{{ coreStatus?.supervisor.pid ?? '-' }}</b></div>
@@ -836,20 +871,21 @@ onBeforeUnmount(() => {
               <div><span>last update</span><b>{{ coreStatus?.lastUpdate?.status ?? '-' }}</b></div>
             </div>
             <div class="job-actions">
-              <button class="secondary" :disabled="coreActionRunning !== ''" @click="runCoreAction('start')">{{ coreActionRunning === 'start' ? 'Starting…' : '启动 core' }}</button>
-              <button class="secondary" :disabled="coreActionRunning !== ''" @click="runCoreAction('stop')">{{ coreActionRunning === 'stop' ? 'Stopping…' : '停止 core' }}</button>
-              <button class="secondary" :disabled="coreActionRunning !== ''" @click="runCoreAction('restart')">{{ coreActionRunning === 'restart' ? 'Restarting…' : '重启 core' }}</button>
+              <button v-if="coreStatus?.installed.current === null" class="primary" :disabled="jobRunning" @click="installCore">{{ jobRunning ? '安装中…' : '安装 Core' }}</button>
+              <button class="secondary" :disabled="coreActionRunning !== '' || coreStatus?.installed.current === null" @click="runCoreAction('start')">{{ coreActionRunning === 'start' ? 'Starting…' : '启动 core' }}</button>
+              <button class="secondary" :disabled="coreActionRunning !== '' || coreStatus?.installed.current === null" @click="runCoreAction('stop')">{{ coreActionRunning === 'stop' ? 'Stopping…' : '停止 core' }}</button>
+              <button class="secondary" :disabled="coreActionRunning !== '' || coreStatus?.installed.current === null" @click="runCoreAction('restart')">{{ coreActionRunning === 'restart' ? 'Restarting…' : '重启 core' }}</button>
             </div>
-            <label for="core-manifest">Release manifest URL</label>
+            <label for="core-manifest">Core Release manifest URL</label>
             <div class="connect-row">
               <input id="core-manifest" v-model="coreManifestUrl" placeholder="https://…/release-manifest.json" />
-              <button class="secondary" :disabled="jobRunning" @click="runCoreUpdateCheck">检查更新</button>
+              <button class="secondary" :disabled="jobRunning" @click="runCoreUpdateCheck">检查版本</button>
             </div>
             <p v-if="coreUpdateError" class="error-text">{{ coreUpdateError }}</p>
             <div v-if="coreUpdateCheck" class="update-check">
               <p>当前：<b>{{ coreUpdateCheck.current ?? '未安装' }}</b> · 可用：<b>{{ coreUpdateCheck.available ?? 'unknown' }}</b></p>
               <p v-if="!coreUpdateCheck.needsUpdate" class="muted">已是最新版本。</p>
-              <button v-else class="primary" :disabled="jobRunning" @click="applyCoreUpdate">应用 core 更新</button>
+              <button v-else class="primary" :disabled="jobRunning" @click="applyCoreUpdate">{{ coreUpdateCheck.current === null ? '安装 Core' : '更新 Core' }}</button>
             </div>
             <p class="muted small-note">
               更新流程会下载并校验 bundle，停止旧 core，切换 current，启动新 core，并做 health check；
@@ -942,6 +978,7 @@ onBeforeUnmount(() => {
                     <a class="secondary" href="./start.command" download>macOS launcher</a>
                     <a class="secondary" href="./start.sh" download>Linux launcher</a>
                   </template>
+                  <button v-else-if="item.management === 'core-update' && coreStatus?.installed.current === null" class="primary" :disabled="jobRunning" @click="installCore">{{ jobRunning ? '安装中…' : '安装 Core' }}</button>
                   <button v-else-if="item.management === 'core-update'" class="primary" @click="active = 'setup'">打开 Core 更新</button>
                   <button v-else-if="item.management === 'bootstrap'" class="primary" :disabled="jobRunning" @click="runJob('bootstrap')">用户级准备 pnpm</button>
                 </div>

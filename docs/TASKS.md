@@ -149,3 +149,5 @@
 - 2026-11-26：改进 preflight 信息质量：新增 requirement/feature/remediation 字段，区分 required toolchain 与 sandbox/Docker 能力；Docker 缺失时显示 `sandboxReady=false`、具体原因和平台安装指引；bootstrap/doctor 的 job 即使退出 0 也显示 warning 数量，避免“succeeded”被误读为全部能力就绪。
 
 - 2026-11-26：完成 T6.4f：Packages 扩展为 12 项依赖目录，新增 Node/pnpm/git/bash/curl/tar/SHA-256/Docker/OpenCode 等状态、用途、requirement、平台化安装命令、复制按钮和官方文档链接；补齐 `docs/PACKAGES.md`。
+
+- 2026-11-26：优化 Install & Doctor 信息架构：Core 未安装时在 Dashboard、Core 卡片和 Packages 中提供明确“安装 Core”按钮；启动/停止/重启按钮在未安装时禁用；将“安装依赖/构建 PWA/构建 TypeScript/运行测试”移入“仅源码仓库使用”的开发者工具折叠区，并明确正常安装用户无需执行。
