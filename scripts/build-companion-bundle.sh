@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${1:-${OUT_DIR:-$ROOT/artifacts/companion}}"
-VERSION="$(node -e "process.stdout.write(require('$ROOT/package.json').version)")"
+VERSION="$(node -e "process.stdout.write(require('$ROOT/apps/companion/package.json').version)")"
 STAGE="$OUT_DIR/she-companion-$VERSION"
 ARCHIVE="$OUT_DIR/she-companion-$VERSION.tar.gz"
 

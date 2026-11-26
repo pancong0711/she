@@ -3,7 +3,7 @@
 # Never runs as root and never installs Node/Docker/system services.
 #
 # Usage:
-#   bash install-companion.sh she-companion-0.1.0.tar.gz --sha256 <hash> [--install-root <dir>]
+#   bash install-companion.sh she-companion-<version>.tar.gz --sha256 <hash> [--install-root <dir>]
 set -euo pipefail
 
 ARCHIVE=""

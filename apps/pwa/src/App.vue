@@ -7,6 +7,7 @@ import type { AgentRuntimeStatus, GatewayHealth, GatewayServerEvent, GatewaySnap
 import {
   BROKER_COMMANDS,
   COMPANION_BUNDLE_URL,
+  COMPANION_MIN_VERSION,
   COMPANION_INSTALLER_URL,
   COMPANION_MANIFEST_URL,
   COMPANION_RELEASE_URL,
@@ -30,6 +31,7 @@ import {
   saveWorkerConfig,
   sendTaskToShe,
   setCompanionUrl,
+  isVersionOlder,
   startJob,
   streamJobEvents,
   subscribeGatewayEvents,
@@ -121,6 +123,7 @@ const jobWarnings = computed(() => jobEvents.value.filter((event): event is Extr
 const online = computed(() => health.value?.status === 'ok')
 const brokerOnline = computed(() => brokerHealth.value?.status === 'ok')
 const companionOnline = computed(() => companion.value !== null)
+const companionOutdated = computed(() => companion.value !== null && isVersionOlder(companion.value.version, COMPANION_MIN_VERSION))
 
 async function refresh(): Promise<void> {
   loading.value = true
@@ -841,7 +844,7 @@ onBeforeUnmount(() => {
             </p>
             <p class="muted small-note">
               安装命令（示例，具体 SHA 以 manifest 为准）：<br />
-              <code>bash install-companion.sh she-companion-0.1.0.tar.gz --sha256 &lt;hash&gt;</code>
+              <code>bash install-companion.sh she-companion-${COMPANION_RELEASE_VERSION}.tar.gz --sha256 &lt;hash&gt;</code>
             </p>
             <a class="repo-link" :href="COMPANION_RELEASE_URL" target="_blank" rel="noreferrer">Release 页面 ↗</a>
           </div>
@@ -871,6 +874,16 @@ onBeforeUnmount(() => {
           <div class="card companion-card">
             <p class="eyebrow">COMPANION ONLINE</p>
             <h2>安装、调试与环境检查</h2>
+            <div v-if="companionOutdated" class="alert companion-outdated-alert">
+              <strong>Companion 版本过低</strong>
+              <p>
+                当前 companion {{ companion.version }}，PWA 至少需要 {{ COMPANION_MIN_VERSION }}。
+                请重新下载并运行一次 start.sh / start.command / start.bat；launcher 会把新版本安装到独立版本目录。
+              </p>
+              <p class="muted small-note">
+                PWA 不会在运行中替换 companion。旧版本继续运行是正常的，但新的本地 API 和安装说明不会出现。
+              </p>
+            </div>
             <div class="health-grid">
               <div><span>PID</span><b>{{ companion.pid }}</b></div>
               <div><span>版本</span><b>{{ companion.version }}</b></div>

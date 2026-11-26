@@ -348,10 +348,12 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.1.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_TAG = 'v0.1.0-companion.2'
+export const COMPANION_RELEASE_VERSION = '0.2.0'
+export const COMPANION_MIN_VERSION = '0.2.0'
+export const COMPANION_RELEASE_TAG = 'v0.2.0-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
-export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-0.1.0.tar.gz`
+export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`
 export const COMPANION_INSTALLER_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/install-companion.sh`
 
 function localActionHeaders(): Record<string, string> {
@@ -410,6 +412,19 @@ export interface PackageInfo {
   readonly manifestUrl?: string
   readonly note: string
   readonly install?: PackageInstallInfo
+}
+
+export function isVersionOlder(current: string | undefined, minimum: string): boolean {
+  if (current === undefined) return true
+  const parse = (value: string): number[] => value.replace(/^v/, '').split('.').map(part => Number.parseInt(part, 10) || 0)
+  const left = parse(current)
+  const right = parse(minimum)
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const a = left[index] ?? 0
+    const b = right[index] ?? 0
+    if (a !== b) return a < b
+  }
+  return false
 }
 
 export async function loadPackages(signal?: AbortSignal): Promise<readonly PackageInfo[]> {

@@ -55,7 +55,8 @@ jobs:
       - name: Build and install companion bundle
         run: |
           pnpm build:companion
-          bash scripts/install-companion.sh artifacts/companion/she-companion-0.1.0.tar.gz --sha256 "$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').bundle.sha256)")" --install-root /tmp/she-companion-install --bin-dir /tmp/she-companion-install/bin
+          BUNDLE="artifacts/companion/$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').bundle.file)")"
+          bash scripts/install-companion.sh "$BUNDLE" --sha256 "$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').bundle.sha256)")" --install-root /tmp/she-companion-install --bin-dir /tmp/she-companion-install/bin
           test -x /tmp/she-companion-install/current/bin/she-companion
 
       - name: Build PWA

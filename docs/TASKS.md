@@ -157,3 +157,5 @@
 - 2026-11-26：T6.8 部分完成：新增 companion `/api/platform` 平台探测（OS/arch/Node/shell/uid/WSL/Docker mode）与 Linux/macOS/Windows 支持矩阵；Install & Doctor 新增平台能力卡片，明确 verified / implemented-unverified / design-only / unsupported；新增 `docs/PLATFORM-SUPPORT.md`。
 
 - 2026-11-26：T6.5 首版：新增 companion workspace 授权注册表 `~/.config/she/workspaces.json`（0600）与 `/api/workspaces` CRUD；校验 realpath、叶子目录、root/home/系统路径、r/w 权限；PWA 新增 Workspaces 页面。实际只读强制仍由 broker host mount 执行；Agent Migration 与 worker 绑定授权 ID 列为后续。
+
+- 2026-11-26：修复 companion 版本与 root/core 耦合导致的 launcher 不更新问题：companion bundle/manifest 改用 `apps/companion/package.json` 版本，升级到 0.2.0；launcher 默认 Release tag 更新为 `v0.2.0-companion.1`；PWA 增加最低 companion 版本提示；service worker 对导航和 start.* 改为 network-first，避免缓存旧 launcher。

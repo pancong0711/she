@@ -14,7 +14,7 @@ const args = process.argv.slice(2).reduce((acc, item, index, list) => {
 }, {})
 const repoRoot = resolve(args.root ?? process.cwd())
 const bundle = resolve(args.bundle)
-const packageJson = JSON.parse(await readFile(resolve(repoRoot, 'package.json'), 'utf8'))
+const packageJson = JSON.parse(await readFile(resolve(repoRoot, 'apps/companion/package.json'), 'utf8'))
 const commit = args.commit ?? (await execFileAsync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'])).stdout.trim()
 const bytes = await readFile(bundle)
 const manifest = {

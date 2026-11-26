@@ -6,6 +6,7 @@ All notable changes to SHE are documented here.
 
 ### Added
 
+- Companion version is now decoupled from the root/core package version; new companion release `v0.2.0-companion.1` fixes stale launcher update detection.
 - Added a workspace authorization registry and PWA Workspaces page with leaf-directory validation, read-only/read-write intent, realpath checks, and 0600 persistence.
 - Added `/api/platform` and an Install & Doctor platform support matrix with explicit verified / implemented-unverified / design-only / unsupported statuses.
 - Added read-only Agents page and `GET /v1/agents` with OpenCode health, worker configuration, credential-file path only, and workspace authorization details.
