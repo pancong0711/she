@@ -105,11 +105,96 @@ CMD ["sleep", "infinity"]
 
 当前限制：`agentId`/`role` 只是元数据，创建 sandbox 不会自动把它接入 worker 或多 agent 路由。
 
-## 6. 限制
+## 6. 在 sandbox 内执行命令
+
+broker 新增：
+
+```text
+POST /v1/sandboxes/:name/exec
+```
+
+请求：
+
+```json
+{
+  "command": ["sh", "-lc", "pwd && ls -la /workspace"],
+  "cwd": "/workspace",
+  "timeoutMs": 30000
+}
+```
+
+语义：
+
+- broker 是唯一持有 Docker socket 的组件；
+- broker 通过固定参数调用 `docker exec`；
+- 宿主 shell 不解析命令；
+- 容器内命令通过显式 `sh -lc` 执行；
+- 输出有大小上限，超时会被终止；
+- cwd 只允许 `/workspace`、`/home/agent`、`/cache`、`/tmp`、`/outbox`、`/legacy`；
+- 审计日志只记录 argv0、参数数量、cwd、退出码、超时/截断状态，不记录环境变量；
+- 当前是**一次性命令执行**，不是完整 PTY 终端。
+
+容器环境固定为：
+
+```text
+HOME=/home/agent
+PATH=/home/agent/.local/bin:...
+NPM_CONFIG_PREFIX=/home/agent/.local
+XDG_CONFIG_HOME=/home/agent/.config
+XDG_DATA_HOME=/home/agent/.local/share
+XDG_CACHE_HOME=/cache
+```
+
+PWA 的每个 Sandbox 卡片现在有：
+
+```text
+安装 Agent
+执行命令
+复制 docker exec 命令
+```
+
+用户可以：
+
+```text
+pwd && ls -la /workspace
+opencode --version
+hermes --help
+pi --help
+dsh --version
+```
+
+## 7. 创建时预装 Agent
+
+新建 Sandbox 表单新增 **Agent recipe** 选择：
+
+```text
+不预装（空容器）
+OpenCode
+dsh
+Hermes Agent
+Pi coding agent
+```
+
+选择 recipe 后，创建命令会变成：
+
+```text
+npm install -g --prefix /home/agent/.local <pkg>@<pinned-version>
+command -v <binary>
+exec sleep infinity
+```
+
+安装写入 `/home/agent/.local`（持久化 bind mount），不修改容器只读 rootfs。
+容器重启后安装仍然存在。
+
+详细 recipe 与版本见 [Agent Runtime Recipes](AGENT-RUNTIME-RECIPES.md)。
+
+## 8. 限制
 
 - 不自动拉取镜像；
 - 不自动停止/删除/重启 container（broker API 已有，PWA 生命周期 UI 待补）；
-- 不自动安装 agent；
+- 当前安装发生在容器启动时，依赖 npm registry/GitHub 网络；生产环境仍推荐预构建并锁定 digest 的镜像；
+- 首次安装可能较慢，hermes 可能下载受管 Python runtime；
 - 首版创建表单不配置文件/凭据/workspace host mount；
 - sandbox 创建需要 broker 与 Docker/rootless Docker 可用；
-- worker 当前仍运行在宿主用户空间，不会自动使用新 sandbox。
+- worker 当前仍运行在宿主用户空间，不会自动使用新 sandbox；
+- exec 是一次性命令，不是完整交互式 PTY。

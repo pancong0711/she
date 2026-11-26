@@ -4,6 +4,8 @@ import { request as httpRequest, type ClientRequest, type IncomingMessage } from
 import type {
   Result,
   SandboxBrokerHealth,
+  SandboxExecRequest,
+  SandboxExecResult,
   SandboxMessageReceipt,
   SandboxMessageRequest,
   SandboxSpec,
@@ -101,6 +103,13 @@ export class SandboxBrokerClient {
       'stats',
     )
     return value ?? undefined
+  }
+
+  async exec(name: string, request: SandboxExecRequest): Promise<SandboxExecResult> {
+    return unwrapResult(
+      await this.requestJson<unknown>('POST', `/v1/sandboxes/${encodeURIComponent(name)}/exec`, request),
+      'exec',
+    )
   }
 
   async sendMessage(message: SandboxMessageRequest): Promise<SandboxMessageReceipt> {

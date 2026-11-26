@@ -4,6 +4,7 @@ import HelpPanel from './components/HelpPanel.vue'
 import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
 import WorkspaceAuthorizationPanel from './components/WorkspaceAuthorizationPanel.vue'
 import GatewayPanel from './components/GatewayPanel.vue'
+import SandboxToolsPanel from './components/SandboxToolsPanel.vue'
 import { parseCommandLine } from './command'
 import type { AgentRuntimeStatus, ArtifactListItem, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
@@ -32,6 +33,7 @@ import {
   loadPackages,
   loadPlatformStatus,
   loadPreflight,
+  loadSandboxAgentRecipes,
   loadSandboxPreferences,
   loadSandboxStats,
   loadSandboxes,
@@ -62,6 +64,7 @@ import {
   type PackageInstallStep,
   type PlatformStatus,
   type PreflightResult,
+  type SandboxAgentRecipe,
   type SandboxPreferences,
   type SandboxPreferencesResponse,
   type WorkerConfig,
@@ -164,6 +167,10 @@ const autostart = ref<AutostartStatus | null>(null)
 const autostartError = ref('')
 const autostartBusy = ref(false)
 const sandboxPreferences = ref<SandboxPreferencesResponse | null>(null)
+const sandboxAgentRecipes = ref<readonly SandboxAgentRecipe[]>([])
+const sandboxAgentRecipeError = ref('')
+const sandboxAgentRecipeId = ref('')
+const selectedSandboxAgentRecipe = computed(() => sandboxAgentRecipes.value.find(item => item.id === sandboxAgentRecipeId.value))
 const sandboxPreferenceForm = ref<SandboxPreferences | null>(null)
 const sandboxPreferenceError = ref('')
 const sandboxPreferenceMessage = ref('')
@@ -593,6 +600,28 @@ async function applyCoreUpdate(): Promise<void> {
   await refresh()
 }
 
+async function loadSandboxRecipes(): Promise<void> {
+  try {
+    sandboxAgentRecipes.value = await loadSandboxAgentRecipes()
+    sandboxAgentRecipeError.value = ''
+  } catch (cause) {
+    sandboxAgentRecipes.value = []
+    sandboxAgentRecipeError.value = cause instanceof Error ? cause.message : String(cause)
+  }
+}
+
+function applySandboxAgentRecipe(): void {
+  const recipe = selectedSandboxAgentRecipe.value
+  if (recipe === undefined) return
+  sandboxDraft.value = {
+    ...sandboxDraft.value,
+    agentId: recipe.id,
+    image: recipe.image,
+    networkMode: recipe.networkMode,
+    command: '由 Agent recipe 在容器启动时安装并保持运行',
+  }
+}
+
 async function submitSandbox(): Promise<void> {
   if (sandboxCreating.value) return
   const draft = sandboxDraft.value
@@ -603,15 +632,18 @@ async function submitSandbox(): Promise<void> {
   sandboxCreating.value = true
   sandboxCreateError.value = ''
   try {
+    const recipe = selectedSandboxAgentRecipe.value
     await createSandbox({
       name: draft.name,
       role: draft.role as 'standalone' | 'main' | 'worker' | 'observer' | 'utility',
-      agentId: draft.agentId.trim() || 'agent',
-      image: draft.image.trim(),
-      networkMode: draft.networkMode as 'none' | 'egress',
+      agentId: recipe?.id ?? (draft.agentId.trim() || 'agent'),
+      image: recipe?.image ?? draft.image.trim(),
+      networkMode: recipe?.networkMode ?? draft.networkMode as 'none' | 'egress',
       resources: { cpus: draft.cpus, memoryMb: draft.memoryMb, pids: draft.pids },
       allowedCallers: ['main'],
-      ...(draft.command.trim() === '' ? {} : { command: parseCommandLine(draft.command) }),
+      ...(recipe !== undefined
+        ? { command: [...recipe.bootstrap.command] }
+        : draft.command.trim() === '' ? {} : { command: parseCommandLine(draft.command) }),
     })
     sandboxCreateOpen.value = false
     await refresh()
@@ -945,6 +977,7 @@ async function chatEventLoop(signal: AbortSignal): Promise<void> {
 
 onMounted(() => {
   void refresh()
+  void loadSandboxRecipes()
   timer = setInterval(() => void refresh(), 5000)
   chatAbortController = new AbortController()
   void chatEventLoop(chatAbortController.signal)
@@ -1182,8 +1215,17 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div v-if="sandboxCreateOpen" class="sandbox-create-form">
-            <p class="muted">创建会调用 broker 的 `POST /v1/sandboxes`，需要 Docker/rootless Docker 可用。新建 sandbox 默认是空容器：镜像决定里面有什么，SHE 不会在创建时向可写 rootfs 自动安装 agent。</p>
+            <p class="muted">创建会调用 broker 的 `POST /v1/sandboxes`，需要 Docker/rootless Docker 可用。选择 Agent recipe 后，容器启动时会自动安装 agent 到 <code>/home/agent/.local</code>，然后保持运行。</p>
             <div class="settings-grid">
+              <label>
+                Agent recipe（创建时预装）
+                <select v-model="sandboxAgentRecipeId" @change="applySandboxAgentRecipe">
+                  <option value="">不预装（空容器）</option>
+                  <option v-for="recipe in sandboxAgentRecipes" :key="recipe.id" :value="recipe.id">
+                    {{ recipe.label }} — {{ recipe.packageName }}@{{ recipe.version }}
+                  </option>
+                </select>
+              </label>
               <label>名称<input v-model="sandboxDraft.name" placeholder="sbx-main" /></label>
               <label>角色
                 <select v-model="sandboxDraft.role">
@@ -1208,7 +1250,7 @@ onBeforeUnmount(() => {
                   <option value="none">none（完全离线）</option>
                 </select>
               </label>
-              <label>启动命令（shell 语法）<input v-model="sandboxDraft.command" placeholder="sleep infinity 或 sh -lc 'exec ...'" /></label>
+              <label>启动命令（shell 语法）<input v-model="sandboxDraft.command" :disabled="selectedSandboxAgentRecipe !== undefined" :placeholder="selectedSandboxAgentRecipe ? '由 Agent recipe 生成：安装后 sleep infinity' : 'sleep infinity 或 sh -lc \'exec ...\''" /></label>
               <label>CPUs<input v-model.number="sandboxDraft.cpus" type="number" min="0.1" max="64" step="0.1" /></label>
               <label>Memory MB<input v-model.number="sandboxDraft.memoryMb" type="number" min="128" max="131072" /></label>
               <label>PIDs<input v-model.number="sandboxDraft.pids" type="number" min="16" max="16384" /></label>
@@ -1216,6 +1258,15 @@ onBeforeUnmount(() => {
             <p v-if="sandboxPreferences" class="muted small-note">
               {{ sandboxPreferences.catalog.find(preset => preset.image === sandboxDraft.image)?.description ?? '自定义镜像：其 shell、Node、git、curl 和 agent runtime 均由镜像提供。' }}
             </p>
+            <p v-if="sandboxAgentRecipeError" class="warn-text small-note">Agent recipe 目录不可用：{{ sandboxAgentRecipeError }}</p>
+            <div v-if="selectedSandboxAgentRecipe" class="agent-recipe-help">
+              <p><b>{{ selectedSandboxAgentRecipe.label }}</b> · <code>{{ selectedSandboxAgentRecipe.packageName }}@{{ selectedSandboxAgentRecipe.version }}</code></p>
+              <p>{{ selectedSandboxAgentRecipe.description }}</p>
+              <p class="muted small-note">安装位置：<code>/home/agent/.local/bin/{{ selectedSandboxAgentRecipe.binary }}</code>；创建后可在 Sandboxes 卡片里执行验证命令。</p>
+              <ul>
+                <li v-for="requirement in selectedSandboxAgentRecipe.requirements" :key="requirement">{{ requirement }}</li>
+              </ul>
+            </div>
             <div class="container-setting-explain">
               <p><b>启动命令</b>：追加在镜像之后，不经过宿主 shell。`sleep infinity` 只保持容器运行；要执行 shell 脚本，写 `sh -lc "..."` 并显式加引号。留空表示使用镜像自己的 ENTRYPOINT/CMD。</p>
               <p><b>CPUs 1.5</b>：Docker 的 CPU 配额，表示最多使用 1.5 个 CPU 核的算力（150%），不是“必须占用 1.5 核”。1 核建议给单个轻量 agent，编译任务可给 2–4。</p>
@@ -1259,6 +1310,7 @@ onBeforeUnmount(() => {
               <button class="secondary stats-button" :disabled="loadingStats === sandbox.name" @click="loadStats(sandbox.name)">
                 {{ loadingStats === sandbox.name ? 'Loading…' : 'Load stats' }}
               </button>
+              <SandboxToolsPanel :sandbox="sandbox" :broker-online="brokerOnline" />
             </article>
           </div>
         </div>

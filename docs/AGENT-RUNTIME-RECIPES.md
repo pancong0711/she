@@ -91,7 +91,45 @@ interface AgentRuntimeRecipe {
 
 首版可以先只实现“静态 recipe 目录 + 生成 Dockerfile + 复制/构建说明”，不要声称已经一键安装任意 agent。
 
-## 4. 预构建镜像示例
+## 4. 当前已实现：创建时 bootstrap 到 writable home
+
+当前版本采用“预构建镜像优先，创建时 bootstrap 作为可用折中”的方式。
+
+Sandbox 表单可选择以下固定版本 recipe：
+
+| Agent | npm 包 | 固定版本 | binary | 基础镜像 |
+|---|---|---|---|---|
+| OpenCode | `opencode-ai` | `1.19.6` | `opencode` | `node:24-bookworm` |
+| dsh | `@deepseek-ai/dsh` | `0.2.2-rc.5` | `dsh` | `node:24-bookworm` |
+| Hermes Agent | `hermes-agent` | `0.23.4` | `hermes` | `node:24-bookworm` |
+| Pi coding agent | `@mariozechner/pi-coding-agent` | `0.73.1` | `pi` | `node:24-bookworm` |
+
+安装命令只在容器内执行，并写入可写 bind mount：
+
+```text
+/home/agent/.local
+```
+
+不会写入只读 rootfs。容器命令：
+
+```sh
+npm install -g --prefix /home/agent/.local <pkg>@<version>
+command -v <binary>
+exec sleep infinity
+```
+
+这解决了“创建完 sandbox 里面没有 agent”的即时需求，同时保持：
+
+- 版本固定；
+- 不使用 `latest`；
+- 不在宿主执行；
+- 不接触宿主凭据；
+- 安装和验证结果可通过 broker exec 审计；
+- 镜像仍是最终可替换的 recipe 载体。
+
+生产级方案仍应把同样的安装步骤固化到 Docker image，并锁定 image digest。
+
+## 5. 预构建镜像示例
 
 ```dockerfile
 FROM node:24-bookworm
@@ -120,7 +158,7 @@ docker image inspect she-agent-example:1.2.3 --format '{{index .RepoDigests 0}}'
 首次使用时用户在 Sandboxes 选择 `she-agent-example:1.2.3`，或填 `名称@sha256:<digest>`。
 `docker digest` 比 tag 更适合作为生产默认值。
 
-## 5. 可选：受审计的一键构建
+## 6. 可选：受审计的一键构建
 
 如果后续要让 PWA 生成镜像，应由 broker 而不是 companion 执行 Docker：
 
@@ -142,7 +180,7 @@ docker image inspect she-agent-example:1.2.3 --format '{{index .RepoDigests 0}}'
 - 失败回滚；
 - 不在 build args 中放 secret。
 
-## 6. 与 worker 的关系
+## 7. 与 worker 的关系
 
 当前：
 
@@ -167,9 +205,13 @@ Agent Runtime Recipe
   → 任务状态、预算、fanout、artifact 回到 SHE
 ```
 
-## 7. 验收
+## 8. 验收
 
-- [ ] Node full / Ubuntu / slim / Alpine 的 shell/工具差异有文档；
+- [x] Node full / Ubuntu / slim / Alpine 的 shell/工具差异有文档；
+- [x] 四种 agent 的固定版本 recipe 与 sandbox exec；
+- [x] 安装到 `/home/agent/.local`，不写只读 rootfs；
+- [x] PWA 创建时选择 recipe、卡片内安装/验证/执行命令；
+- [ ] image digest 锁定与预构建镜像发布；
 - [ ] 新增 recipe 不需要修改 broker 核心逻辑；
 - [ ] 镜像必须可追溯到固定 digest；
 - [ ] secret 不进入 Dockerfile、build args、镜像层或日志；

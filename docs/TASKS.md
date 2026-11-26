@@ -191,3 +191,5 @@
 - 2026-11-26：T6.14/T6.15 首版：修复 PWA 启动命令引号解析；Sandboxes/Agent Migration 增加 CPU、memory、PIDs、bridge/egress、启动命令和镜像解释；Settings 明确 worker 在 core 宿主进程、不在 sandbox，并增加 Chat 快速验证入口；新增 `/api/feishu4dsh` 只读前置检查和 `feishu4dsh-install` 受控 dsh 插件安装 job；Gateway 增加安装/连接清单，明确安装插件不等于 SHE 已接通飞书（T4.6 仍待完成）；新增 `docs/AGENT-RUNTIME-RECIPES.md`。
 
 - 2026-11-26：修复 worker 状态和 OpenCode 连接发现：TaskRunner 增加 `onClaim`，worker 在任务 claim 后立即显示 `running`；companion 新增 OpenCode `--service` state 文件发现（URL/health/凭据路径，不返回密码），旧默认 `49375 + ~/.config/opencode/service.json` 自动跟随当前 live service（如 49374）；Settings 增加检测状态和“使用检测到的服务”；Chat/Tasks 显示 task 失败详情；Core 启动/重启按 control-plane + broker health 给出真实成功/失败结果。发布 core 0.2.3 与 companion 0.4.9。
+
+- 2026-11-26：完成 sandbox agent 安装与命令执行首版：broker 新增 `sandbox.exec` capability、`POST /v1/sandboxes/:name/exec`、固定容器 HOME/PATH/NPM prefix、超时/输出截断与审计；PWA Sandboxes 增加 Agent recipe 创建时 bootstrap（OpenCode/dsh/Hermes/Pi，固定版本）、卡片内“安装 Agent / 验证 / 执行命令”；安装写入 `/home/agent/.local`，不修改只读 rootfs；新增 `apps/companion/sandbox-agent-recipes.mjs`。发布 core 0.3.0 与 companion 0.5.0。

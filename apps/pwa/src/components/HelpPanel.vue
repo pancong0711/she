@@ -154,6 +154,8 @@ defineProps<{
         <li>broker 是唯一调用 Docker runtime 的组件，agent 不直接接触 Docker socket。</li>
         <li>每个 sandbox 有独立 workspace/inbox/outbox/home/cache/logs。</li>
         <li>sandbox 默认是空容器：镜像决定使用什么 shell、Node/npm、git/curl 和 agent runtime。</li>
+        <li>可在创建时选择 Agent recipe（OpenCode/dsh/Hermes/Pi），或创建后在卡片中安装；安装写入可写的 /home/agent/.local。</li>
+        <li>每个 sandbox 卡片有“执行命令”入口，由 broker 通过 docker exec 执行一次性命令，不是完整 PTY。</li>
         <li>CPUs 是 CPU 核数配额（1.5 = 1.5 核算力）；PIDs 是容器内最大进程/线程数。</li>
         <li>egress 使用 Docker bridge 仅出站访问，不发布入站端口；none 完全离线。</li>
         <li>agentId/role 目前只是元数据，不自动加入 worker 或多 agent 路由。</li>
@@ -172,7 +174,7 @@ defineProps<{
           <tr><td>Workspaces</td><td>叶子目录授权注册表；记录 read-only/read-write 意图，拒绝 root/home/系统路径；实际挂载由 broker 二次校验。</td></tr>
           <tr><td>Chat</td><td>通过 `/she submit` 布置任务，实时显示 agent text delta、工具状态和完成/失败。</td></tr>
           <tr><td>Agent Migration</td><td>发现本机 AI agent，dry-run 规划并迁移到 sandbox；只读凭据目录挂载，原进程不动。</td></tr>
-          <tr><td>Sandboxes</td><td>创建 sandbox、broker 列表、状态、image、按需 CPU/内存/PIDs；解释启动命令与镜像边界。</td></tr>
+          <tr><td>Sandboxes</td><td>创建 sandbox、Agent recipe 预装、卡片内安装/验证/执行命令、broker 列表、状态与资源。</td></tr>
           <tr><td>Packages</td><td>Companion/Core/Node/pnpm/git/bash/curl/tar/SHA-256/Docker/OpenCode 依赖清单；显示用途、缺失影响、可复制安装方法和官方文档链接。</td></tr>
           <tr><td>Gateway</td><td>feishu4dsh dsh 插件检测/受控安装、control-plane gateway.v1 状态、adapter health；飞书 secret 始终留在 feishu4dsh。</td></tr>
           <tr><td>Settings</td><td>companion URL、服务状态、worker/OpenCode/workspace 配置（密码仅保存路径）。</td></tr>
@@ -197,7 +199,9 @@ defineProps<{
         <dt>安装了 feishu4dsh 是否就能连接飞书和 SHE？</dt>
         <dd>不完全是。插件安装只完成飞书 ↔ feishu4dsh ↔ dsh 的通道准备；还要配置飞书应用凭据、启动用户服务，并由 feishu4dsh 实现 gateway.v1 adapter。SHE 不保存 secret，T4.6 真机联调仍未完成。</dd>
         <dt>为什么新建 sandbox 里没有 agent？</dt>
-        <dd>Sandbox 只消费镜像；运行期 rootfs 是只读的。要让 agent 自带在镜像里，应预构建固定版本/digest 的 Agent Runtime Recipe，而不是每次启动 apt/npm 安装。</dd>
+        <dd>Sandbox 只消费镜像；运行期 rootfs 是只读的。现在可在创建时选择 Agent recipe，把固定版本安装到可写的 /home/agent/.local；也可以创建后用卡片内“安装 Agent”完成。生产环境仍推荐预构建并锁定 digest 的镜像。</dd>
+        <dt>怎么进入 sandbox 执行命令？</dt>
+        <dd>Sandboxes 卡片内点击“执行命令”，输入容器内 shell 命令。broker 通过 docker exec 执行，命令以 sh -lc 运行，并受 cwd、超时和输出大小限制。当前是一次性命令；完整交互式终端尚未实现。</dd>
       </dl>
     </article>
 

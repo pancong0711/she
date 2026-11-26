@@ -89,7 +89,7 @@ export class BrokerServer {
     this.capabilities = options.capabilities ?? makeCapabilitySet([
       'sandbox.create', 'sandbox.start', 'sandbox.stop', 'sandbox.restart',
       'sandbox.destroy', 'sandbox.inspect', 'sandbox.stats', 'sandbox.message',
-      'sandbox.registry', 'sandbox.audit', 'sandbox.host-mount', 'sandbox.command',
+      'sandbox.registry', 'sandbox.audit', 'sandbox.host-mount', 'sandbox.command', 'sandbox.exec',
     ])
     this.maxBodyBytes = options.maxBodyBytes ?? 20 * 1024 * 1024
   }
@@ -178,6 +178,11 @@ export class BrokerServer {
         }
         if (parts.length === 4 && parts[3] === 'restart' && request.method === 'POST') {
           jsonWrite(response, 200, resultOk(await this.service.restart(name)))
+          return
+        }
+        if (parts.length === 4 && parts[3] === 'exec' && request.method === 'POST') {
+          const body = await readJson(request, this.maxBodyBytes)
+          jsonWrite(response, 200, resultOk(await this.service.exec(name, body as unknown as import('@she/protocol').SandboxExecRequest)))
           return
         }
         if (parts.length === 4 && parts[3] === 'messages' && request.method === 'POST') {

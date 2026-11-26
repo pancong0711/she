@@ -4,6 +4,8 @@ import type {
   GatewayHealth,
   GatewaySnapshot,
   SandboxBrokerHealth,
+  SandboxExecRequest,
+  SandboxExecResult,
   SandboxSpec,
   SandboxStats,
   SandboxView,
@@ -98,6 +100,49 @@ export async function createSandbox(spec: SandboxSpec): Promise<SandboxView> {
   if (!response.ok || !payload.ok || payload.value === undefined) {
     throw new Error(payload.error?.message ?? `sandbox create failed: HTTP ${response.status}`)
   }
+  return payload.value
+}
+
+export async function execSandbox(name: string, request: SandboxExecRequest): Promise<SandboxExecResult> {
+  const response = await fetch(`${apiBase()}${brokerBase()}/v1/sandboxes/${encodeURIComponent(name)}/exec`, {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  const payload = await response.json() as { ok: boolean; value?: SandboxExecResult; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `sandbox exec failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
+export interface SandboxAgentRecipeCommand {
+  readonly command: readonly string[]
+  readonly cwd: string
+  readonly timeoutMs: number
+}
+
+export interface SandboxAgentRecipe {
+  readonly schema: 1
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  readonly packageName: string
+  readonly version: string
+  readonly binary: string
+  readonly image: string
+  readonly networkMode: 'none' | 'egress'
+  readonly requirements: readonly string[]
+  readonly notes: readonly string[]
+  readonly install: SandboxAgentRecipeCommand
+  readonly verify: SandboxAgentRecipeCommand
+  readonly bootstrap: SandboxAgentRecipeCommand
+  readonly exampleCommand?: string
+}
+
+export async function loadSandboxAgentRecipes(signal?: AbortSignal): Promise<readonly SandboxAgentRecipe[]> {
+  const payload = await getJson<{ ok: boolean; value?: readonly SandboxAgentRecipe[]; error?: { message?: string } }>('/api/sandbox/agent-recipes', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'sandbox agent recipes unavailable')
   return payload.value
 }
 
@@ -596,12 +641,12 @@ export interface CoreUpdateCheck {
   readonly manifest: unknown
 }
 
-export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.2.3-core.1/release-manifest.json'
+export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.0-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.4.9'
+export const COMPANION_RELEASE_VERSION = '0.5.0'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.4.9'
-export const COMPANION_RELEASE_TAG = 'v0.4.9-companion.1'
+export const COMPANION_MIN_VERSION = '0.5.0'
+export const COMPANION_RELEASE_TAG = 'v0.5.0-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/companion-release-manifest.json`
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

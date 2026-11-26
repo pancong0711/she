@@ -8,6 +8,8 @@ import type { SandboxProvider } from '@she/sandbox-sdk'
 import type {
   ArtifactRef,
   SandboxEvent,
+  SandboxExecRequest,
+  SandboxExecResult,
   SandboxMessageReceipt,
   SandboxMessageRequest,
   SandboxProviderHealth,
@@ -110,6 +112,29 @@ function assertCommand(command: readonly string[] | undefined): readonly string[
   }
   if (total > 16 * 1024) throw new BrokerError('invalid_request', 'command is too large')
   return [...command]
+}
+
+function assertExecRequest(request: SandboxExecRequest): { readonly command: readonly string[]; readonly cwd: string; readonly timeoutMs: number } {
+  if (!Array.isArray(request.command) || request.command.length === 0) {
+    throw new BrokerError('invalid_request', 'exec command must contain at least one argument')
+  }
+  const command = assertCommand(request.command)
+  if (command === undefined || command.length === 0) throw new BrokerError('invalid_request', 'exec command must not be empty')
+  const cwd = request.cwd ?? '/workspace'
+  if (typeof cwd !== 'string' || !cwd.startsWith('/') || cwd.includes('\u0000')) {
+    throw new BrokerError('invalid_request', 'exec cwd must be an absolute container path')
+  }
+  const normalized = cwd.replace(/\/+/g, '/').replace(/\/$/, '') || '/'
+  if (normalized.split('/').includes('..')) throw new BrokerError('invalid_request', 'exec cwd must not contain ..')
+  const allowedRoots = ['/workspace', '/home/agent', '/cache', '/tmp', '/outbox', '/legacy']
+  if (!allowedRoots.some(root => normalized === root || normalized.startsWith(`${root}/`))) {
+    throw new BrokerError('invalid_request', `exec cwd must be under one of: ${allowedRoots.join(', ')}`)
+  }
+  const timeoutMs = Number(request.timeoutMs ?? 30_000)
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 300_000) {
+    throw new BrokerError('invalid_request', 'exec timeoutMs must be between 1000 and 300000')
+  }
+  return { command, cwd: normalized, timeoutMs }
 }
 
 async function resolveHostMounts(
@@ -324,6 +349,30 @@ export class SandboxBrokerService implements SandboxProvider {
     }
     await this.store.save(this.registry)
     await this.audit.append('sandbox.destroyed', { name, preserveData: options.preserveData }, now)
+  }
+
+  async exec(name: string, request: SandboxExecRequest): Promise<SandboxExecResult> {
+    const record = this.requireRecord(name)
+    const requestValue = assertExecRequest(request)
+    const state = await this.options.docker.inspect(record.containerName)
+    if (state.state !== 'running') {
+      throw new BrokerError('unavailable', `sandbox is not running: ${name}`)
+    }
+    const result = await this.options.docker.exec(record.containerName, {
+      command: requestValue.command,
+      cwd: requestValue.cwd,
+      timeoutMs: requestValue.timeoutMs,
+    })
+    await this.audit.append('sandbox.exec', {
+      name,
+      argv0: requestValue.command[0] ?? '',
+      argvCount: requestValue.command.length,
+      cwd: requestValue.cwd,
+      exitCode: result.exitCode,
+      timedOut: result.timedOut,
+      truncated: result.truncated,
+    }, this.now())
+    return result
   }
 
   async stats(name: string): Promise<SandboxStats | undefined> {

@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SandboxBrokerClient } from '@she/client'
-import type { SandboxSpec } from '@she/protocol'
+import type { SandboxExecRequest, SandboxExecResult, SandboxSpec } from '@she/protocol'
 import {
   BrokerServer,
   SandboxBrokerService,
@@ -66,6 +66,30 @@ class FakeDocker implements DockerRuntime {
       memoryLimitBytes: 4096,
       pids: 2,
       collectedAt: 1_700_000_000_000,
+    }
+  }
+
+  async exec(containerName: string, request: SandboxExecRequest): Promise<SandboxExecResult> {
+    this.calls.push(`exec:${containerName}:${request.command.join(' ')}`)
+    if (this.running.get(containerName) !== true) {
+      return {
+        exitCode: 1,
+        stdout: '',
+        stderr: 'container is not running',
+        truncated: false,
+        timedOut: false,
+        startedAt: 1_700_000_000_000,
+        finishedAt: 1_700_000_000_001,
+      }
+    }
+    return {
+      exitCode: 0,
+      stdout: `ran:${request.command.join(' ')}`,
+      stderr: '',
+      truncated: false,
+      timedOut: false,
+      startedAt: 1_700_000_000_000,
+      finishedAt: 1_700_000_000_001,
     }
   }
 }
@@ -224,6 +248,26 @@ describe('sandbox broker service', () => {
     ])
   })
 
+  it('executes one-shot commands inside a running sandbox and records audit metadata', async () => {
+    const { dir, docker, service } = await harness()
+    await service.create(sandboxSpec('sbx-exec'))
+    const result = await service.exec('sbx-exec', {
+      command: ['sh', '-lc', 'echo hello'],
+      cwd: '/workspace',
+      timeoutMs: 5_000,
+    })
+    expect(result).toMatchObject({ exitCode: 0, stdout: 'ran:sh -lc echo hello' })
+    expect(docker.calls).toContain('exec:she-sbx-exec:sh -lc echo hello')
+    const audit = await readFile(join(dir, 'broker', 'audit.jsonl'), 'utf8')
+    expect(audit).toContain('sandbox.exec')
+    expect(audit).toContain('"exitCode":0')
+
+    await expect(service.exec('sbx-exec', { command: [] })).rejects.toMatchObject({ code: 'invalid_request' })
+    await expect(service.exec('sbx-exec', { command: ['true'], cwd: '/etc' })).rejects.toMatchObject({ code: 'invalid_request' })
+    await service.stop('sbx-exec')
+    await expect(service.exec('sbx-exec', { command: ['true'] })).rejects.toMatchObject({ code: 'unavailable' })
+  })
+
   it('rejects root and writable credential host mounts', async () => {
     const { service, homeDir } = await harness()
     await expect(service.create(sandboxSpec('sbx-root-mount', {
@@ -257,6 +301,8 @@ describe('sandbox broker service', () => {
       text: 'ping',
     })
     expect(message.accepted).toBe(true)
+    const execResult = await client.exec('sbx-0001', { command: ['sh', '-lc', 'echo via-socket'], cwd: '/workspace' })
+    expect(execResult.exitCode).toBe(0)
     await client.destroy('sbx-0001', { preserveData: true })
     expect(await client.inspect('sbx-0001')).toBeUndefined()
   })

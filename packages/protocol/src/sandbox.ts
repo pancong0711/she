@@ -25,6 +25,7 @@ export type KnownSandboxCapability =
   | 'sandbox.audit'
   | 'sandbox.host-mount'
   | 'sandbox.command'
+  | 'sandbox.exec'
 
 export type SandboxCapability = KnownSandboxCapability | (string & {})
 
@@ -84,6 +85,25 @@ export interface SandboxSpec {
   readonly command?: readonly string[]
   /** Explicit host directory mounts, validated by the broker. */
   readonly hostMounts?: readonly SandboxHostMount[]
+}
+
+export interface SandboxExecRequest {
+  /** argv passed to `docker exec`; never interpreted by the host shell. */
+  readonly command: readonly string[]
+  /** Absolute container path under an allowed writable/read-only root. Defaults to /workspace. */
+  readonly cwd?: string
+  /** Hard timeout; defaults to 30s and is capped by the broker. */
+  readonly timeoutMs?: number
+}
+
+export interface SandboxExecResult {
+  readonly exitCode: number
+  readonly stdout: string
+  readonly stderr: string
+  readonly truncated: boolean
+  readonly timedOut: boolean
+  readonly startedAt: number
+  readonly finishedAt: number
 }
 
 export interface SandboxView {
@@ -171,6 +191,7 @@ export interface SandboxApi {
   restart(name: string): Promise<SandboxView>
   destroy(name: string, options: { readonly preserveData: boolean }): Promise<void>
   stats(name: string): Promise<SandboxStats | undefined>
+  exec(name: string, request: SandboxExecRequest): Promise<SandboxExecResult>
   sendMessage(message: SandboxMessageRequest): Promise<SandboxMessageReceipt>
   subscribe(input: { readonly cursor?: string; readonly signal?: AbortSignal }): AsyncIterable<SandboxEvent>
 }

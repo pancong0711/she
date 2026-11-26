@@ -2,6 +2,8 @@
 
 import type {
   SandboxEvent,
+  SandboxExecRequest,
+  SandboxExecResult,
   SandboxMessageReceipt,
   SandboxMessageRequest,
   SandboxProviderHealth,
@@ -20,6 +22,7 @@ export interface SandboxProvider {
   restart(name: string): Promise<SandboxView>
   destroy(name: string, options: { readonly preserveData: boolean }): Promise<void>
   stats(name: string): Promise<SandboxStats | undefined>
+  exec(name: string, request: SandboxExecRequest): Promise<SandboxExecResult>
   sendMessage(message: SandboxMessageRequest): Promise<SandboxMessageReceipt>
   subscribe(input: { readonly cursor?: string; readonly signal?: AbortSignal }): AsyncIterable<SandboxEvent>
 }
