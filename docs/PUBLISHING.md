@@ -85,7 +85,7 @@ blockExoticSubdeps: false
 在 npm registry 发布前，使用 GitHub Release 固定 tarball：
 
 ```text
-https://github.com/pancong0711/she/releases/tag/v0.1.0-packages.1
+https://github.com/pancong0711/she/releases/tag/v0.1.0-packages.2
 ```
 
 消费说明见：

@@ -209,3 +209,5 @@
 - 2026-11-27：修复 GitHub Pages 跨源访问本地 companion 全部 offline：移除读请求中非 CORS-safelisted 的 `cache-control` 请求头，companion CORS 允许头补齐 cache-control/pragma，代理 503 也返回 CORS；PWA 增加全局连接诊断、本地网络权限提示和恢复默认地址按钮。发布 companion 0.7.4。
 
 - 2026-11-27：修复 Chat 任务成功但看不到 OpenCode 最终回复：确认真实 OpenCode 2.3.2 后端会产出 agent.delta + report artifact；PWA 在 task.completed 或 snapshot 发现 succeeded 时刷新 artifacts，未收到实时 text delta 则从 report artifact 回填最终回复，并显示明确诊断。发布 companion 0.7.5。
+
+- 2026-11-27：核查 feishu4dsh R71 `gateway.v1` 薄适配：基础命令/卡片/事件/cursor 契约兼容；SHE 发布 `v0.1.0-packages.2`，`@she/client` 0.1.1 公开 artifacts/downloadArtifact 并增加 feishu4dsh consumer 契约测试。剩余跨仓库需求为 feishu4dsh 接入 artifact 下载与 Feishu sendFile/群聊审批，以及真机闭环。
