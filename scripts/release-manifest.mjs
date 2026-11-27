@@ -29,9 +29,14 @@ const args = parseArgs(process.argv.slice(2))
 const repoRoot = resolve(args.root ?? process.cwd())
 const packageJson = JSON.parse(await readFile(resolve(repoRoot, 'apps/control-plane/package.json'), 'utf8'))
 const commit = args.commit ?? (await execFileAsync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'])).stdout.trim()
+const releaseTag = String(args['release-tag'] ?? `v${packageJson.version}-core.1`)
+const releaseBase = String(args['release-base'] ?? `https://github.com/pancong0711/she/releases/download/${releaseTag}`).replace(/\/+$/, '')
+const channelBase = String(args['channel-base'] ?? 'https://pancong0711.github.io/she').replace(/\/+$/, '')
 const bundle = args.bundle ? resolve(repoRoot, args.bundle) : undefined
 const bundleInfo = bundle === undefined ? undefined : {
   file: basename(bundle),
+  url: `${channelBase}/${basename(bundle)}`,
+  fallbackUrl: `${releaseBase}/${basename(bundle)}`,
   bytes: (await stat(bundle)).size,
   sha256: await sha256(bundle),
 }

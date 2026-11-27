@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "name": "she",
+  "version": "0.3.4",
+  "commit": "ad881c5eabb7b19ec6f746e71d251918b864d9fa",
+  "generatedAt": "2026-11-27T13:40:36.914Z",
+  "protocols": {
+    "companionApi": "v1",
+    "gateway": "v1",
+    "agent": "v1",
+    "sandbox": "v1"
+  },
+  "entrypoint": {
+    "posix": "run-core.sh",
+    "windows": "run-core.cmd",
+    "args": []
+  },
+  "bundle": {
+    "file": "she-core-0.3.4.tar.gz",
+    "url": "https://pancong0711.github.io/she/she-core-0.3.4.tar.gz",
+    "fallbackUrl": "https://github.com/pancong0711/she/releases/download/v0.3.4-core.1/she-core-0.3.4.tar.gz",
+    "bytes": 34314,
+    "sha256": "32b5bd2fe0737a1f14b5feae9823279ee27b8f6cdabca6508aa16e797ccb8269"
+  }
+}

@@ -75,7 +75,7 @@ const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
 const launcherVersion = process.env.SHE_LAUNCHER_VERSION?.trim() || undefined
 const launcherPath = join(companionInstallRoot, 'launcher.mjs')
 const COMPANION_RESTART_EXIT_CODE = 75
-const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.3.3-core.1/release-manifest.json'
+const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://pancong0711.github.io/she/core-release-manifest.json'
 const defaultCompanionManifestUrl = process.env.SHE_COMPANION_MANIFEST_URL?.trim() || 'https://pancong0711.github.io/she/companion-release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(paths.runtimeRoot, 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(paths.configRoot, 'token')
@@ -1292,25 +1292,34 @@ async function downloadBundle(manifestUrl, manifest, job) {
   const file = manifest?.bundle?.file
   const expected = manifest?.bundle?.sha256
   if (typeof file !== 'string' || typeof expected !== 'string') throw new Error('manifest bundle.file/sha256 missing')
-  const url = manifestUrl.startsWith('file://')
-    ? new URL(file, manifestUrl).href
-    : new URL(file, manifestUrl).href
-  appendJobEvent(job, { type: 'system', text: `downloading bundle: ${url}` })
-  let bytes
-  if (url.startsWith('file://')) {
-    bytes = await readFile(new URL(url))
-  } else if (/^https?:\/\//.test(url)) {
-    bytes = await fetchBytesWithCurlFallback(url, 120_000)
-  } else {
-    throw new Error('bundle URL must be http(s) or file://')
+  const candidates = []
+  for (const declared of [manifest.bundle.url, file, manifest.bundle.fallbackUrl]) {
+    if (typeof declared !== 'string' || declared.trim() === '') continue
+    const resolved = new URL(declared.trim(), manifestUrl).href
+    if (!candidates.includes(resolved)) candidates.push(resolved)
   }
-  const actual = createHash('sha256').update(bytes).digest('hex')
-  if (actual !== expected) throw new Error(`bundle SHA-256 mismatch: expected ${expected}, got ${actual}`)
-  const staging = join(coreRoot, 'staging')
-  await mkdir(staging, { recursive: true, mode: 0o700 })
-  const target = join(staging, basename(file))
-  await writeFile(target, bytes, { mode: 0o600 })
-  return { path: target, sha256: actual, bytes: bytes.byteLength }
+  let lastError
+  for (const url of candidates) {
+    appendJobEvent(job, { type: 'system', text: `downloading bundle: ${url}` })
+    try {
+      const bytes = url.startsWith('file://')
+        ? await readFile(new URL(url))
+        : /^https?:\/\//.test(url)
+          ? await fetchBytesWithCurlFallback(url, 120_000)
+          : Promise.reject(new Error('bundle URL must be http(s) or file://'))
+      const actual = createHash('sha256').update(bytes).digest('hex')
+      if (actual !== expected) throw new Error(`bundle SHA-256 mismatch: expected ${expected}, got ${actual}`)
+      const staging = join(coreRoot, 'staging')
+      await mkdir(staging, { recursive: true, mode: 0o700 })
+      const target = join(staging, basename(file))
+      await writeFile(target, bytes, { mode: 0o600 })
+      return { path: target, sha256: actual, bytes: bytes.byteLength }
+    } catch (error) {
+      lastError = error
+      appendJobEvent(job, { type: 'system', text: `bundle download failed: ${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('bundle download failed')
 }
 
 async function executeCoreUpdate(job) {
