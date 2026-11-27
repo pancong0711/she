@@ -8,6 +8,9 @@ import type {
   GatewayHello,
   GatewayInteractionRequest,
   GatewayInteractionResult,
+  GatewayMessageEvent,
+  GatewayMessageRequest,
+  GatewayMessageResult,
   GatewayServerEvent,
   GatewaySnapshot,
   GatewayWelcome,
@@ -120,6 +123,12 @@ export class SheClient {
     const body: GatewayCommandRequest = { protocolVersion: GATEWAY_PROTOCOL_VERSION, command }
     const response = await this.requestJson<unknown>('POST', '/v1/commands', body, signal)
     return unwrapResult<GatewayCommandResult>(response, 'command failed')
+  }
+
+  async message(message: GatewayMessageEvent, signal?: AbortSignal): Promise<GatewayMessageResult> {
+    const body: GatewayMessageRequest = { protocolVersion: GATEWAY_PROTOCOL_VERSION, message }
+    const response = await this.requestJson<unknown>('POST', '/v1/messages', body, signal)
+    return unwrapResult<GatewayMessageResult>(response, 'message failed')
   }
 
   async interaction(

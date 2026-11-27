@@ -111,6 +111,9 @@ describe('SheGatewayBridge', () => {
             commandResult: { renderIntents: [approval, file] },
           }
         },
+        async message(input) {
+          return { accepted: true, requestId: input.requestId, taskId: 'task-message-1', topicId: 'topic-message-1' }
+        },
         async interaction(input) {
           return { accepted: true, interactionId: input.interactionId }
         },

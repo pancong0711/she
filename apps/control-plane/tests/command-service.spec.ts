@@ -9,7 +9,7 @@ import {
   SystemClock,
   TaskService,
 } from '@she/control'
-import type { GatewayCommandInvocation } from '@she/protocol'
+import type { GatewayCommandInvocation, GatewayMessageEvent } from '@she/protocol'
 import { SheCommandService, resolveControlPlaneConfig } from '@she/control-plane'
 
 function createCommand(text: string, requestId = 'req-1'): GatewayCommandInvocation {
@@ -19,6 +19,16 @@ function createCommand(text: string, requestId = 'req-1'): GatewayCommandInvocat
     actor: { id: 'user-1', kind: 'user' },
     conversation: { id: 'chat-1', kind: 'dm' },
     rawCommand: text,
+  }
+}
+
+function createMessage(text: string, requestId = 'req-message', conversationId = 'chat-1'): GatewayMessageEvent {
+  return {
+    kind: 'message',
+    requestId,
+    actor: { id: 'user-1', kind: 'user' },
+    conversation: { id: conversationId, kind: 'dm' },
+    text,
   }
 }
 
@@ -39,12 +49,14 @@ function createService() {
 }
 
 describe('SheCommandService', () => {
-  it('returns a help card and handles unknown commands', async () => {
+  it('returns a help card and handles direct as well as legacy commands', async () => {
     const { service } = createService()
-    const help = await service.command(createCommand('/she help'))
+    const help = await service.command(createCommand('/help'))
     expect(help.accepted).toBe(true)
     expect(help.commandResult?.renderIntents[0]?.kind).toBe('card')
-    const unknown = await service.command(createCommand('/she nope'))
+    const legacy = await service.command(createCommand('/she help'))
+    expect(legacy.accepted).toBe(true)
+    const unknown = await service.command(createCommand('/nope'))
     expect(unknown.accepted).toBe(false)
     expect(unknown.commandResult?.renderIntents[0]).toMatchObject({ kind: 'text' })
   })
@@ -71,6 +83,32 @@ describe('SheCommandService', () => {
     const cancelled = await service.command(createCommand(`/she cancel ${taskId}`, 'req-cancel'))
     expect(cancelled.accepted).toBe(true)
     expect((await tasks.get(taskId))?.status).toBe('cancelled')
+  })
+
+  it('accepts ordinary messages, deduplicates idempotency keys and routes conversations to topics', async () => {
+    const { service, tasks } = createService()
+    const first = await service.message({ ...createMessage('implement feature'), idempotencyKey: 'feishu:message:m1' })
+    expect(first).toMatchObject({ accepted: true, requestId: 'req-message' })
+    expect(first.taskId).toBeTypeOf('string')
+    expect(first.topicId).toBeTypeOf('string')
+    const duplicate = await service.message({ ...createMessage('implement feature'), idempotencyKey: 'feishu:message:m1' })
+    expect(duplicate.taskId).toBe(first.taskId)
+    expect(duplicate.topicId).toBe(first.topicId)
+    expect(await tasks.get(first.taskId!)).toMatchObject({ status: 'queued', topicId: first.topicId })
+
+    const otherConversation = await service.message(createMessage('second conversation', 'req-other', 'chat-2'))
+    expect(otherConversation.topicId).not.toBe(first.topicId)
+
+    const list = await service.command(createCommand('/list', 'req-list'))
+    expect(list.commandResult?.renderIntents[0]).toMatchObject({ kind: 'card', title: 'SHE tasks · 1' })
+  })
+
+  it('cancels the latest active task through /stop', async () => {
+    const { service, tasks } = createService()
+    const accepted = await service.message(createMessage('long running task'))
+    const stopped = await service.command(createCommand('/stop', 'req-stop'))
+    expect(stopped.accepted).toBe(true)
+    expect(await tasks.get(accepted.taskId!)).toMatchObject({ status: 'cancelled' })
   })
 
   it('returns not-found and usage errors as render intents', async () => {

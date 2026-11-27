@@ -11,6 +11,7 @@ import {
   makeCapabilitySet,
   type GatewayCommandInvocation,
   type GatewayInteractionResponse,
+  type GatewayMessageEvent,
   type AgentRuntimeStatus,
 } from '@she/protocol'
 import { ControlPlaneServer } from '@she/control-plane'
@@ -59,6 +60,9 @@ async function harness() {
     async command(input: GatewayCommandInvocation) {
       expect(input.requestId).toBe(command.requestId)
       return GATEWAY_V1_FIXTURES.commandResult
+    },
+    async message(input: GatewayMessageEvent) {
+      return { accepted: true, requestId: input.requestId, taskId: 'task-message-1', topicId: 'topic-message-1' }
     },
     async interaction(input: GatewayInteractionResponse) {
       return { accepted: true, interactionId: input.interactionId }
@@ -130,6 +134,15 @@ describe('control-plane gateway.v1 server', () => {
 
     const commandResult = await client.command(GATEWAY_V1_FIXTURES.commandRequest.command)
     expect(commandResult.commandResult?.renderIntents).toHaveLength(2)
+
+    const messageResult = await client.message({
+      kind: 'message',
+      requestId: 'req-message',
+      actor: { id: 'user-1', kind: 'user' },
+      conversation: { id: 'chat-1', kind: 'dm' },
+      text: 'hello agent',
+    })
+    expect(messageResult).toMatchObject({ accepted: true, requestId: 'req-message', taskId: 'task-message-1', topicId: 'topic-message-1' })
 
     const interactionResult = await client.interaction({
       kind: 'interaction',

@@ -88,6 +88,14 @@ describe('feishu4dsh gateway.v1 compatibility surface', () => {
         })
         return
       }
+      if (request.method === 'POST' && request.url === '/v1/messages') {
+        const payload = JSON.parse(body) as { message: { requestId: string } }
+        json(response, {
+          ok: true,
+          value: { accepted: true, requestId: payload.message.requestId, taskId: 'task-1', topicId: 'topic-1' },
+        })
+        return
+      }
       if (request.method === 'POST' && request.url === '/v1/commands') {
         const payload = JSON.parse(body) as { command: { requestId: string } }
         json(response, {
@@ -137,6 +145,16 @@ describe('feishu4dsh gateway.v1 compatibility surface', () => {
     const command = await client.command(GATEWAY_V1_FIXTURES.commandRequest.command)
     expect(command.taskId).toBe('task-1')
     expect(command.commandResult?.renderIntents.length).toBeGreaterThan(0)
+
+    const message = await client.message({
+      kind: 'message',
+      requestId: 'req-message',
+      actor: { id: 'user-fixture', kind: 'user' },
+      conversation: { id: 'chat-fixture', kind: 'dm' },
+      text: 'hello agent',
+      idempotencyKey: 'feishu:message:m1',
+    })
+    expect(message).toMatchObject({ accepted: true, requestId: 'req-message', taskId: 'task-1', topicId: 'topic-1' })
 
     const interaction = await client.interaction({
       kind: 'interaction',

@@ -13,6 +13,9 @@ import type {
   GatewayHello,
   GatewayInteractionRequest,
   GatewayInteractionResult,
+  GatewayMessageEvent,
+  GatewayMessageRequest,
+  GatewayMessageResult,
   GatewayServerEvent,
   GatewaySnapshot,
   GatewayWelcome,
@@ -30,6 +33,7 @@ import {
 
 export interface ControlPlaneHandlers {
   command(command: GatewayCommandInvocation): Promise<GatewayCommandResult>
+  message(message: GatewayMessageEvent): Promise<GatewayMessageResult>
   interaction(input: GatewayInteractionRequest['interaction']): Promise<GatewayInteractionResult>
   snapshot(): Promise<GatewaySnapshot>
 }
@@ -452,6 +456,38 @@ export class ControlPlaneServer {
           capabilities: this.capabilities,
         }
         jsonWrite(response, 200, welcome)
+        return
+      }
+      if (request.method === 'POST' && url.pathname === '/v1/messages') {
+        const body = await this.readJson(request) as Partial<GatewayMessageRequest>
+        if (body.protocolVersion !== GATEWAY_PROTOCOL_VERSION
+          || body.message === undefined
+          || body.message.kind !== 'message'
+          || typeof body.message.text !== 'string'
+          || body.message.text.trim() === ''
+          || typeof body.message.requestId !== 'string'
+          || body.message.requestId.trim() === ''
+          || body.message.actor === undefined
+          || typeof body.message.actor.id !== 'string'
+          || body.message.actor.id.trim() === ''
+          || body.message.conversation === undefined
+          || typeof body.message.conversation.id !== 'string'
+          || body.message.conversation.id.trim() === '') {
+          jsonWrite(response, 400, resultErr(sheError('protocol_mismatch', 'invalid message request')))
+          return
+        }
+        try {
+          const value = await this.handlers.message(body.message)
+          jsonWrite(response, 200, resultOk(value))
+        } catch (error) {
+          const typed = error instanceof ControlPlaneHttpError ? error : undefined
+          const code = (error as { readonly code?: unknown } | null)?.code
+          if (typed !== undefined) jsonWrite(response, typed.status, resultErr(typed.error))
+          else if (code === 'invalid_request') jsonWrite(response, 400, resultErr(sheError('invalid_request', error instanceof Error ? error.message : String(error))))
+          else if (code === 'not_found') jsonWrite(response, 404, resultErr(sheError('not_found', error instanceof Error ? error.message : String(error))))
+          else if (code === 'conflict') jsonWrite(response, 409, resultErr(sheError('conflict', error instanceof Error ? error.message : String(error))))
+          else jsonWrite(response, 500, resultErr(asSheError(error)))
+        }
         return
       }
       if (request.method === 'POST' && url.pathname === '/v1/commands') {

@@ -82,6 +82,27 @@ export interface RenderTarget {
   readonly replyTo?: ReplyContext
 }
 
+/** Request wrapper for an ordinary inbound message (no command semantics). */
+export interface GatewayMessageRequest {
+  readonly protocolVersion: GatewayProtocolVersion
+  readonly message: GatewayMessageEvent
+}
+
+/**
+ * Acknowledgement for an ordinary inbound message.
+ *
+ * A message is asynchronous: SHE returns once the task has been accepted and
+ * emits further output through the event stream. The optional task/topic ids
+ * let channel adapters correlate later task events with the original render
+ * target, without owning any SHE business routing state.
+ */
+export interface GatewayMessageResult {
+  readonly accepted: boolean
+  readonly requestId: string
+  readonly taskId?: string
+  readonly topicId?: string
+}
+
 export interface RenderIntentBase {
   /** Stable identifier for one logical render target/stream. */
   readonly renderId: string
@@ -314,6 +335,7 @@ export type GatewayServerEvent = RenderServerEvent | TaskServerEvent | Heartbeat
 export interface GatewayApi {
   hello(hello: GatewayHello): Promise<GatewayWelcome>
   invoke(event: GatewayInboundEvent): Promise<void>
+  message?(message: GatewayMessageEvent): Promise<GatewayMessageResult>
   subscribe(input: { readonly cursor?: string; readonly signal?: AbortSignal }): AsyncIterable<GatewayServerEvent>
 }
 

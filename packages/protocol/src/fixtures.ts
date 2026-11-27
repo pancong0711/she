@@ -8,6 +8,8 @@
 import type {
   GatewayCommandRequest,
   GatewayCommandResult,
+  GatewayMessageRequest,
+  GatewayMessageResult,
   GatewayServerEvent,
   GatewaySnapshot,
   GatewayTaskEvent,
@@ -55,6 +57,27 @@ export const GATEWAY_V1_COMMAND_RESULT: GatewayCommandResult = {
   commandResult: { renderIntents: GATEWAY_V1_RENDER_INTENTS },
 }
 
+export const GATEWAY_V1_MESSAGE_REQUEST: GatewayMessageRequest = {
+  protocolVersion: GATEWAY_PROTOCOL_VERSION,
+  message: {
+    kind: 'message',
+    requestId: 'req-message-fixture-1',
+    idempotencyKey: 'feishu:message:fixture-1',
+    actor: { id: 'user-fixture', kind: 'user', displayName: 'Fixture User' },
+    conversation: { id: 'chat-fixture:thread-fixture', kind: 'thread', parentId: 'chat-fixture', threadId: 'thread-fixture' },
+    replyTo: { messageId: 'message-fixture-1', threadId: 'thread-fixture' },
+    text: 'Summarize the current task status.',
+    extensions: { feishu: { chatId: 'chat-fixture', chatType: 'group', messageId: 'message-fixture-1', threadId: 'thread-fixture' } },
+  },
+}
+
+export const GATEWAY_V1_MESSAGE_RESULT: GatewayMessageResult = {
+  accepted: true,
+  requestId: 'req-message-fixture-1',
+  taskId: 'task-fixture-1',
+  topicId: 'topic-fixture-1',
+}
+
 export const GATEWAY_V1_TASK_EVENT: GatewayTaskEvent = {
   type: 'task.accepted',
   eventId: 'event-fixture-1',
@@ -100,6 +123,8 @@ export const GATEWAY_V1_FIXTURES = {
   channelCapabilities: CHANNEL_CAPABILITIES_V1,
   commandRequest: GATEWAY_V1_COMMAND_REQUEST,
   commandResult: GATEWAY_V1_COMMAND_RESULT,
+  messageRequest: GATEWAY_V1_MESSAGE_REQUEST,
+  messageResult: GATEWAY_V1_MESSAGE_RESULT,
   renderIntents: GATEWAY_V1_RENDER_INTENTS,
   taskEvent: GATEWAY_V1_TASK_EVENT,
   serverEvent: GATEWAY_V1_SERVER_EVENT,

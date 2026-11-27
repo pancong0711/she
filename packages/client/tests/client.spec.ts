@@ -8,6 +8,7 @@ import {
   makeCapabilitySet,
   type GatewayCommandInvocation,
   type GatewayInteractionResponse,
+  type GatewayMessageEvent,
 } from '@she/protocol'
 import { SheClient, SheClientError } from '@she/client'
 
@@ -53,6 +54,15 @@ const command: GatewayCommandInvocation = {
   conversation: { id: 'chat-1', kind: 'dm' },
   rawCommand: '/she status task-1',
   idempotencyKey: 'idem-1',
+}
+
+const message: GatewayMessageEvent = {
+  kind: 'message',
+  requestId: 'req-message',
+  actor: { id: 'user-1', kind: 'user' },
+  conversation: { id: 'chat-1', kind: 'dm' },
+  text: 'hello agent',
+  idempotencyKey: 'feishu:message:m1',
 }
 
 const interaction: GatewayInteractionResponse = {
@@ -102,8 +112,18 @@ describe('@she/client', () => {
     await client.close()
   })
 
-  it('unwraps command and interaction results', async () => {
+  it('unwraps command, message and interaction results', async () => {
     const socketPath = await startServer((request, response, body) => {
+      if (request.url === '/v1/messages') {
+        const payload = JSON.parse(body) as { protocolVersion: string; message: GatewayMessageEvent }
+        expect(payload.protocolVersion).toBe('gateway.v1')
+        expect(payload.message.idempotencyKey).toBe('feishu:message:m1')
+        json(response, 200, {
+          ok: true,
+          value: { accepted: true, requestId: payload.message.requestId, taskId: 'task-message-1', topicId: 'topic-message-1' },
+        })
+        return
+      }
       if (request.url === '/v1/commands') {
         const payload = JSON.parse(body) as { protocolVersion: string; command: { requestId: string } }
         expect(payload.protocolVersion).toBe('gateway.v1')
@@ -126,8 +146,10 @@ describe('@she/client', () => {
 
     const client = new SheClient({ socketPath })
     const commandResult = await client.command(command)
+    const messageResult = await client.message(message)
     const interactionResult = await client.interaction(interaction)
     expect(commandResult.taskId).toBe('task-1')
+    expect(messageResult).toMatchObject({ accepted: true, taskId: 'task-message-1', topicId: 'topic-message-1' })
     expect(interactionResult.interactionId).toBe('interaction-1')
     await client.close()
   })

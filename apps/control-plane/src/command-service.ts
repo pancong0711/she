@@ -7,6 +7,8 @@ import type {
   GatewayCommandResult,
   GatewayInteractionResponse,
   GatewayInteractionResult,
+  GatewayMessageEvent,
+  GatewayMessageResult,
   GatewaySnapshot,
   GatewayTaskSnapshot,
   RenderIntent,
@@ -25,6 +27,19 @@ export interface SheCommandServiceDeps {
 
 function textRender(renderId: string, text: string, format: 'plain' | 'markdown' = 'markdown'): RenderIntent {
   return { kind: 'text', renderId, sequence: 1, format, text }
+}
+
+/**
+ * Parse the command body from either direct SHE syntax (`/list`) or the
+ * legacy `/she list` alias. Returns undefined for non-command text.
+ */
+export function parseSheCommand(rawCommand: string): string | undefined {
+  const raw = rawCommand.trim()
+  if (!raw.startsWith('/')) return undefined
+  const body = raw.slice(1).trim()
+  if (body === 'she') return ''
+  if (body.startsWith('she ')) return body.slice(4).trim()
+  return body
 }
 
 function taskErrorOf(task: Task): SheError | undefined {
@@ -77,17 +92,17 @@ export class SheCommandService implements ControlPlaneHandlers {
 
   async command(command: GatewayCommandInvocation): Promise<GatewayCommandResult> {
     const renderId = `${command.requestId}:0`
-    const raw = command.rawCommand.trim()
-    if (!raw.startsWith('/she')) {
+    const args = parseSheCommand(command.rawCommand)
+    if (args === undefined) {
       return {
         accepted: false,
         requestId: command.requestId,
-        commandResult: { renderIntents: [textRender(renderId, 'Expected a `/she` command.')] },
+        commandResult: { renderIntents: [textRender(renderId, 'Expected a SHE command such as `/help`.')] },
       }
     }
-    const args = raw.slice('/she'.length).trim()
     if (args === '' || args === 'help' || args === '?') return this.help(command.requestId, renderId)
     if (args === 'list') return this.list(command, renderId)
+    if (args === 'stop') return this.stopLatest(command, renderId)
     if (args.startsWith('status ')) return this.status(command.requestId, renderId, args.slice('status '.length).trim())
     if (args.startsWith('submit ')) return this.submit(command, renderId, args.slice('submit '.length))
     if (args.startsWith('cancel ')) return this.cancel(command.requestId, renderId, args.slice('cancel '.length).trim())
@@ -95,8 +110,33 @@ export class SheCommandService implements ControlPlaneHandlers {
       accepted: false,
       requestId: command.requestId,
       commandResult: {
-        renderIntents: [textRender(renderId, `Unknown SHE command: \`${args}\`. Try \`/she help\`.`)],
+        renderIntents: [textRender(renderId, `Unknown SHE command: \`${args}\`. Try \`/help\`.`)],
       },
+    }
+  }
+
+  /**
+   * Accept one ordinary gateway message and enqueue it as a task in the
+   * conversation's own topic. The task runner uses the topic id as its agent
+   * session key, so each Feishu chat/thread gets an isolated persistent
+   * session even while this first phase uses the configured default agent.
+   */
+  async message(message: GatewayMessageEvent): Promise<GatewayMessageResult> {
+    if (message.text.trim() === '') {
+      throw new TaskServiceError('invalid_request', 'message text must not be empty')
+    }
+    const result = await this.deps.commands.submit({
+      conversationKey: message.conversation.id,
+      workspaceKey: message.workspaceKey?.trim() || 'default',
+      request: message.text,
+      ...(message.attachments === undefined || message.attachments.length === 0 ? {} : { attachments: message.attachments }),
+      ...(message.idempotencyKey === undefined ? {} : { idempotencyKey: message.idempotencyKey }),
+    })
+    return {
+      accepted: true,
+      requestId: message.requestId,
+      taskId: result.task.id,
+      topicId: result.topic.id,
     }
   }
 
@@ -132,10 +172,11 @@ export class SheCommandService implements ControlPlaneHandlers {
         {
           type: 'list',
           items: [
-            { id: 'submit', primary: '/she submit <request>', secondary: 'enqueue a task' },
-            { id: 'list', primary: '/she list', secondary: 'list tasks in this conversation' },
-            { id: 'status', primary: '/she status <task-id>', secondary: 'show task status' },
-            { id: 'cancel', primary: '/she cancel <task-id>', secondary: 'cancel a queued/running task' },
+            { id: 'submit', primary: '/submit <request>', secondary: 'enqueue a task' },
+            { id: 'list', primary: '/list', secondary: 'list tasks in this conversation' },
+            { id: 'status', primary: '/status <task-id>', secondary: 'show task status' },
+            { id: 'cancel', primary: '/cancel <task-id>', secondary: 'cancel a queued/running task' },
+            { id: 'stop', primary: '/stop', secondary: 'cancel the latest active task in this conversation' },
           ],
         },
       ],
@@ -161,7 +202,7 @@ export class SheCommandService implements ControlPlaneHandlers {
   }
 
   private async status(requestId: string, renderId: string, taskId: string): Promise<GatewayCommandResult> {
-    if (taskId === '') return this.invalid(requestId, renderId, '/she status <task-id>')
+    if (taskId === '') return this.invalid(requestId, renderId, '/status <task-id>')
     const task = await this.deps.commands.getTask(taskId)
     if (task === undefined) return this.notFound(requestId, renderId, taskId)
     const error = taskErrorOf(task)
@@ -188,12 +229,34 @@ export class SheCommandService implements ControlPlaneHandlers {
     return { accepted: true, requestId, commandResult: { renderIntents: [card] } }
   }
 
+  private async stopLatest(command: GatewayCommandInvocation, renderId: string): Promise<GatewayCommandResult> {
+    const tasks = await this.deps.commands.listTasks(command.conversation.id)
+    const active = [...tasks]
+      .sort((left, right) => right.seq - left.seq)
+      .find(task => task.status === 'queued' || task.status === 'submitted' || task.status === 'running')
+    if (active === undefined) {
+      return {
+        accepted: false,
+        requestId: command.requestId,
+        commandResult: { renderIntents: [textRender(renderId, 'No active task in this conversation.')] },
+      }
+    }
+    const result = await this.deps.commands.cancelTask(active.id, 'gateway /stop')
+    return {
+      accepted: true,
+      requestId: command.requestId,
+      taskId: result.task.id,
+      topicId: result.task.topicId,
+      commandResult: { renderIntents: [textRender(renderId, `Task cancelled: \`${result.task.id}\`.`)] },
+    }
+  }
+
   private async submit(
     command: GatewayCommandInvocation,
     renderId: string,
     requestText: string,
   ): Promise<GatewayCommandResult> {
-    if (requestText.trim() === '') return this.invalid(command.requestId, renderId, '/she submit <request>')
+    if (requestText.trim() === '') return this.invalid(command.requestId, renderId, '/submit <request>')
     try {
       const result = await this.deps.commands.submit({
         conversationKey: command.conversation.id,
@@ -219,7 +282,7 @@ export class SheCommandService implements ControlPlaneHandlers {
   }
 
   private async cancel(requestId: string, renderId: string, taskId: string): Promise<GatewayCommandResult> {
-    if (taskId === '') return this.invalid(requestId, renderId, '/she cancel <task-id>')
+    if (taskId === '') return this.invalid(requestId, renderId, '/cancel <task-id>')
     try {
       const result = await this.deps.commands.cancelTask(taskId, 'gateway request')
       return {

@@ -215,3 +215,5 @@
 - 2026-11-27：修复 companion 更新通道被仓库级 GitHub latest 抢占的问题：发布 `v0.1.0-packages.2` 后 `releases/latest/download/companion-release-manifest.json` 变 404，旧 launcher fallback 导致新安装停留在 0.7.2。改为 Pages 独立 `companion-release-manifest.json` + manifest 内绝对 release URL；start.sh/start.ps1 去除版本/tag 硬编码；launcher 优先使用绝对 bundle URL。发布 companion 0.7.6。
 
 - 2026-11-27：修复 companion Pages channel manifest 被 launcher 旧 URL 校验拒绝的问题；发布 companion 0.7.7。start.sh/start.ps1/launcher/PWA 更新检查统一走 Pages `companion-release-manifest.json`，不依赖 GitHub 仓库级 latest。
+
+- 2026-11-27：Sandbox 镜像源下拉：Packages、Sandboxes 新建表单和 Agent Migration 支持 Docker Hub 官方源、DaoCloud、1ms.run、1Panel 镜像代理；Docker Hub 镜像引用按所选源重写，其他 registry 保持原样。SHE gateway.v1 新增 `POST /v1/messages`、`@she/client.message()`、直接命令（`/help`、`/list`、`/status`、`/submit`、`/cancel`、`/stop`）及 `/she` 兼容别名；普通消息以 conversation 路由到独立 topic/session，按 idempotencyKey 去重。新增 SHE 侧实施单与 feishu4dsh 侧复核单；feishu4dsh 需补充 `GatewayMessageResult.taskId/topicId` 到任务 RenderTarget 的关联后联合真机验收。
