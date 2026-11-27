@@ -168,6 +168,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.2.tar.gz --core-
 - [SHE companion 0.7.7 发布说明](docs/RELEASE-0.7.7-COMPANION.md)
 - [SHE companion 0.7.8 发布说明](docs/RELEASE-0.7.8-COMPANION.md)
 - [SHE companion 0.7.9 发布说明](docs/RELEASE-0.7.9-COMPANION.md)
+- [SHE companion 0.7.10 发布说明](docs/RELEASE-0.7.10-COMPANION.md)
 - [Public packages compatibility update](docs/RELEASE-0.1.0-PACKAGES.2.md)
 - [feishu4dsh 侧复核：切换到 SHE packages.1](docs/20261127-需求-feishu4dsh-切换到SHE-packages.1.md)
 - [Public packages direct-message update](docs/RELEASE-0.1.1-PACKAGES.1.md)

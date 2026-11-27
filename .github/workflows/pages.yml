@@ -41,8 +41,27 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Build companion and PWA channel
-        run: pnpm build:companion
+      - name: Build PWA and launcher mirror
+        run: pnpm pwa:build
+
+      # Pages is a fallback host, not a second release builder. Download the
+      # exact immutable release bundle so its SHA-256 matches the committed
+      # channel manifest and the GitHub Release asset.
+      - name: Stage companion fallback assets
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const manifest = JSON.parse(fs.readFileSync('apps/pwa/public/companion-release-manifest.json', 'utf8'))
+          fs.writeFileSync('/tmp/she-bundle-url', manifest.bundle.url)
+          fs.writeFileSync('/tmp/she-bundle-file', manifest.bundle.file)
+          fs.writeFileSync('/tmp/she-bundle-sha', manifest.bundle.sha256)
+          fs.writeFileSync('/tmp/she-launcher-sha', manifest.launcher.sha256)
+          NODE
+          BUNDLE_FILE="$(cat /tmp/she-bundle-file)"
+          curl -fL --http1.1 --retry 5 --retry-all-errors --connect-timeout 20 --max-time 180             -o "apps/pwa/dist/$BUNDLE_FILE" "$(cat /tmp/she-bundle-url)"
+          echo "$(cat /tmp/she-bundle-sha)  apps/pwa/dist/$BUNDLE_FILE" | sha256sum -c -
+          test -f apps/pwa/dist/she-launcher.mjs
+          echo "$(cat /tmp/she-launcher-sha)  apps/pwa/dist/she-launcher.mjs" | sha256sum -c -
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
