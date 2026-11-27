@@ -44,4 +44,4 @@ task.completed
 - [x] Chat 未收到 delta 时显示 report 最终回复；
 - [x] snapshot 发现 succeeded 时也会回填回复；
 - [x] 失败任务仍显示明确错误；
-- [ ] `pnpm typecheck` / `pnpm test` / PWA build / CI 通过。
+- [x] `pnpm typecheck` / `pnpm test`（112/112）/ PWA build / CI / Pages 通过。
