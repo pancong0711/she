@@ -22,14 +22,14 @@ export interface SandboxResult {
 }
 
 const COMPANION_KEY = 'she.companionUrl'
-const DEFAULT_COMPANION = 'http://127.0.0.1:8787'
+export const DEFAULT_COMPANION_URL = 'http://127.0.0.1:8787'
 
 export function isLocalOrigin(): boolean {
   return ['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname)
 }
 
 export function getCompanionUrl(): string {
-  return localStorage.getItem(COMPANION_KEY)?.trim() || DEFAULT_COMPANION
+  return localStorage.getItem(COMPANION_KEY)?.trim() || DEFAULT_COMPANION_URL
 }
 
 export function setCompanionUrl(value: string): void {
@@ -46,12 +46,31 @@ export function brokerBase(): string {
   return '/broker'
 }
 
+function companionTargetLabel(): string {
+  return isLocalOrigin() ? window.location.origin : (apiBase() || DEFAULT_COMPANION_URL)
+}
+
+function companionNetworkError(error: unknown): Error {
+  const detail = error instanceof Error ? error.message : String(error)
+  return new Error(
+    `无法连接本地 companion（${companionTargetLabel()}）：${detail}。`
+    + '请确认 companion v0.7.3+ 正在运行；从 GitHub Pages 首次访问时，请在浏览器提示中允许“本地网络访问”，并确认没有拦截 http://127.0.0.1 的 HTTPS→HTTP 请求。',
+  )
+}
+
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${apiBase()}${path}`, {
-    headers: { accept: 'application/json', 'cache-control': 'no-cache' },
-    cache: 'no-store',
-    ...(signal === undefined ? {} : { signal }),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${apiBase()}${path}`, {
+      // `cache-control` is not a CORS-safelisted request header. Omitting it
+      // prevents an unnecessary cross-origin preflight on every read.
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+      ...(signal === undefined ? {} : { signal }),
+    })
+  } catch (cause) {
+    throw companionNetworkError(cause)
+  }
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`)
   return await response.json() as T
 }
@@ -748,10 +767,10 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.1-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.7.3'
+export const COMPANION_RELEASE_VERSION = '0.7.4'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.7.3'
-export const COMPANION_RELEASE_TAG = 'v0.7.3-companion.1'
+export const COMPANION_MIN_VERSION = '0.7.4'
+export const COMPANION_RELEASE_TAG = 'v0.7.4-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/latest/download/companion-release-manifest.json'
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

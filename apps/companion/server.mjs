@@ -20,6 +20,7 @@ import { dockerGuidance, summarizePreflight } from './preflight.mjs'
 import { authorizeWorkspace, listWorkspaceAuthorizations, removeWorkspaceAuthorization } from './workspaces.mjs'
 import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 import { installCompanionBundle } from './companion-installer.mjs'
+import { corsHeadersForOrigin } from './cors.mjs'
 import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
 import { autostartOptionsFromEnv, autostartStatus, disableAutostart, enableAutostart } from './autostart.mjs'
 import { probeGatewayAdapter, readGatewayConfig, writeGatewayConfig } from './gateway.mjs'
@@ -2254,18 +2255,7 @@ async function handleCompanionApi(request, response) {
 }
 
 function corsHeaders(request) {
-  const origin = request.headers.origin
-  if (origin === undefined) return {}
-  if (!allowedOrigins.has(origin)) return undefined
-  return {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
-    'access-control-allow-headers': 'authorization, content-type, accept, x-she-local-action',
-    'access-control-expose-headers': 'content-type',
-    'access-control-max-age': '600',
-    'access-control-allow-private-network': 'true',
-    vary: 'Origin',
-  }
+  return corsHeadersForOrigin(request.headers.origin, allowedOrigins)
 }
 
 async function proxyApi(request, response, target) {
@@ -2311,7 +2301,7 @@ async function proxyApi(request, response, target) {
         details: { socketPath: target.socketPath },
       },
     })
-    response.writeHead(503, { 'content-type': 'application/json; charset=utf-8' })
+    response.writeHead(503, { ...cors, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
     response.end(body)
   })
   request.pipe(proxy)

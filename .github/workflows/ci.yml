@@ -45,6 +45,7 @@ jobs:
           node --check apps/companion/server.mjs
           node --check apps/companion/launcher.mjs
           node --check apps/companion/companion-installer.mjs
+          node --check apps/companion/cors.mjs
           node --check run-core.mjs
           bash -n apps/pwa/public/start.sh
           node scripts/release-manifest.mjs --out /tmp/she-release-manifest.json

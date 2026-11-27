@@ -205,3 +205,5 @@
 - 2026-11-27：修复 Docker `--mount` 生成非法裸 `rw` 导致 sandbox 创建必然失败的问题；新增 `buildDockerRunArgs()` 回归测试，并用本机 rootless Docker 完成真实容器挂载/读写验证。sandbox 临时目录改名为 `scratch/`，与用户项目 workspace 分离；Sandboxes 创建表单支持选择 Workspaces 授权目录并显式挂载为 `/workspace`。发布 companion 0.7.2 / core 0.3.1。新增 feishu4dsh 复用与分工建议文档；当前 feishu4dsh 主分支没有扫码 onboarding，扫码能力建议由 feishu4dsh 侧实现。
 
 - 2026-11-27：Companion 更新分层：新增稳定 `she-launcher.mjs`，start.sh/start.ps1 变为薄 bootstrap；新增跨平台 Node companion installer，去掉页面更新对 bash installer 的依赖并开放 Windows 页面内更新；launcher 负责首次安装、75 重启和启动失败回滚；自启动指向稳定 launcher。发布 companion 0.7.3。
+
+- 2026-11-27：修复 GitHub Pages 跨源访问本地 companion 全部 offline：移除读请求中非 CORS-safelisted 的 `cache-control` 请求头，companion CORS 允许头补齐 cache-control/pragma，代理 503 也返回 CORS；PWA 增加全局连接诊断、本地网络权限提示和恢复默认地址按钮。发布 companion 0.7.4。

@@ -53,6 +53,8 @@ defineProps<{
         <dd>检查当前用户、Node.js、pnpm、git、Docker、构建产物和 socket 状态。只读，不安装。</dd>
         <dt>用户级环境准备</dt>
         <dd>不请求 root，只在当前用户目录准备 pnpm 等无需管理员权限的组件；不会安装 Docker。若 Docker 缺失，job 仍可能成功，但 Sandbox / Agent Migration / broker 容器能力会标记为不可用，并显示安装指引。</dd>
+        <dt>GitHub Pages 如何连接本地 Companion</dt>
+        <dd>GitHub Pages 与本地 127.0.0.1 页面使用不同的浏览器 localStorage，但会连接同一个本地 companion API，因此数据一致。首次跨源访问时浏览器可能询问“本地网络设备”权限；允许后重新连接即可。SHE 对已知 GitHub Pages origin 开启 CORS 与 Private Network Access，并显示明确的连接诊断。</dd>
         <dt>Companion 生命周期</dt>
         <dd>Settings 显示 companion 版本、最低版本、稳定 launcher 和 supervisor 状态。首次运行一次启动脚本安装 launcher；之后在页面内“检查更新 → 安装并重启”即可升级，不需要重新下载 start.sh。更新使用 SHA-256 校验，launcher 会在新进程启动失败时回滚到上一版本。</dd>
         <dt>Core 首次安装</dt>

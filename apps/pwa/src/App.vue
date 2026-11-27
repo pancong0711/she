@@ -13,6 +13,7 @@ import {
   COMPANION_MIN_VERSION,
   PWA_BUILD_VERSION,
   COMPANION_INSTALLER_URL,
+  DEFAULT_COMPANION_URL,
   COMPANION_MANIFEST_URL,
   COMPANION_RELEASE_URL,
   DEFAULT_CORE_MANIFEST_URL,
@@ -198,6 +199,10 @@ const jobWarnings = computed(() => jobEvents.value.filter((event): event is Extr
 const online = computed(() => health.value?.status === 'ok')
 const brokerOnline = computed(() => brokerHealth.value?.status === 'ok')
 const companionOnline = computed(() => companion.value !== null)
+const companionTarget = computed(() => remoteMode ? (companionUrl.value.trim() || DEFAULT_COMPANION_URL) : window.location.origin)
+const remoteConnectionIssue = computed(() => remoteMode && !companionOnline.value
+  ? (companionError.value || 'companion 尚未连接。请确认本机 companion 正在运行，并允许浏览器访问本地网络。')
+  : '')
 const companionOutdated = computed(() => companion.value !== null && isVersionOlder(companion.value.version, COMPANION_MIN_VERSION))
 
 async function refresh(): Promise<void> {
@@ -363,7 +368,14 @@ async function forceReloadLocalPwa(): Promise<void> {
 }
 
 async function connectCompanion(): Promise<void> {
+  companionUrl.value = companionUrl.value.trim() || DEFAULT_COMPANION_URL
   setCompanionUrl(companionUrl.value)
+  await refresh()
+}
+
+async function resetCompanionConnection(): Promise<void> {
+  companionUrl.value = DEFAULT_COMPANION_URL
+  setCompanionUrl('')
   await refresh()
 }
 
@@ -1154,6 +1166,29 @@ onBeforeUnmount(() => {
         </button>
       </header>
 
+      <div v-if="remoteConnectionIssue" class="alert companion-connect-alert">
+        <strong>GitHub Pages 无法连接本地 companion</strong>
+        <p>
+          当前页面是跨源静态 PWA，目标地址：<code>{{ companionTarget }}</code>。
+          companion、broker、control 全部 offline 通常意味着浏览器请求在到达 companion 前被拦截，或 companion 未运行。
+        </p>
+        <p class="error-text">{{ remoteConnectionIssue }}</p>
+        <div class="hero-actions">
+          <button class="primary" :disabled="loading" @click="connectCompanion">{{ loading ? '连接中…' : '重试连接' }}</button>
+          <button class="secondary" :disabled="loading" @click="resetCompanionConnection">恢复默认 127.0.0.1:8787</button>
+          <a class="secondary" href="http://127.0.0.1:8787" target="_blank" rel="noreferrer">打开本地同源页面</a>
+        </div>
+        <details class="muted small-note">
+          <summary>仍然失败时检查</summary>
+          <ul>
+            <li>当前浏览器是否弹出“访问本地网络设备”权限提示；首次允许后刷新。</li>
+            <li>companion 是否为 v0.7.3+，是否正在监听 <code>127.0.0.1:8787</code>。</li>
+            <li>是否有浏览器扩展、企业策略或隐私模式阻止 HTTPS 页面访问 <code>http://127.0.0.1</code>。</li>
+            <li>可在本地同源页面 <code>http://127.0.0.1:8787</code> 中验证 companion/broker/control 本身是否正常。</li>
+          </ul>
+        </details>
+      </div>
+
       <section v-if="active === 'dashboard'" class="dashboard-page">
         <div v-if="!health" class="card offline-card">
           <p class="eyebrow">CONTROL PLANE OFFLINE</p>
@@ -1168,8 +1203,10 @@ onBeforeUnmount(() => {
               {{ jobRunning ? '安装中…' : '安装 Core' }}
             </button>
             <button class="primary" @click="active = 'setup'">打开 Install & Doctor</button>
+            <button v-if="remoteMode && !companionOnline" class="secondary" :disabled="loading" @click="connectCompanion">重试连接本地 companion</button>
             <a class="secondary" :href="REPO_URL" target="_blank" rel="noreferrer">打开 GitHub 仓库</a>
           </div>
+          <p v-if="remoteMode && !companionOnline && companionError" class="error-text">连接错误：{{ companionError }}</p>
           <p v-if="error" class="error-text">错误：{{ error }}</p>
         </div>
 
