@@ -47,4 +47,4 @@ authorization, content-type, accept, x-she-local-action
 - [x] OPTIONS 预检请求 `access-control-request-headers: accept,cache-control` 允许；
 - [x] GET `/v1/health`、`/broker/v1/health` 的代理响应包含 CORS 头；
 - [x] 本地页面行为不变；
-- [ ] `pnpm typecheck` / `pnpm test` / PWA build / CI 通过。
+- [x] `pnpm typecheck` / `pnpm test`（110/110）/ PWA build / CI / Pages 通过。
