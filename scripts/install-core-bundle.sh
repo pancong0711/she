@@ -8,7 +8,8 @@ set -euo pipefail
 
 ARCHIVE=""
 EXPECTED_SHA=""
-CORE_ROOT="${SHE_CORE_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/she/core}"
+SHE_HOME="${SHE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/she}"
+CORE_ROOT="${SHE_CORE_ROOT:-$SHE_HOME/core}"
 FORCE=0
 while [ "$#" -gt 0 ]; do
   case "$1" in

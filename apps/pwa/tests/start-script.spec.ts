@@ -43,6 +43,29 @@ describe.skipIf(process.platform === 'win32')('start.sh bootstrap', () => {
     expect(await readFile(join(installRoot, 'launcher-run-local'), 'utf8')).toBe('ok')
   })
 
+  it('finds the app under the unified SHE_HOME layout', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'she-start-home-'))
+    cleanup.push(root)
+    const sheHome = join(root, 'SHE')
+    const installRoot = join(sheHome, 'app')
+    await mkdirGenerated(installRoot)
+    const launcher = "import { writeFileSync } from 'node:fs'\nwriteFileSync(process.env.SHE_COMPANION_ROOT + '/launcher-run-home', 'ok')\n"
+    await writeFile(join(installRoot, 'launcher.mjs'), launcher, { mode: 0o755 })
+    const { stdout } = await execFileAsync('bash', ['apps/pwa/public/start.sh'], {
+      cwd: process.cwd(),
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        HOME: root,
+        SHE_HOME: sheHome,
+        SHE_BIN_DIR: join(sheHome, 'bin'),
+        SHE_COMPANION_MANIFEST_URL: 'file:///definitely/not/present/manifest.json',
+      },
+    })
+    expect(stdout).toContain('using installed launcher')
+    expect(await readFile(join(installRoot, 'launcher-run-home'), 'utf8')).toBe('ok')
+  })
+
   it('falls back to the Pages launcher mirror when the release URL fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'she-start-script-'))
     cleanup.push(root)

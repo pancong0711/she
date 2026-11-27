@@ -1,6 +1,6 @@
-# Companion ↔ Core 契约 v1
+# SHE App Shell ↔ Core 契约 v1
 
-> 日期：2026-11-25
+> 日期：2026-11-25（2026-11-27 对齐 SHE_HOME 与 App Shell 命名）
 > 状态：T7.2 / T7.3 已实现
 > 关联：`ADR-0001-companion-core-split.md`
 > 代码：
@@ -10,13 +10,13 @@
 
 ## 1. 目标
 
-把稳定层和高频更新的 core 分开：
+把稳定 launcher、可更新 App Shell 和高频 core 分开：
 
 ```text
 PWA / gateway adapter
         │ companion-api.v1
         ▼
-she-companion（稳定）
+SHE App Shell（companion，可更新）
         │ run-core
         ▼
 she-core bundle（可替换）

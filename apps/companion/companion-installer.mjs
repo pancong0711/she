@@ -166,14 +166,21 @@ export async function writeCompanionCommand(options) {
     : resolve(String(options.binDir))
   await mkdir(binDir, { recursive: true, mode: 0o700 })
   if ((options.platform ?? process.platform) === 'win32') {
-    const command = join(binDir, 'she-companion.cmd')
-    const body = `@echo off\r\nset "SHE_COMPANION_ROOT=${installRoot}"\r\nset "SHE_BIN_DIR=${binDir}"\r\nnode "%SHE_COMPANION_ROOT%\\launcher.mjs" %*\r\n`
+    const command = join(binDir, 'she.cmd')
+    const legacy = join(binDir, 'she-companion.cmd')
+    const sheHome = resolve(installRoot, '..')
+    const body = `@echo off\r\nset "SHE_HOME=${sheHome}"\r\nset "SHE_COMPANION_ROOT=${installRoot}"\r\nset "SHE_BIN_DIR=${binDir}"\r\nnode "%SHE_COMPANION_ROOT%\\launcher.mjs" %*\r\n`
     await writeFile(command, body, { mode: 0o600 })
+    await writeFile(legacy, body, { mode: 0o600 })
     return command
   }
-  const command = join(binDir, 'she-companion')
-  const body = `#!/usr/bin/env bash\nset -euo pipefail\nexport SHE_COMPANION_ROOT=${JSON.stringify(installRoot)}\nexport SHE_BIN_DIR=${JSON.stringify(binDir)}\nexec node "$SHE_COMPANION_ROOT/launcher.mjs" "$@"\n`
+  const command = join(binDir, 'she')
+  const legacy = join(binDir, 'she-companion')
+  const sheHome = resolve(installRoot, '..')
+  const body = `#!/usr/bin/env bash\nset -euo pipefail\nexport SHE_HOME=${JSON.stringify(sheHome)}\nexport SHE_COMPANION_ROOT=${JSON.stringify(installRoot)}\nexport SHE_BIN_DIR=${JSON.stringify(binDir)}\nexport SHE_CORE_ROOT="\${SHE_CORE_ROOT:-$SHE_HOME/core}"\nexport SHE_CONFIG_HOME="\${SHE_CONFIG_HOME:-$SHE_HOME/config}"\nexport SHE_STATE_HOME="\${SHE_STATE_HOME:-$SHE_HOME/state}"\nexport SHE_RUNTIME_DIR="\${SHE_RUNTIME_DIR:-$SHE_HOME/run}"\nexport SHE_WORKSPACE_ROOT="\${SHE_WORKSPACE_ROOT:-$SHE_HOME/workspaces}"\nexec node "$SHE_COMPANION_ROOT/launcher.mjs" "$@"\n`
   await writeFile(command, body, { mode: 0o700 })
   await chmod(command, 0o755)
+  await writeFile(legacy, body, { mode: 0o700 })
+  await chmod(legacy, 0o755)
   return command
 }

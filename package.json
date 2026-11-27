@@ -17,6 +17,7 @@
     "control-plane": "pnpm --filter @she/control-plane start",
     "broker": "pnpm --filter @she/broker start",
     "launcher:build": "bash scripts/build-launcher-asset.sh",
+    "home:migrate": "node scripts/migrate-she-home.mjs",
     "pwa:build": "pnpm build && pnpm launcher:build && pnpm --filter @she/pwa build",
     "pwa:serve": "pnpm companion",
     "pwa:dev": "pnpm --filter @she/pwa dev",

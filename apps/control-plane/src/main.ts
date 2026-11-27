@@ -33,26 +33,41 @@ function expandHome(path: string): string {
   return path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
 }
 
+/** Resolve the canonical SHE_HOME without importing app-shell code into core. */
+export function resolveSheHome(env: NodeJS.ProcessEnv = process.env): string {
+  const explicit = env.SHE_HOME?.trim()
+  if (explicit !== undefined && explicit !== '') return expandHome(explicit)
+  if (process.platform === 'win32') {
+    const localAppData = env.LOCALAPPDATA?.trim() || expandHome('~/AppData/Local')
+    return join(localAppData, 'SHE')
+  }
+  const dataHome = env.XDG_DATA_HOME?.trim() || expandHome('~/.local/share')
+  return join(dataHome, 'she')
+}
+
 export function resolveControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): ControlPlaneConfig {
-  const runtimeDir = env.XDG_RUNTIME_DIR?.trim() || join(expandHome('~/.local/run'))
-  const stateHome = env.XDG_STATE_HOME?.trim() || expandHome('~/.local/state')
-  const configHome = env.XDG_CONFIG_HOME?.trim() || expandHome('~/.config')
-  const tokenFile = env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
+  const sheHome = resolveSheHome(env)
+  const runtimeDir = env.SHE_RUNTIME_DIR?.trim()
+    || (env.XDG_RUNTIME_DIR?.trim() ? join(env.XDG_RUNTIME_DIR.trim(), 'she') : join(sheHome, 'run'))
+  const stateHome = env.SHE_STATE_HOME?.trim() || join(sheHome, 'state')
+  const configHome = env.SHE_CONFIG_HOME?.trim() || join(sheHome, 'config')
+  const tokenFile = env.SHE_TOKEN_FILE?.trim() || join(configHome, 'token')
   const workerPollIntervalMs = Number(env.SHE_WORKER_POLL_MS ?? 1_000)
   const workerLeaseTtlMs = Number(env.SHE_WORKER_LEASE_TTL_MS ?? 5 * 60_000)
   const providerId = env.SHE_AGENT_MODEL_PROVIDER?.trim()
   const modelId = env.SHE_AGENT_MODEL_ID?.trim()
   const variant = env.SHE_AGENT_MODEL_VARIANT?.trim()
   return {
-    socketPath: env.SHE_CONTROL_SOCKET?.trim() || join(runtimeDir, 'she', 'control.sock'),
-    databasePath: env.SHE_DB_PATH?.trim() || join(stateHome, 'she', 'she.db'),
+    socketPath: env.SHE_CONTROL_SOCKET?.trim() || join(runtimeDir, 'control.sock'),
+    databasePath: env.SHE_DB_PATH?.trim() || join(stateHome, 'she.db'),
     tokenFile,
     serverVersion: env.SHE_VERSION?.trim() || '0.1.0',
     workerEnabled: env.SHE_WORKER_ENABLED === '1',
     opencodeUrl: env.SHE_OPENCODE_URL?.trim() || 'http://127.0.0.1:49375',
     opencodeUsername: env.SHE_OPENCODE_USERNAME?.trim() || 'opencode',
     opencodePasswordFile: env.SHE_OPENCODE_PASSWORD_FILE?.trim() || join(configHome, 'opencode', 'service.json'),
-    workspacePath: env.SHE_WORKSPACE_PATH?.trim() || join(stateHome, 'she', 'workspaces', 'default'),
+    workspacePath: env.SHE_WORKSPACE_PATH?.trim()
+      || join(env.SHE_WORKSPACE_ROOT?.trim() || join(sheHome, 'workspaces'), 'default'),
     workerPollIntervalMs: Number.isInteger(workerPollIntervalMs) && workerPollIntervalMs > 0 ? workerPollIntervalMs : 1_000,
     workerLeaseTtlMs: Number.isInteger(workerLeaseTtlMs) && workerLeaseTtlMs > 0 ? workerLeaseTtlMs : 5 * 60_000,
     ...(providerId !== undefined && providerId !== '' && modelId !== undefined && modelId !== ''

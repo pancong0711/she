@@ -30,6 +30,8 @@ import { defaultFeishu4dshPaths, inspectFeishu4dsh, validateFeishu4dshPackageSpe
 import { inspectOpenCodeService, reconcileOpenCodeWorkerConfig } from './opencode-service.mjs'
 import { sandboxAgentRecipeCatalog } from './sandbox-agent-recipes.mjs'
 import { installedVersionsFor, readAgentVersionRegistry, recordAgentInstall, resolveSandboxAgentVersion } from './sandbox-agent-versions.mjs'
+import { resolveShePaths } from './paths.mjs'
+import { migrateSheHome, planSheHomeMigration } from './home-migration.mjs'
 import { FeishuGatewayManager } from './feishu-gateway-manager.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -40,38 +42,46 @@ const distDir = process.env.SHE_PWA_DIST?.trim()
 const companionVersion = JSON.parse(await readFile(join(here, 'package.json'), 'utf8')).version
 const sourceCheckout = existsSync(join(repoRoot, 'pnpm-workspace.yaml')) && existsSync(join(repoRoot, 'packages'))
 const DEV_JOB_KINDS = new Set(['install', 'build', 'build-all', 'test'])
-const userBin = join(homedir(), '.local', 'bin')
+const paths = resolveShePaths(process.env)
+const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || paths.appRoot
+const companionBinDir = process.env.SHE_BIN_DIR?.trim() || paths.binDir
 const childEnv = {
   ...process.env,
-  PATH: `${userBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
+  SHE_HOME: paths.home,
+  SHE_COMPANION_ROOT: companionInstallRoot,
+  SHE_BIN_DIR: companionBinDir,
+  SHE_CORE_ROOT: paths.coreRoot,
+  SHE_CONFIG_HOME: paths.configRoot,
+  SHE_STATE_HOME: paths.stateRoot,
+  SHE_WORKSPACE_ROOT: paths.workspaceRoot,
+  SHE_RUNTIME_DIR: paths.runtimeRoot,
+  SHE_SANDBOX_ROOT: paths.sandboxRoot,
+  SHE_BROKER_REGISTRY: join(paths.stateRoot, 'broker', 'registry.json'),
+  SHE_BROKER_AUDIT: join(paths.stateRoot, 'broker', 'audit.jsonl'),
+  PATH: `${companionBinDir}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
 }
 const host = '127.0.0.1'
 const port = Number(process.env.SHE_PWA_PORT ?? 8787)
-const runtimeHome = process.env.XDG_RUNTIME_DIR?.trim() || join(homedir(), '.local', 'run')
-const configHome = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config')
-const dataHome = process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share')
-const stateHome = process.env.XDG_STATE_HOME?.trim() || join(homedir(), '.local', 'state')
-const coreDbPath = process.env.SHE_DB_PATH?.trim() || join(stateHome, 'she', 'she.db')
-const coreRoot = process.env.SHE_CORE_ROOT?.trim() || join(dataHome, 'she', 'core')
-const workerConfigPath = process.env.SHE_WORKER_CONFIG_FILE?.trim() || join(configHome, 'she', 'worker.json')
-const migrationRecordRoot = process.env.SHE_MIGRATION_RECORD_ROOT?.trim() || join(dataHome, 'she', 'migrations')
-const migrationWorkspaceRoot = process.env.SHE_MIGRATION_WORKSPACE_ROOT?.trim() || join(dataHome, 'she', 'workspaces')
-const workspaceRegistryPath = process.env.SHE_WORKSPACE_REGISTRY?.trim() || join(configHome, 'she', 'workspaces.json')
-const gatewayConfigPath = process.env.SHE_GATEWAY_CONFIG_FILE?.trim() || join(configHome, 'she', 'gateway.json')
-const sandboxPreferencesPath = process.env.SHE_SANDBOX_PREFERENCES_FILE?.trim() || join(configHome, 'she', 'sandbox.json')
-const agentVersionRegistryPath = process.env.SHE_AGENT_VERSION_REGISTRY?.trim() || join(configHome, 'she', 'agent-versions.json')
-const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
-const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
+const coreDbPath = process.env.SHE_DB_PATH?.trim() || join(paths.stateRoot, 'she.db')
+const coreRoot = process.env.SHE_CORE_ROOT?.trim() || paths.coreRoot
+const workerConfigPath = process.env.SHE_WORKER_CONFIG_FILE?.trim() || join(paths.configRoot, 'worker.json')
+const migrationRecordRoot = process.env.SHE_MIGRATION_RECORD_ROOT?.trim() || paths.migrationRecordRoot
+const migrationWorkspaceRoot = process.env.SHE_MIGRATION_WORKSPACE_ROOT?.trim() || paths.workspaceRoot
+const workspaceRegistryPath = process.env.SHE_WORKSPACE_REGISTRY?.trim() || join(paths.configRoot, 'workspaces.json')
+const gatewayConfigPath = process.env.SHE_GATEWAY_CONFIG_FILE?.trim() || join(paths.configRoot, 'gateway.json')
+const sandboxPreferencesPath = process.env.SHE_SANDBOX_PREFERENCES_FILE?.trim() || join(paths.configRoot, 'sandbox.json')
+const agentVersionRegistryPath = process.env.SHE_AGENT_VERSION_REGISTRY?.trim() || join(paths.configRoot, 'agent-versions.json')
 const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
 const launcherVersion = process.env.SHE_LAUNCHER_VERSION?.trim() || undefined
-const launcherPath = companionInstallRoot === undefined ? undefined : join(companionInstallRoot, 'launcher.mjs')
+const launcherPath = join(companionInstallRoot, 'launcher.mjs')
 const COMPANION_RESTART_EXIT_CODE = 75
-const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.3.2-core.1/release-manifest.json'
-const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
-const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
-const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
-const brokerTokenFile = process.env.SHE_BROKER_TOKEN_FILE?.trim() || join(configHome, 'she', 'broker-token')
-const feishuGatewayEnvFile = process.env.SHE_FEISHU_ENV_FILE?.trim() || join(configHome, 'she', 'feishu.env')
+const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.3.3-core.1/release-manifest.json'
+const defaultCompanionManifestUrl = process.env.SHE_COMPANION_MANIFEST_URL?.trim() || 'https://pancong0711.github.io/she/companion-release-manifest.json'
+const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(paths.runtimeRoot, 'control.sock')
+const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(paths.configRoot, 'token')
+const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(paths.runtimeRoot, 'broker.sock')
+const brokerTokenFile = process.env.SHE_BROKER_TOKEN_FILE?.trim() || join(paths.configRoot, 'broker-token')
+const feishuGatewayEnvFile = process.env.SHE_FEISHU_ENV_FILE?.trim() || join(paths.configRoot, 'feishu.env')
 const feishuGatewayEntry = process.env.SHE_FEISHU_GATEWAY_ENTRY?.trim() || join(here, '../feishu-gateway/dist/main.cjs')
 const feishuGateway = new FeishuGatewayManager({
   envFile: feishuGatewayEnvFile,
@@ -503,7 +513,7 @@ function defaultWorkerConfig(openCodeService) {
     opencodeUrl: process.env.SHE_OPENCODE_URL?.trim() || openCodeService?.url || 'http://127.0.0.1:49375',
     opencodeUsername: process.env.SHE_OPENCODE_USERNAME?.trim() || openCodeService?.username || 'opencode',
     opencodePasswordFile: process.env.SHE_OPENCODE_PASSWORD_FILE?.trim() || openCodeService?.credentialFile || expandHome('~/.config/opencode/service.json'),
-    workspacePath: process.env.SHE_WORKSPACE_PATH?.trim() || join(dataHome, 'she', 'workspaces', 'default'),
+    workspacePath: process.env.SHE_WORKSPACE_PATH?.trim() || join(paths.workspaceRoot, 'default'),
     pollIntervalMs: Number(process.env.SHE_WORKER_POLL_MS ?? 1_000),
     leaseTtlMs: Number(process.env.SHE_WORKER_LEASE_TTL_MS ?? 300_000),
     ...(providerId !== '' && modelId !== '' ? { model: { providerId, modelId, ...(variant === '' ? {} : { variant }) } } : {}),
@@ -1356,6 +1366,34 @@ async function checkCoreUpdate(manifestUrl) {
   }
 }
 
+async function updatesStatus() {
+  const [appResult, coreResult] = await Promise.allSettled([
+    checkCompanionUpdate(defaultCompanionManifestUrl),
+    checkCoreUpdate(defaultCoreManifestUrl),
+  ])
+  const summarize = (result, manifestUrl) => result.status === 'fulfilled'
+    ? {
+        manifestUrl,
+        current: result.value.current,
+        available: result.value.available,
+        needsUpdate: result.value.needsUpdate,
+      }
+    : {
+        manifestUrl,
+        current: manifestUrl === defaultCompanionManifestUrl ? companionVersion : null,
+        available: null,
+        needsUpdate: false,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      }
+  return {
+    schema: 1,
+    checkedAt: Date.now(),
+    sheHome: paths.home,
+    app: summarize(appResult, defaultCompanionManifestUrl),
+    core: summarize(coreResult, defaultCoreManifestUrl),
+  }
+}
+
 async function executeJob(job) {
   job.status = 'running'
   job.startedAt = Date.now()
@@ -1824,6 +1862,42 @@ async function handleCompanionApi(request, response) {
         },
       },
     })
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/home/status') {
+    try {
+      sendJsonWithCors(request, response, 200, {
+        ok: true,
+        value: {
+          schema: 1,
+          sheHome: paths.home,
+          paths,
+          migration: await planSheHomeMigration(),
+        },
+      })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/home/migrate') {
+    if (request.headers['x-she-local-action'] !== '1') {
+      sendJsonWithCors(request, response, 400, { ok: false, error: { code: 'invalid_request', message: 'missing local action header', retryable: false } })
+      return
+    }
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await migrateSheHome() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 409, { ok: false, error: { code: 'conflict', message: error.message, retryable: false } })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/updates/status') {
+    try {
+      sendJsonWithCors(request, response, 200, { ok: true, value: await updatesStatus() })
+    } catch (error) {
+      sendJsonWithCors(request, response, 500, { ok: false, error: { code: 'internal', message: error.message, retryable: false } })
+    }
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/capabilities') {

@@ -121,7 +121,9 @@ export class FeishuGatewayManager {
         lastError: this.lastError,
         logs: this.logs.slice(-120),
       },
-      note: 'SHE 内置 Feishu gateway 不依赖 dsh/feishu4dsh；App Secret 仅保存在本地 0600 env 文件，core/agent 不读取。',
+      legacy: true,
+      preferred: 'external feishu4dsh standalone gateway (gateway.v1)',
+      note: 'LEGACY：SHE 内置 Feishu gateway 已进入退役路线。推荐使用 feishu4dsh standalone gateway 直连 SHE；App Secret 仍只保存在本地 0600 env 文件，core/agent 不读取。',
     }
   }
 

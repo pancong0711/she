@@ -27,8 +27,19 @@ export function expandHome(path: string): string {
   return path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
 }
 
-export function defaultSandboxDataRoot(): string {
-  return join(homedir(), '.local', 'share', 'she', 'sandboxes')
+export function defaultSandboxDataRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const explicit = env.SHE_SANDBOX_ROOT?.trim()
+  if (explicit !== undefined && explicit !== '') return environmentPath(explicit)
+  const sheHome = env.SHE_HOME?.trim()
+  if (sheHome !== undefined && sheHome !== '') return join(environmentPath(sheHome), 'sandboxes')
+  if (process.platform === 'win32') {
+    return join(env.LOCALAPPDATA?.trim() || expandHome('~/AppData/Local'), 'SHE', 'sandboxes')
+  }
+  return join(env.XDG_DATA_HOME?.trim() || expandHome('~/.local/share'), 'she', 'sandboxes')
+}
+
+function environmentPath(path: string): string {
+  return resolve(expandHome(path))
 }
 
 export function assertSandboxName(name: string): string {

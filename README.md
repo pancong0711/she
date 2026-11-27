@@ -6,6 +6,33 @@
 
 它的职责是管理 agent **怎么跑、在哪里跑、和谁协作、用什么凭据**，而不是实现某个聊天平台。飞书通道继续由 `feishu4dsh` 负责；`she` 通过版本化协议与其薄适配层协作。
 
+## 本机 App 布局
+
+新安装统一使用 `SHE_HOME`：
+
+```text
+Linux/macOS: ${XDG_DATA_HOME:-~/.local/share}/she
+Windows:     %LOCALAPPDATA%\SHE
+
+SHE_HOME/
+  app/          # 可更新 App Shell（companion + bundled PWA）
+  core/         # 高频更新的控制面/broker bundle
+  config/       # 0600 配置与 token
+  state/        # SQLite、broker registry/audit
+  run/          # 无 XDG_RUNTIME_DIR 时的 socket 目录
+  bin/          # she / she-companion 命令
+  workspaces/   # 默认 workspace 与迁移目录
+```
+
+旧 `${SHE_HOME}/companion`、`~/.config/she`、`~/.local/state/she` 仍可运行。
+可执行 `pnpm home:migrate` 查看计划，或：
+
+```sh
+node scripts/migrate-she-home.mjs --apply
+```
+
+迁移只复制、不删除旧目录；完成后重启 SHE。
+
 ## 初始原则
 
 - 独立仓库、独立发布节奏；
@@ -70,7 +97,7 @@ pnpm companion
 
 # core bundle（供 companion 更新使用）
 pnpm build:core
-bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.2.tar.gz --core-root ~/.local/share/she/core
+bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.3.tar.gz --core-root ~/.local/share/she/core
 ```
 
 - 本地同源模式：`http://127.0.0.1:8787`
@@ -103,6 +130,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.2.tar.gz --core-
 - [SHE core 0.3.0 发布说明](docs/RELEASE-0.3.0-CORE.md)
 - [SHE core 0.3.1 发布说明](docs/RELEASE-0.3.1-CORE.md)
 - [SHE core 0.3.2 发布说明](docs/RELEASE-0.3.2-CORE.md)
+- [SHE core 0.3.3 发布说明](docs/RELEASE-0.3.3-CORE.md)
 - [SHE companion bundle 0.1.0](docs/RELEASE-0.1.0-COMPANION.md)
 - [Control-plane gateway.v1 server](docs/CONTROL-PLANE-SERVER.md)
 - [OpenCode agent adapter](docs/OPENCODE-ADAPTER.md)
@@ -171,6 +199,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.2.tar.gz --core-
 - [SHE companion 0.7.9 发布说明](docs/RELEASE-0.7.9-COMPANION.md)
 - [SHE companion 0.7.10 发布说明](docs/RELEASE-0.7.10-COMPANION.md)
 - [SHE companion 0.7.11 发布说明](docs/RELEASE-0.7.11-COMPANION.md)
+- [SHE companion 0.7.12 发布说明](docs/RELEASE-0.7.12-COMPANION.md)
 - [Public packages compatibility update](docs/RELEASE-0.1.0-PACKAGES.2.md)
 - [feishu4dsh 侧复核：切换到 SHE packages.1](docs/20261127-需求-feishu4dsh-切换到SHE-packages.1.md)
 - [Public packages direct-message update](docs/RELEASE-0.1.1-PACKAGES.1.md)

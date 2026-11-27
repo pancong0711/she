@@ -121,22 +121,23 @@ describe('SheCommandService', () => {
 })
 
 describe('resolveControlPlaneConfig', () => {
-  it('uses deterministic XDG defaults and environment overrides', () => {
-    const defaults = resolveControlPlaneConfig({})
-    expect(defaults.socketPath.endsWith('/she/control.sock')).toBe(true)
-    expect(defaults.databasePath.endsWith('/she/she.db')).toBe(true)
+  it('uses SHE_HOME defaults and explicit environment overrides', () => {
+    const defaults = resolveControlPlaneConfig({ SHE_HOME: '/srv/she' })
+    expect(defaults.socketPath).toBe('/srv/she/run/control.sock')
+    expect(defaults.databasePath).toBe('/srv/she/state/she.db')
 
     const overridden = resolveControlPlaneConfig({
-      XDG_RUNTIME_DIR: '/run/user/1000',
-      XDG_STATE_HOME: '/state',
-      XDG_CONFIG_HOME: '/config',
+      SHE_HOME: '/srv/she',
+      SHE_RUNTIME_DIR: '/run/user/1000/she',
+      SHE_STATE_HOME: '/state',
+      SHE_CONFIG_HOME: '/config',
       SHE_CONTROL_SOCKET: '/tmp/custom.sock',
       SHE_DB_PATH: '/tmp/custom.db',
     })
     expect(overridden).toMatchObject({
       socketPath: '/tmp/custom.sock',
       databasePath: '/tmp/custom.db',
-      tokenFile: '/config/she/token',
+      tokenFile: '/config/token',
     })
   })
 })

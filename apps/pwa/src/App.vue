@@ -33,6 +33,7 @@ import {
   loadArtifactText,
   loadAutostart,
   loadCompanionHealth,
+  loadHomeStatus,
   loadCoreStatus,
   loadPackages,
   loadPlatformStatus,
@@ -44,6 +45,8 @@ import {
   loadSandboxStats,
   loadSandboxes,
   loadSnapshot,
+  loadUpdatesStatus,
+  migrateHome,
   loadTaskArtifacts,
   loadWorkerConfig,
   loadWorkspaces,
@@ -64,6 +67,9 @@ import {
   type AutostartStatus,
   type CompanionUpdateCheck,
   type CoreUpdateCheck,
+  type UpdatesStatus,
+  type HomeStatus,
+  type HomeMigrationReport,
   type JobEvent,
   type JobSummary,
   type PackageInfo,
@@ -178,6 +184,12 @@ const workerConfigSaving = ref(false)
 const detectedModelKey = ref('')
 const companionActionRunning = ref('')
 const companionUpdateCheck = ref<CompanionUpdateCheck | null>(null)
+const updatesStatus = ref<UpdatesStatus | null>(null)
+const updatesStatusLoading = ref(false)
+const homeStatus = ref<HomeStatus | null>(null)
+const homeMigrationReport = ref<HomeMigrationReport | null>(null)
+const homeMigrationBusy = ref(false)
+const homeMigrationError = ref('')
 const companionUpdateError = ref('')
 const companionMessage = ref('')
 const autostart = ref<AutostartStatus | null>(null)
@@ -345,6 +357,7 @@ async function refresh(): Promise<void> {
     workerConfigError.value = workerConfigResult.reason instanceof Error ? workerConfigResult.reason.message : String(workerConfigResult.reason)
   }
   loading.value = false
+  void refreshHomeStatus()
 }
 
 async function saveWorker(restart: boolean): Promise<void> {
@@ -523,6 +536,44 @@ async function checkCompanionUpdateFromPage(): Promise<void> {
     companionUpdateError.value = cause instanceof Error ? cause.message : String(cause)
   } finally {
     companionActionRunning.value = ''
+  }
+}
+
+async function refreshHomeStatus(): Promise<void> {
+  try {
+    homeStatus.value = await loadHomeStatus()
+    homeMigrationError.value = ''
+  } catch (cause) {
+    homeMigrationError.value = cause instanceof Error ? cause.message : String(cause)
+  }
+}
+
+async function migrateHomeLayout(): Promise<void> {
+  if (homeMigrationBusy.value) return
+  if (!window.confirm('将旧 companion/config/state 目录复制到 SHE_HOME？不会删除旧目录，完成后需要重启 SHE。继续吗？')) return
+  homeMigrationBusy.value = true
+  homeMigrationError.value = ''
+  try {
+    homeMigrationReport.value = await migrateHome()
+    await refreshHomeStatus()
+    companionMessage.value = '旧目录已复制到 SHE_HOME；请重启 SHE 后使用新布局。'
+  } catch (cause) {
+    homeMigrationError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    homeMigrationBusy.value = false
+  }
+}
+
+async function checkAllUpdatesFromPage(): Promise<void> {
+  if (updatesStatusLoading.value) return
+  updatesStatusLoading.value = true
+  companionUpdateError.value = ''
+  try {
+    updatesStatus.value = await loadUpdatesStatus()
+  } catch (cause) {
+    companionUpdateError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    updatesStatusLoading.value = false
   }
 }
 
@@ -2248,6 +2299,54 @@ onBeforeUnmount(() => {
           <p v-if="companionUpdateCheck && !companionUpdateCheck.needsUpdate" class="muted small-note">
             当前 {{ companionUpdateCheck.current }} 已是最新版本。
           </p>
+
+          <div class="autostart-block">
+            <div class="section-head">
+              <div>
+                <h3>统一版本检查</h3>
+                <p class="muted small-note">同时检查 SHE App Shell 与 Core 的 remote manifest；只读取元数据，不自动安装。</p>
+              </div>
+            </div>
+            <div class="job-actions">
+              <button class="secondary" :disabled="updatesStatusLoading" @click="checkAllUpdatesFromPage">
+                {{ updatesStatusLoading ? '检查中…' : '检查 App 与 Core 更新' }}
+              </button>
+            </div>
+            <div v-if="updatesStatus" class="health-grid">
+              <div><span>SHE_HOME</span><b><code>{{ updatesStatus.sheHome }}</code></b></div>
+              <div><span>App</span><b>{{ updatesStatus.app.current ?? '-' }} → {{ updatesStatus.app.available ?? '-' }} · {{ updatesStatus.app.needsUpdate ? 'update available' : 'up to date' }}</b></div>
+              <div><span>Core</span><b>{{ updatesStatus.core.current ?? 'not installed' }} → {{ updatesStatus.core.available ?? '-' }} · {{ updatesStatus.core.needsUpdate ? 'update available' : 'up to date' }}</b></div>
+              <div v-if="updatesStatus.app.error"><span>App check</span><b class="error-text">{{ updatesStatus.app.error }}</b></div>
+              <div v-if="updatesStatus.core.error"><span>Core check</span><b class="error-text">{{ updatesStatus.core.error }}</b></div>
+            </div>
+            <div class="section-head">
+              <div>
+                <h3>SHE_HOME 布局</h3>
+                <p class="muted small-note">新安装统一使用 SHE_HOME；旧 companion/config/state 可安全复制迁移，旧目录不会被删除。</p>
+              </div>
+            </div>
+            <div class="job-actions">
+              <button class="secondary" :disabled="homeMigrationBusy" @click="refreshHomeStatus">刷新 SHE_HOME 状态</button>
+              <button
+                v-if="homeStatus?.migration.some(item => item.needed)"
+                class="primary"
+                :disabled="homeMigrationBusy"
+                @click="migrateHomeLayout"
+              >{{ homeMigrationBusy ? '迁移中…' : '复制旧目录到 SHE_HOME' }}</button>
+            </div>
+            <p v-if="homeMigrationError" class="error-text">{{ homeMigrationError }}</p>
+            <div v-if="homeStatus" class="health-grid">
+              <div><span>SHE_HOME</span><b><code>{{ homeStatus.sheHome }}</code></b></div>
+              <div v-for="item in homeStatus.migration" :key="item.name">
+                <span>{{ item.name }}</span>
+                <b>{{ item.needed ? `${item.from} → ${item.to}` : item.targetExists ? 'unified target exists' : 'no legacy source' }}</b>
+              </div>
+            </div>
+            <div v-if="homeMigrationReport" class="health-grid">
+              <div><span>copied</span><b>{{ homeMigrationReport.copied.map(item => item.name).join(', ') || '-' }}</b></div>
+              <div><span>skipped</span><b>{{ homeMigrationReport.skipped.map(item => item.name).join(', ') || '-' }}</b></div>
+            </div>
+          </div>
 
           <div class="autostart-block">
             <div class="section-head">

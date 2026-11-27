@@ -3,8 +3,9 @@
 import { execFile } from 'node:child_process'
 import { access, mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
+import { resolveShePaths } from './paths.mjs'
 
 const execFileAsync = promisify(execFile)
 
@@ -17,15 +18,22 @@ function xmlEscape(value) {
 }
 
 export function buildSystemdUnit(options) {
+  const home = dirname(options.installRoot)
   return `[Unit]
-Description=SHE Companion
+Description=SHE App
 After=network-online.target
 
 [Service]
 Type=simple
+Environment=${systemdQuote(`SHE_HOME=${home}`)}
 Environment=${systemdQuote(`SHE_PWA_PORT=${options.port}`)}
 Environment=${systemdQuote(`SHE_COMPANION_ROOT=${options.installRoot}`)}
 Environment=${systemdQuote(`SHE_BIN_DIR=${options.binDir}`)}
+Environment=${systemdQuote(`SHE_CORE_ROOT=${home}/core`)}
+Environment=${systemdQuote(`SHE_CONFIG_HOME=${home}/config`)}
+Environment=${systemdQuote(`SHE_STATE_HOME=${home}/state`)}
+Environment=${systemdQuote(`SHE_RUNTIME_DIR=${home}/run`)}
+Environment=${systemdQuote(`SHE_WORKSPACE_ROOT=${home}/workspaces`)}
 ExecStart=${systemdQuote(options.execPath)} ${systemdQuote(join(options.installRoot, 'launcher.mjs'))}
 Restart=on-failure
 RestartSec=2
@@ -36,6 +44,7 @@ WantedBy=default.target
 }
 
 export function buildLaunchAgentPlist(options) {
+  const home = dirname(options.installRoot)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -48,9 +57,15 @@ export function buildLaunchAgentPlist(options) {
   </array>
   <key>EnvironmentVariables</key>
   <dict>
+    <key>SHE_HOME</key><string>${xmlEscape(home)}</string>
     <key>SHE_PWA_PORT</key><string>${xmlEscape(options.port)}</string>
     <key>SHE_COMPANION_ROOT</key><string>${xmlEscape(options.installRoot)}</string>
     <key>SHE_BIN_DIR</key><string>${xmlEscape(options.binDir)}</string>
+    <key>SHE_CORE_ROOT</key><string>${xmlEscape(join(home, 'core'))}</string>
+    <key>SHE_CONFIG_HOME</key><string>${xmlEscape(join(home, 'config'))}</string>
+    <key>SHE_STATE_HOME</key><string>${xmlEscape(join(home, 'state'))}</string>
+    <key>SHE_RUNTIME_DIR</key><string>${xmlEscape(join(home, 'run'))}</string>
+    <key>SHE_WORKSPACE_ROOT</key><string>${xmlEscape(join(home, 'workspaces'))}</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><false/>
@@ -60,7 +75,8 @@ export function buildLaunchAgentPlist(options) {
 }
 
 export function buildWindowsStartupCmd(options) {
-  return `@echo off\r\nset "SHE_PWA_PORT=${options.port}"\r\nset "SHE_COMPANION_ROOT=${options.installRoot}"\r\nset "SHE_BIN_DIR=${options.binDir}"\r\nstart "" /min "${options.execPath}" "${join(options.installRoot, 'launcher.mjs')}"\r\n`
+  const home = dirname(options.installRoot)
+  return `@echo off\r\nset "SHE_HOME=${home}"\r\nset "SHE_PWA_PORT=${options.port}"\r\nset "SHE_COMPANION_ROOT=${options.installRoot}"\r\nset "SHE_BIN_DIR=${options.binDir}"\r\nset "SHE_CORE_ROOT=${join(home, 'core')}"\r\nset "SHE_CONFIG_HOME=${join(home, 'config')}"\r\nset "SHE_STATE_HOME=${join(home, 'state')}"\r\nset "SHE_RUNTIME_DIR=${join(home, 'run')}"\r\nset "SHE_WORKSPACE_ROOT=${join(home, 'workspaces')}"\r\nstart "" /min "${options.execPath}" "${join(options.installRoot, 'launcher.mjs')}"\r\n`
 }
 
 async function pathExists(path) {
@@ -111,7 +127,8 @@ export async function enableAutostart(options) {
     if (enabled) return autostartStatus(options)
     // Fallback for desktops without a usable user systemd manager.
     await unlink(unitPath).catch(() => undefined)
-    const exec = `env SHE_PWA_PORT=${options.port} SHE_COMPANION_ROOT=${systemdQuote(options.installRoot)} SHE_BIN_DIR=${systemdQuote(options.binDir)} ${systemdQuote(options.execPath)} ${systemdQuote(join(options.installRoot, 'launcher.mjs'))}`
+    const home = dirname(options.installRoot)
+    const exec = `env SHE_HOME=${systemdQuote(home)} SHE_PWA_PORT=${options.port} SHE_COMPANION_ROOT=${systemdQuote(options.installRoot)} SHE_BIN_DIR=${systemdQuote(options.binDir)} SHE_CORE_ROOT=${systemdQuote(join(home, 'core'))} SHE_CONFIG_HOME=${systemdQuote(join(home, 'config'))} SHE_STATE_HOME=${systemdQuote(join(home, 'state'))} SHE_RUNTIME_DIR=${systemdQuote(join(home, 'run'))} SHE_WORKSPACE_ROOT=${systemdQuote(join(home, 'workspaces'))} ${systemdQuote(options.execPath)} ${systemdQuote(join(options.installRoot, 'launcher.mjs'))}`
     const desktop = `[Desktop Entry]\nType=Application\nName=SHE Companion\nComment=SHE local companion\nExec=${exec}\nX-GNOME-Autostart-enabled=true\nTerminal=false\n`
     await mkdir(join(options.configHome, 'autostart'), { recursive: true, mode: 0o700 })
     await writeFile(desktopPath, desktop, { mode: 0o644 })
@@ -151,13 +168,14 @@ export async function disableAutostart(options) {
 
 export function autostartOptionsFromEnv(env = process.env) {
   const platform = process.platform
+  const paths = resolveShePaths(env)
   return {
     platform,
     home: homedir(),
-    configHome: env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config'),
+    configHome: paths.configRoot,
     appData: env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming'),
-    installRoot: env.SHE_COMPANION_ROOT?.trim() || undefined,
-    binDir: env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin'),
+    installRoot: env.SHE_COMPANION_ROOT?.trim() || paths.appRoot,
+    binDir: env.SHE_BIN_DIR?.trim() || paths.binDir,
     port: Number(env.SHE_PWA_PORT ?? 8787),
     execPath: process.execPath,
   }

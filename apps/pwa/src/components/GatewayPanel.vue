@@ -196,8 +196,9 @@ onMounted(refresh)
           <p class="eyebrow">GATEWAY / CHANNEL ADAPTER</p>
           <h2>Gateway / Feishu 连接</h2>
           <p class="muted">
-            SHE 是独立 agent control plane，不要求安装 dsh 或 feishu4dsh。首选方式是使用下方内置 Feishu gateway：
-            飞书凭据只保存在本地 0600 文件，core、worker 和 agent 不读取，也不暴露给模型。
+            首选架构是外部 feishu4dsh standalone gateway 通过 gateway.v1 直连 SHE。
+            下方内置 Feishu gateway 已标记为 legacy，仅用于旧部署兼容；飞书凭据始终只保存在本地 0600 文件，
+            core、worker 和 agent 不读取，也不暴露给模型。
           </p>
         </div>
         <button class="secondary" :disabled="loading" @click="refresh">{{ loading ? '刷新中…' : '刷新状态' }}</button>
@@ -209,12 +210,12 @@ onMounted(refresh)
     <article class="card wide direct-feishu-card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">BUILT-IN FEISHU CHANNEL</p>
-          <h2>直接连接飞书（不需要 dsh / feishu4dsh）</h2>
+          <p class="eyebrow">LEGACY BUILT-IN FEISHU CHANNEL</p>
+          <h2>内置 Feishu gateway（legacy / 兼容模式）</h2>
           <p class="muted">
-            SHE 自带轻量 Feishu WebSocket gateway。它只依赖飞书 App ID/App Secret 和本机 SHE control plane，
-            不要求用户安装 dsh 或 feishu4dsh。凭据写入 <code>~/.config/she/feishu.env</code>（0600），
-            core/agent 不读取该文件。
+            该内置 gateway 已进入退役路线。新部署应使用 feishu4dsh standalone gateway →
+            gateway.v1 → SHE control plane。这里保留启动/停止能力，仅用于旧部署迁移和兼容。
+            凭据写入 <code>SHE_HOME/config/feishu.env</code>（0600），core/agent 不读取该文件。
           </p>
         </div>
         <span :class="['pill', directGateway?.runtime.running ? 'succeeded' : directGateway?.envFile.appSecretConfigured ? 'warn' : 'failed']">

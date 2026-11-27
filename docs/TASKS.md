@@ -228,3 +228,4 @@
 - 2026-11-27：修正 Pages fallback 发布一致性：Pages workflow 不再重新构建 companion bundle，而是从 GitHub Release 下载与 committed manifest 对应的同一个不可变 bundle，并校验 bundle/launcher SHA-256；解决 0.7.9 中 GitHub Release bundle 与 Pages 重建 bundle 哈希不同导致主源校验失败的问题。准备 companion 0.7.10。
 - 2026-11-27：companion 0.7.11 将稳定 channel 的 bundle/launcher 首选源切到 GitHub Pages 同源地址，GitHub Release 作为 checksum-verified fallback；Pages workflow 从 release 下载同一 bundle 以保持哈希一致，避免受限网络下 GitHub 下载长时间超时。
 - 2026-11-27：完成宏观架构评审并新增 ADR-0005：明确稳定层是 launcher，companion + bundled PWA 是可更新 app shell，core 是高频业务运行时；start 入口改为本地 launcher 优先，只有首次安装/强制刷新才走网络 bootstrap，并补充回归测试。后续待确认 SHE_HOME 路径统一、app shell 职责收敛、内置 Feishu gateway legacy 化。
+- 2026-11-27：执行 App Shell 架构调整：引入统一 SHE_HOME 路径解析（`apps/companion/paths.mjs`），start 脚本和 launcher 本地优先；新增旧布局安全复制迁移 API/CLI；内置 Feishu gateway 标记 legacy；新增 `/api/updates/status` 与 PWA 统一版本/SHE_HOME 管理入口。准备 companion 0.7.12 / core 0.3.3。Vitest 132/132 通过。

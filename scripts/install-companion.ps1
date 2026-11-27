@@ -3,10 +3,14 @@
 param(
   [Parameter(Mandatory=$true)][string]$Bundle,
   [Parameter(Mandatory=$true)][string]$Sha256,
-  [string]$InstallRoot = "$env:LOCALAPPDATA\she\companion",
-  [string]$BinDir = "$env:LOCALAPPDATA\she\bin"
+  [string]$InstallRoot = "",
+  [string]$BinDir = ""
 )
 $ErrorActionPreference = 'Stop'
+$SheHome = if ($env:SHE_HOME) { $env:SHE_HOME } else { Join-Path $env:LOCALAPPDATA 'SHE' }
+if (-not $InstallRoot) { $InstallRoot = if ($env:SHE_COMPANION_ROOT) { $env:SHE_COMPANION_ROOT } else { Join-Path $SheHome 'app' } }
+if (-not $BinDir) { $BinDir = if ($env:SHE_BIN_DIR) { $env:SHE_BIN_DIR } else { Join-Path $SheHome 'bin' } }
+$env:SHE_HOME = $SheHome
 if (-not (Test-Path $Bundle)) { throw "bundle not found: $Bundle" }
 $actual = (Get-FileHash $Bundle -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $Sha256.ToLowerInvariant()) { throw "SHA-256 mismatch" }
@@ -32,7 +36,7 @@ try {
   }
   New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
   $launcher = Join-Path $BinDir 'she-companion.cmd'
-  "@echo off`r`nset `"SHE_COMPANION_ROOT=$InstallRoot`"`r`nset `"SHE_BIN_DIR=$BinDir`"`r`nnode `"$stableLauncher`" %*`r`n" | Set-Content -Path $launcher -Encoding ASCII
+  "@echo off`r`nset `"SHE_HOME=$SheHome`"`r`nset `"SHE_COMPANION_ROOT=$InstallRoot`"`r`nset `"SHE_BIN_DIR=$BinDir`"`r`nnode `"$stableLauncher`" %*`r`n" | Set-Content -Path $launcher -Encoding ASCII
   Write-Host "✓ installed she-companion $version"
   Write-Host "  launcher: $launcher"
 } finally {

@@ -28,12 +28,14 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compareVersions, companionAssetUrls, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 import { installCompanionBundle, writeCompanionCommand } from './companion-installer.mjs'
+import { resolveShePaths } from './paths.mjs'
 
 export const LAUNCHER_VERSION = '2'
 const RESTART_EXIT_CODE = 75
 const STARTUP_GRACE_MS = 20_000
-const installRoot = resolve(process.env.SHE_COMPANION_ROOT?.trim() || join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'share', 'she', 'companion'))
-const binDir = resolve(process.env.SHE_BIN_DIR?.trim() || join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'bin'))
+const paths = resolveShePaths(process.env)
+const installRoot = resolve(process.env.SHE_COMPANION_ROOT?.trim() || paths.appRoot)
+const binDir = resolve(process.env.SHE_BIN_DIR?.trim() || paths.binDir)
 const port = Number(process.env.SHE_PWA_PORT ?? 8787)
 const manifestUrl = process.env.SHE_COMPANION_MANIFEST_URL?.trim()
   || 'https://pancong0711.github.io/she/companion-release-manifest.json'
@@ -225,8 +227,14 @@ function spawnCompanion() {
   child = spawn(process.execPath, [entry], {
     env: {
       ...process.env,
+      SHE_HOME: paths.home,
       SHE_COMPANION_ROOT: installRoot,
       SHE_BIN_DIR: binDir,
+      SHE_CORE_ROOT: paths.coreRoot,
+      SHE_CONFIG_HOME: paths.configRoot,
+      SHE_STATE_HOME: paths.stateRoot,
+      SHE_WORKSPACE_ROOT: paths.workspaceRoot,
+      SHE_RUNTIME_DIR: paths.runtimeRoot,
       SHE_COMPANION_SUPERVISED: '1',
       SHE_SUPERVISOR_PID: String(process.pid),
       SHE_LAUNCHER_VERSION: LAUNCHER_VERSION,

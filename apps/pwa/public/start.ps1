@@ -12,9 +12,39 @@ $Base = if ($env:SHE_COMPANION_RELEASE_BASE) {
 } else {
   ''
 }
-$InstallRoot = if ($env:SHE_COMPANION_ROOT) { $env:SHE_COMPANION_ROOT } else { Join-Path $env:LOCALAPPDATA 'she\companion' }
-$BinDir = if ($env:SHE_BIN_DIR) { $env:SHE_BIN_DIR } else { Join-Path $env:LOCALAPPDATA 'she\bin' }
+$SheHome = if ($env:SHE_HOME) { $env:SHE_HOME } else { Join-Path $env:LOCALAPPDATA 'SHE' }
+$InstallRoot = if ($env:SHE_COMPANION_ROOT) {
+  $env:SHE_COMPANION_ROOT
+} elseif (Test-Path (Join-Path $SheHome 'app\launcher.mjs')) {
+  Join-Path $SheHome 'app'
+} elseif (Test-Path (Join-Path $SheHome 'companion\launcher.mjs')) {
+  Join-Path $SheHome 'companion'
+} else {
+  Join-Path $SheHome 'app'
+}
+$BinDir = if ($env:SHE_BIN_DIR) {
+  $env:SHE_BIN_DIR
+} elseif (Test-Path (Join-Path $SheHome 'bin')) {
+  Join-Path $SheHome 'bin'
+} else {
+  Join-Path $env:LOCALAPPDATA 'she\bin'
+}
+$CoreRoot = if ($env:SHE_CORE_ROOT) { $env:SHE_CORE_ROOT } else { Join-Path $SheHome 'core' }
+$LegacyConfigRoot = Join-Path $env:USERPROFILE '.config\she'
+$LegacyStateRoot = Join-Path $env:USERPROFILE '.local\state\she'
+$ConfigRoot = if ($env:SHE_CONFIG_HOME) { $env:SHE_CONFIG_HOME } elseif (Test-Path (Join-Path $SheHome 'config')) { Join-Path $SheHome 'config' } elseif (Test-Path $LegacyConfigRoot) { $LegacyConfigRoot } else { Join-Path $SheHome 'config' }
+$StateRoot = if ($env:SHE_STATE_HOME) { $env:SHE_STATE_HOME } elseif (Test-Path (Join-Path $SheHome 'state')) { Join-Path $SheHome 'state' } elseif (Test-Path $LegacyStateRoot) { $LegacyStateRoot } else { Join-Path $SheHome 'state' }
+$RuntimeRoot = if ($env:SHE_RUNTIME_DIR) { $env:SHE_RUNTIME_DIR } elseif ($env:XDG_RUNTIME_DIR) { Join-Path $env:XDG_RUNTIME_DIR 'she' } else { Join-Path $SheHome 'run' }
+$WorkspaceRoot = if ($env:SHE_WORKSPACE_ROOT) { $env:SHE_WORKSPACE_ROOT } else { Join-Path $SheHome 'workspaces' }
 $Port = if ($env:SHE_PWA_PORT) { [int]$env:SHE_PWA_PORT } else { 8787 }
+$env:SHE_HOME = $SheHome
+$env:SHE_COMPANION_ROOT = $InstallRoot
+$env:SHE_BIN_DIR = $BinDir
+$env:SHE_CORE_ROOT = $CoreRoot
+$env:SHE_CONFIG_HOME = $ConfigRoot
+$env:SHE_STATE_HOME = $StateRoot
+$env:SHE_RUNTIME_DIR = $RuntimeRoot
+$env:SHE_WORKSPACE_ROOT = $WorkspaceRoot
 $ManifestUrl = if ($env:SHE_COMPANION_MANIFEST_URL) {
   $env:SHE_COMPANION_MANIFEST_URL
 } elseif ($env:SHE_COMPANION_RELEASE_BASE -or $Tag) {
@@ -44,9 +74,15 @@ New-Item -ItemType Directory -Force -Path $InstallRoot, $BinDir | Out-Null
 $localLauncher = Join-Path $InstallRoot 'launcher.mjs'
 if ($env:SHE_FORCE_LAUNCHER_REFRESH -ne '1' -and (Test-Path $localLauncher)) {
   Write-Host 'SHE bootstrap: using installed launcher'
+  $env:SHE_HOME = $SheHome
   $env:SHE_PWA_PORT = [string]$Port
   $env:SHE_COMPANION_ROOT = $InstallRoot
   $env:SHE_BIN_DIR = $BinDir
+  $env:SHE_CORE_ROOT = $CoreRoot
+  $env:SHE_CONFIG_HOME = $ConfigRoot
+  $env:SHE_STATE_HOME = $StateRoot
+  $env:SHE_RUNTIME_DIR = $RuntimeRoot
+  $env:SHE_WORKSPACE_ROOT = $WorkspaceRoot
   $env:SHE_COMPANION_MANIFEST_URL = $ManifestUrl
   $env:SHE_LAUNCHER_UPDATE_ON_START = '1'
   & node $localLauncher
@@ -60,9 +96,15 @@ function Launch-LocalLauncher {
   $localLauncher = Join-Path $InstallRoot 'launcher.mjs'
   if (-not (Test-Path $localLauncher)) { return $false }
   Write-Host 'SHE bootstrap: using installed launcher'
+  $env:SHE_HOME = $SheHome
   $env:SHE_PWA_PORT = [string]$Port
   $env:SHE_COMPANION_ROOT = $InstallRoot
   $env:SHE_BIN_DIR = $BinDir
+  $env:SHE_CORE_ROOT = $CoreRoot
+  $env:SHE_CONFIG_HOME = $ConfigRoot
+  $env:SHE_STATE_HOME = $StateRoot
+  $env:SHE_RUNTIME_DIR = $RuntimeRoot
+  $env:SHE_WORKSPACE_ROOT = $WorkspaceRoot
   $env:SHE_COMPANION_MANIFEST_URL = $ManifestUrl
   $env:SHE_LAUNCHER_UPDATE_ON_START = '1'
   & node $localLauncher
@@ -140,9 +182,15 @@ try {
   Copy-Item $launcherPath $next -Force
   Move-Item $next $target -Force
 
+  $env:SHE_HOME = $SheHome
   $env:SHE_PWA_PORT = [string]$Port
   $env:SHE_COMPANION_ROOT = $InstallRoot
   $env:SHE_BIN_DIR = $BinDir
+  $env:SHE_CORE_ROOT = $CoreRoot
+  $env:SHE_CONFIG_HOME = $ConfigRoot
+  $env:SHE_STATE_HOME = $StateRoot
+  $env:SHE_RUNTIME_DIR = $RuntimeRoot
+  $env:SHE_WORKSPACE_ROOT = $WorkspaceRoot
   $env:SHE_COMPANION_MANIFEST_URL = $ManifestUrl
   $env:SHE_LAUNCHER_UPDATE_ON_START = '1'
   & node $target

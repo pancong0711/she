@@ -7,6 +7,7 @@ import type { SandboxExecRequest, SandboxExecResult, SandboxSpec } from '@she/pr
 import {
   BrokerServer,
   SandboxBrokerService,
+  resolveBrokerConfig,
   type DockerContainerSpec,
   type DockerInspectResult,
   type DockerRuntime,
@@ -129,6 +130,17 @@ async function harness() {
 
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map(run => run()))
+})
+
+describe('sandbox broker configuration', () => {
+  it('uses SHE_HOME for broker data/config/state paths', () => {
+    const config = resolveBrokerConfig({ SHE_HOME: '/srv/she', SHE_RUNTIME_DIR: '/run/she' })
+    expect(config.socketPath).toBe('/run/she/broker.sock')
+    expect(config.dataRoot).toBe('/srv/she/sandboxes')
+    expect(config.registryPath).toBe('/srv/she/state/broker/registry.json')
+    expect(config.auditPath).toBe('/srv/she/state/broker/audit.jsonl')
+    expect(config.tokenFile).toBe('/srv/she/config/broker-token')
+  })
 })
 
 describe('sandbox broker service', () => {

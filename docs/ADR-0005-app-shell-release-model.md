@@ -1,7 +1,7 @@
 # ADR-0005：SHE App Shell、Launcher 与 Core 三层发布模型
 
 > 日期：2026-11-27
-> 状态：建议采纳，待按阶段重构
+> 状态：已采纳；P0–P2 已实现基础能力，P3/P4 持续收敛
 > 关联：ADR-0001、ADR-0003、ADR-0004
 > 背景：companion 实际承担了 PWA host、代理、环境安装、更新器和多项业务 API，
 > 已不再是一个低频稳定层。需要把“稳定启动器”和“经常变化的 app shell”分开。
@@ -152,15 +152,20 @@ companion 应保留“本机应用外壳”职责：UI host、代理、更新、
 
 ### 3.5 路径模型不够“app 文件夹化”
 
-当前大致是：
+当前已经实现统一 `SHE_HOME`：
 
 ```text
-Linux:   ~/.local/share/she/companion/ + ~/.local/share/she/core/
-Windows: %LOCALAPPDATA%\she\companion + 其他 XDG 风格路径
+Linux/macOS: ${XDG_DATA_HOME:-~/.local/share}/she
+Windows:     %LOCALAPPDATA%\SHE
 ```
 
-磁盘上已经分层，但用户和脚本没有看到一个清晰的 `SHE app root`，Windows 路径
-也存在 XDG/LOCALAPPDATA 混用。建议明确单一 `SHE_HOME`。
+旧 `companion` / XDG config/state 路径仍通过兼容检测保留可运行。PWA Settings
+提供 `SHE_HOME` 状态与“复制旧目录到 SHE_HOME”按钮，CLI 为：
+
+```sh
+pnpm home:migrate
+node scripts/migrate-she-home.mjs --apply
+```
 
 ## 4. 目标目录模型
 
@@ -274,17 +279,20 @@ Windows:     %SHE_HOME% 或 %LOCALAPPDATA%\SHE
 - 提供一次性迁移命令和回滚；
 - Windows 与 Linux/macOS 使用同一套解析规则。
 
-### P3：职责收敛
+### P3：职责收敛（进行中）
 
-- 内置 Feishu gateway 按 feishu4dsh 路线退役/外置；
-- workspace 授权、sandbox policy、agent migration 的最终校验下沉 core/broker；
-- companion 只保留 UI host、proxy、环境、安装更新和状态展示。
+- 内置 Feishu gateway 已标记 legacy，新部署应使用 feishu4dsh standalone gateway；
+- workspace/broker host mount 的最终安全校验由 broker 执行；
+- companion 的 workspace 授权列表保留为 UI 确认与迁移入口；
+- 后续把更多业务策略下沉 core/broker，App Shell 只保留 UI host、proxy、环境、
+  安装更新和状态展示。
 
-### P4：启动前自动更新策略
+### P4：更新可见性（基础完成）
 
-- launcher 检查 app manifest；
-- 可选检查 core manifest（默认提示/策略可配置）；
-- 页面显示 app/core 两套版本、可用版本、更新日志和回滚状态。
+- launcher 启动时检查 app manifest；
+- App Shell 提供 `GET /api/updates/status`，统一检查 App 与 Core manifest；
+- PWA Settings 显示 App/Core 当前版本、可用版本和是否需要更新；
+- core 的实际安装仍在用户确认后执行，避免启动时无提示替换运行时。
 
 ## 8. 不改变的东西
 
@@ -295,9 +303,9 @@ Windows:     %SHE_HOME% 或 %LOCALAPPDATA%\SHE
 - 不请求 root；
 - PWA 不直接杀进程或写运行中 app/core 文件。
 
-## 9. 待确认
+## 9. 已确认
 
-1. 是否接受“companion 是可更新 app shell，launcher 才是稳定层”的口径？
-2. `SHE_HOME` 是否直接合并 config/state/workspaces，还是仅合并 app/core 运行时？
-3. 内置 Feishu gateway 是否在下一次架构迭代中正式 legacy/退役，改由 feishu4dsh？
-4. app shell 更新是否默认自动检查，core 更新是否只在页面显式确认？
+1. companion 是可更新 **App Shell**，launcher 才是稳定层；
+2. `SHE_HOME` 统一承载 app/core/config/state/run/bin/workspaces，旧布局兼容并可复制迁移；
+3. 内置 Feishu gateway 已进入 legacy/退役路线，新部署使用 feishu4dsh standalone gateway；
+4. App Shell 更新可由 launcher 启动时自动检查，core 更新由页面显式确认后执行。

@@ -11,8 +11,10 @@ import { spawn } from 'node:child_process'
 import { readFile, readlink, rename, rm, symlink, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveShePaths } from './paths.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const paths = resolveShePaths(process.env)
 const installRoot = process.env.SHE_COMPANION_ROOT?.trim() || resolve(here, '../../../..')
 const currentPath = join(installRoot, 'current')
 const pendingPath = join(installRoot, 'update-pending.json')
@@ -52,7 +54,13 @@ function spawnCompanion() {
   child = spawn(process.execPath, [entry], {
     env: {
       ...process.env,
+      SHE_HOME: paths.home,
       SHE_COMPANION_ROOT: installRoot,
+      SHE_CORE_ROOT: paths.coreRoot,
+      SHE_CONFIG_HOME: paths.configRoot,
+      SHE_STATE_HOME: paths.stateRoot,
+      SHE_WORKSPACE_ROOT: paths.workspaceRoot,
+      SHE_RUNTIME_DIR: paths.runtimeRoot,
       SHE_COMPANION_SUPERVISED: '1',
       SHE_SUPERVISOR_PID: String(process.pid),
     },

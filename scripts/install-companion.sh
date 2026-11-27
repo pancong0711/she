@@ -8,8 +8,9 @@ set -euo pipefail
 
 ARCHIVE=""
 EXPECTED_SHA=""
-INSTALL_ROOT="${SHE_COMPANION_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/she/companion}"
-BIN_DIR="${SHE_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
+SHE_HOME="${SHE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/she}"
+INSTALL_ROOT="${SHE_COMPANION_ROOT:-$SHE_HOME/app}"
+BIN_DIR="${SHE_BIN_DIR:-$SHE_HOME/bin}"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --sha256) EXPECTED_SHA="${2:-}"; shift 2 ;;
@@ -46,18 +47,26 @@ cat > "$INSTALL_ROOT/state.json" <<JSON
 {"schema":1,"current":"$VERSION","installedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","sourceArchive":"$(basename "$ARCHIVE")"}
 JSON
 mkdir -p "$BIN_DIR"
-cat > "$BIN_DIR/she-companion" <<LAUNCHER
+cat > "$BIN_DIR/she" <<LAUNCHER
 #!/usr/bin/env bash
 set -euo pipefail
+export SHE_HOME="$SHE_HOME"
 export SHE_COMPANION_ROOT="$INSTALL_ROOT"
 export SHE_BIN_DIR="$BIN_DIR"
+export SHE_CORE_ROOT="${SHE_CORE_ROOT:-$SHE_HOME/core}"
+export SHE_CONFIG_HOME="${SHE_CONFIG_HOME:-$SHE_HOME/config}"
+export SHE_STATE_HOME="${SHE_STATE_HOME:-$SHE_HOME/state}"
+export SHE_RUNTIME_DIR="${SHE_RUNTIME_DIR:-$SHE_HOME/run}"
+export SHE_WORKSPACE_ROOT="${SHE_WORKSPACE_ROOT:-$SHE_HOME/workspaces}"
 if [ -f "$INSTALL_ROOT/launcher.mjs" ]; then
   exec node "$INSTALL_ROOT/launcher.mjs" "\$@"
 fi
 exec node "$INSTALL_ROOT/current/apps/companion/supervisor.mjs" "\$@"
 LAUNCHER
+chmod 0755 "$BIN_DIR/she"
+cp "$BIN_DIR/she" "$BIN_DIR/she-companion"
 chmod 0755 "$BIN_DIR/she-companion"
-echo "✓ installed she-companion $VERSION"
+echo "✓ installed SHE app $VERSION"
 echo "  current: $INSTALL_ROOT/current"
-echo "  launcher: $BIN_DIR/she-companion"
-echo "  next: ensure $BIN_DIR is on PATH, then run: she-companion"
+echo "  launcher: $BIN_DIR/she"
+echo "  next: ensure $BIN_DIR is on PATH, then run: she"

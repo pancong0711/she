@@ -10,9 +10,45 @@ if [ -n "$TAG" ]; then
 else
   BASE="${SHE_COMPANION_RELEASE_BASE:-}"
 fi
-INSTALL_ROOT="${SHE_COMPANION_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/she/companion}"
-BIN_DIR="${SHE_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
+SHE_HOME="${SHE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/she}"
+if [ -n "${SHE_COMPANION_ROOT:-}" ]; then
+  INSTALL_ROOT="$SHE_COMPANION_ROOT"
+elif [ -f "$SHE_HOME/app/launcher.mjs" ]; then
+  INSTALL_ROOT="$SHE_HOME/app"
+elif [ -f "$SHE_HOME/companion/launcher.mjs" ]; then
+  # Legacy layout remains runnable until the one-time migration is applied.
+  INSTALL_ROOT="$SHE_HOME/companion"
+else
+  INSTALL_ROOT="$SHE_HOME/app"
+fi
+if [ -n "${SHE_BIN_DIR:-}" ]; then
+  BIN_DIR="$SHE_BIN_DIR"
+elif [ -d "$SHE_HOME/bin" ] || [ ! -d "$HOME/.local/bin" ]; then
+  BIN_DIR="$SHE_HOME/bin"
+else
+  BIN_DIR="$HOME/.local/bin"
+fi
+SHE_CORE_ROOT="${SHE_CORE_ROOT:-$SHE_HOME/core}"
+if [ -n "${SHE_CONFIG_HOME:-}" ]; then
+  :
+elif [ -f "$SHE_HOME/config/token" ] || [ ! -d "${XDG_CONFIG_HOME:-$HOME/.config}/she" ]; then
+  SHE_CONFIG_HOME="$SHE_HOME/config"
+else
+  SHE_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/she"
+fi
+if [ -n "${SHE_STATE_HOME:-}" ]; then
+  :
+elif [ -f "$SHE_HOME/state/she.db" ] || [ ! -d "${XDG_STATE_HOME:-$HOME/.local/state}/she" ]; then
+  SHE_STATE_HOME="$SHE_HOME/state"
+else
+  SHE_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/she"
+fi
+SHE_RUNTIME_DIR="${SHE_RUNTIME_DIR:-${XDG_RUNTIME_DIR:-$SHE_HOME/run}}"
+if [ "${XDG_RUNTIME_DIR:-}" != "" ] && [ -z "${SHE_RUNTIME_DIR:-}" ]; then SHE_RUNTIME_DIR="$XDG_RUNTIME_DIR/she"; fi
+if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ "$SHE_RUNTIME_DIR" = "$XDG_RUNTIME_DIR" ]; then SHE_RUNTIME_DIR="$XDG_RUNTIME_DIR/she"; fi
+SHE_WORKSPACE_ROOT="${SHE_WORKSPACE_ROOT:-$SHE_HOME/workspaces}"
 PORT="${SHE_PWA_PORT:-8787}"
+export SHE_HOME SHE_COMPANION_ROOT="$INSTALL_ROOT" SHE_BIN_DIR="$BIN_DIR" SHE_CORE_ROOT SHE_CONFIG_HOME SHE_STATE_HOME SHE_RUNTIME_DIR SHE_WORKSPACE_ROOT
 if [ -n "${SHE_COMPANION_MANIFEST_URL:-}" ]; then
   MANIFEST_URL="$SHE_COMPANION_MANIFEST_URL"
 elif [ -n "$BASE" ]; then
@@ -38,9 +74,15 @@ launch_local() {
   [ -f "$INSTALL_ROOT/launcher.mjs" ] || return 1
   echo "SHE bootstrap: using installed launcher"
   exec env \
+    SHE_HOME="$SHE_HOME" \
     SHE_PWA_PORT="$PORT" \
     SHE_COMPANION_ROOT="$INSTALL_ROOT" \
     SHE_BIN_DIR="$BIN_DIR" \
+    SHE_CORE_ROOT="$SHE_CORE_ROOT" \
+    SHE_CONFIG_HOME="$SHE_CONFIG_HOME" \
+    SHE_STATE_HOME="$SHE_STATE_HOME" \
+    SHE_RUNTIME_DIR="$SHE_RUNTIME_DIR" \
+    SHE_WORKSPACE_ROOT="$SHE_WORKSPACE_ROOT" \
     SHE_COMPANION_MANIFEST_URL="$MANIFEST_URL" \
     SHE_LAUNCHER_UPDATE_ON_START=1 \
     node "$INSTALL_ROOT/launcher.mjs"
@@ -156,9 +198,15 @@ chmod 0755 "$INSTALL_ROOT/launcher.mjs.next"
 mv -f "$INSTALL_ROOT/launcher.mjs.next" "$INSTALL_ROOT/launcher.mjs"
 
 exec env \
+  SHE_HOME="$SHE_HOME" \
   SHE_PWA_PORT="$PORT" \
   SHE_COMPANION_ROOT="$INSTALL_ROOT" \
   SHE_BIN_DIR="$BIN_DIR" \
+  SHE_CORE_ROOT="$SHE_CORE_ROOT" \
+  SHE_CONFIG_HOME="$SHE_CONFIG_HOME" \
+  SHE_STATE_HOME="$SHE_STATE_HOME" \
+  SHE_RUNTIME_DIR="$SHE_RUNTIME_DIR" \
+  SHE_WORKSPACE_ROOT="$SHE_WORKSPACE_ROOT" \
   SHE_COMPANION_MANIFEST_URL="$MANIFEST_URL" \
   SHE_LAUNCHER_UPDATE_ON_START=1 \
   node "$INSTALL_ROOT/launcher.mjs"

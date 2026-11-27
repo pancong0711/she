@@ -23,18 +23,29 @@ function expandHome(path: string): string {
   return path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
 }
 
+export function resolveSheHome(env: NodeJS.ProcessEnv = process.env): string {
+  const explicit = env.SHE_HOME?.trim()
+  if (explicit !== undefined && explicit !== '') return expandHome(explicit)
+  if (process.platform === 'win32') {
+    return join(env.LOCALAPPDATA?.trim() || expandHome('~/AppData/Local'), 'SHE')
+  }
+  return join(env.XDG_DATA_HOME?.trim() || expandHome('~/.local/share'), 'she')
+}
+
 export function resolveBrokerConfig(env: NodeJS.ProcessEnv = process.env): BrokerConfig {
-  const runtimeDir = env.XDG_RUNTIME_DIR?.trim() || expandHome('~/.local/run')
-  const dataHome = env.XDG_DATA_HOME?.trim() || expandHome('~/.local/share')
-  const configHome = env.XDG_CONFIG_HOME?.trim() || expandHome('~/.config')
+  const sheHome = resolveSheHome(env)
+  const runtimeDir = env.SHE_RUNTIME_DIR?.trim()
+    || (env.XDG_RUNTIME_DIR?.trim() ? join(env.XDG_RUNTIME_DIR.trim(), 'she') : join(sheHome, 'run'))
+  const configHome = env.SHE_CONFIG_HOME?.trim() || join(sheHome, 'config')
+  const stateHome = env.SHE_STATE_HOME?.trim() || join(sheHome, 'state')
   const user = userInfo().username.replace(/[^a-zA-Z0-9._-]/g, '-')
   const host = hostname().replace(/[^a-zA-Z0-9._-]/g, '-')
   return {
-    socketPath: env.SHE_BROKER_SOCKET?.trim() || join(runtimeDir, 'she', 'broker.sock'),
-    dataRoot: env.SHE_SANDBOX_ROOT?.trim() || join(dataHome, 'she', 'sandboxes'),
-    registryPath: env.SHE_BROKER_REGISTRY?.trim() || join(dataHome, 'she', 'broker', 'registry.json'),
-    auditPath: env.SHE_BROKER_AUDIT?.trim() || join(dataHome, 'she', 'broker', 'audit.jsonl'),
-    tokenFile: env.SHE_BROKER_TOKEN_FILE?.trim() || join(configHome, 'she', 'broker-token'),
+    socketPath: env.SHE_BROKER_SOCKET?.trim() || join(runtimeDir, 'broker.sock'),
+    dataRoot: env.SHE_SANDBOX_ROOT?.trim() || join(sheHome, 'sandboxes'),
+    registryPath: env.SHE_BROKER_REGISTRY?.trim() || join(stateHome, 'broker', 'registry.json'),
+    auditPath: env.SHE_BROKER_AUDIT?.trim() || join(stateHome, 'broker', 'audit.jsonl'),
+    tokenFile: env.SHE_BROKER_TOKEN_FILE?.trim() || join(configHome, 'broker-token'),
     mainActorId: env.SHE_MAIN_ACTOR_ID?.trim() || `main:${host}:${user}`,
     brokerVersion: env.SHE_VERSION?.trim() || '0.1.0',
   }

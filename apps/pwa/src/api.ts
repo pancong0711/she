@@ -54,7 +54,7 @@ function companionNetworkError(error: unknown): Error {
   const detail = error instanceof Error ? error.message : String(error)
   return new Error(
     `无法连接本地 companion（${companionTargetLabel()}）：${detail}。`
-    + '请确认 companion v0.7.11+ 正在运行；从 GitHub Pages 首次访问时，请在浏览器提示中允许“本地网络访问”，并确认没有拦截 http://127.0.0.1 的 HTTPS→HTTP 请求。',
+    + '请确认 companion v0.7.12+ 正在运行；从 GitHub Pages 首次访问时，请在浏览器提示中允许“本地网络访问”，并确认没有拦截 http://127.0.0.1 的 HTTPS→HTTP 请求。',
   )
 }
 
@@ -372,6 +372,8 @@ export interface FeishuGatewayStatus {
     readonly lastError: string | null
     readonly logs: readonly { readonly at: number; readonly stream: string; readonly text: string }[]
   }
+  readonly legacy?: boolean
+  readonly preferred?: string
   readonly note: string
 }
 
@@ -801,12 +803,12 @@ export interface CoreUpdateCheck {
   readonly manifest: unknown
 }
 
-export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.2-core.1/release-manifest.json'
+export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.3-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.7.11'
+export const COMPANION_RELEASE_VERSION = '0.7.12'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.7.11'
-export const COMPANION_RELEASE_TAG = 'v0.7.11-companion.1'
+export const COMPANION_MIN_VERSION = '0.7.12'
+export const COMPANION_RELEASE_TAG = 'v0.7.12-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = 'https://pancong0711.github.io/she/companion-release-manifest.json'
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`
@@ -814,6 +816,69 @@ export const COMPANION_INSTALLER_URL = `https://github.com/pancong0711/she/relea
 
 function localActionHeaders(): Record<string, string> {
   return { accept: 'application/json', 'content-type': 'application/json', 'x-she-local-action': '1' }
+}
+
+export interface UpdateStatusItem {
+  readonly manifestUrl: string
+  readonly current: string | null
+  readonly available: string | null
+  readonly needsUpdate: boolean
+  readonly error?: string
+}
+
+export interface HomeMigrationItem {
+  readonly name: 'app' | 'config' | 'state' | string
+  readonly from: string
+  readonly to: string
+  readonly sourceExists: boolean
+  readonly targetExists: boolean
+  readonly needed: boolean
+  readonly reason?: string
+}
+
+export interface HomeStatus {
+  readonly schema: 1
+  readonly sheHome: string
+  readonly paths: Readonly<Record<string, unknown>>
+  readonly migration: readonly HomeMigrationItem[]
+}
+
+export interface HomeMigrationReport {
+  readonly schema: 1
+  readonly migratedAt: string
+  readonly sheHome: string
+  readonly copied: readonly HomeMigrationItem[]
+  readonly skipped: readonly HomeMigrationItem[]
+  readonly note: string
+}
+
+export async function loadHomeStatus(signal?: AbortSignal): Promise<HomeStatus> {
+  const payload = await getJson<{ ok: boolean; value?: HomeStatus; error?: { message?: string } }>('/api/home/status', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'SHE_HOME status unavailable')
+  return payload.value
+}
+
+export async function migrateHome(): Promise<HomeMigrationReport> {
+  const response = await fetch(`${apiBase()}/api/home/migrate`, { method: 'POST', headers: localActionHeaders() })
+  const payload = await response.json() as { ok: boolean; value?: HomeMigrationReport; error?: { message?: string } }
+  if (!response.ok || !payload.ok || payload.value === undefined) {
+    throw new Error(payload.error?.message ?? `SHE_HOME migration failed: HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
+export interface UpdatesStatus {
+  readonly schema: 1
+  readonly checkedAt: number
+  readonly sheHome: string
+  readonly app: UpdateStatusItem
+  readonly core: UpdateStatusItem
+}
+
+export async function loadUpdatesStatus(signal?: AbortSignal): Promise<UpdatesStatus> {
+  const payload = await getJson<{ ok: boolean; value?: UpdatesStatus; error?: { message?: string } }>('/api/updates/status', signal)
+  if (!payload.ok || payload.value === undefined) throw new Error(payload.error?.message ?? 'update status unavailable')
+  return payload.value
 }
 
 export async function loadCoreStatus(signal?: AbortSignal): Promise<CoreStatus> {

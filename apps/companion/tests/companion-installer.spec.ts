@@ -82,7 +82,7 @@ describe('companion installer', () => {
     expect(await writeCompanionCommand({ installRoot, binDir, platform: 'linux' })).toBeUndefined()
     await writeFile(join(installRoot, 'launcher.mjs'), '// launcher\n')
     const command = await writeCompanionCommand({ installRoot, binDir, platform: 'linux' })
-    expect(command).toBe(join(binDir, 'she-companion'))
+    expect(command).toBe(join(binDir, 'she'))
     expect(await readFile(command!, 'utf8')).toContain('launcher.mjs')
   })
 })
