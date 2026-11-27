@@ -6,6 +6,7 @@ import WorkspaceAuthorizationPanel from './components/WorkspaceAuthorizationPane
 import GatewayPanel from './components/GatewayPanel.vue'
 import SandboxToolsPanel from './components/SandboxToolsPanel.vue'
 import { parseCommandLine } from './command'
+import { extractAgentReportText } from './chat'
 import type { AgentRuntimeStatus, ArtifactListItem, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
   BROKER_COMMANDS,
@@ -29,6 +30,7 @@ import {
   getCompanionUrl,
   isLocalOrigin,
   loadAgentRuntime,
+  loadArtifactText,
   loadAutostart,
   loadCompanionHealth,
   loadCoreStatus,
@@ -140,6 +142,9 @@ const chatError = ref('')
 const chatTaskId = ref<string | null>(null)
 const chatArtifacts = ref<readonly ArtifactListItem[]>([])
 const chatStreamMessageId = ref<string | null>(null)
+const chatFinalizedTaskId = ref<string | null>(null)
+const chatFinalizingTaskId = ref<string | null>(null)
+const chatTextDeltaTaskIds = new Set<string>()
 const chatLastFailure = ref<{ taskId: string; message: string } | null>(null)
 const seenGatewayEvents = new Set<string>()
 let chatAbortController: AbortController | undefined
@@ -225,6 +230,10 @@ async function refresh(): Promise<void> {
     health.value = snapshotResult.value.health
     snapshot.value = snapshotResult.value.snapshot
     error.value = ''
+    const activeChatTaskId = chatTaskId.value
+    if (activeChatTaskId !== null && snapshotResult.value.snapshot.tasks.some(task => task.taskId === activeChatTaskId && task.status === 'succeeded')) {
+      void finalizeChatTask(activeChatTaskId)
+    }
   } else {
     health.value = null
     snapshot.value = null
@@ -1023,6 +1032,43 @@ async function refreshChatArtifacts(taskId: string): Promise<void> {
   }
 }
 
+async function finalizeChatTask(taskId: string): Promise<void> {
+  if (chatFinalizedTaskId.value === taskId || chatFinalizingTaskId.value === taskId) return
+  chatFinalizingTaskId.value = taskId
+  chatStreamMessageId.value = null
+  let artifacts: readonly ArtifactListItem[] = []
+  try {
+    artifacts = await loadTaskArtifacts(taskId)
+    chatArtifacts.value = artifacts
+  } catch {
+    // The report fallback is best effort; completion still needs to be visible.
+  }
+  try {
+    if (!chatTextDeltaTaskIds.has(taskId)) {
+      const report = artifacts.find(item => item.fileName.toLowerCase().endsWith('.md'))
+      if (report !== undefined) {
+        const text = extractAgentReportText(await loadArtifactText(report.id))
+        if (text !== '') {
+          appendChat('assistant', text)
+          appendChat('system', '实时 agent 文本事件未到达；本回复已从任务报告 artifact 回填。')
+        } else {
+          appendChat('system', '任务已完成，但任务报告为空。请检查 OpenCode 输出与 Agents 页的 lastError。')
+        }
+      } else {
+        appendChat('system', '任务已完成，但没有收到 agent 文本，也没有可读取的任务报告。请检查 event stream、worker 和 OpenCode 状态。')
+      }
+    }
+    appendChat('system', '任务完成')
+    chatFinalizedTaskId.value = taskId
+  } catch (cause) {
+    appendChat('system', `任务已完成，但读取最终回复失败：${cause instanceof Error ? cause.message : String(cause)}`)
+    chatFinalizedTaskId.value = taskId
+  } finally {
+    chatFinalizingTaskId.value = null
+    if (chatTaskId.value === taskId) chatTaskId.value = null
+  }
+}
+
 function handleGatewayEvent(event: GatewayServerEvent): void {
   if (event.type === 'render') {
     const key = `render:${event.render.renderId}:${String(event.render.sequence)}`
@@ -1038,6 +1084,10 @@ function handleGatewayEvent(event: GatewayServerEvent): void {
   seenGatewayEvents.add(`event:${taskEvent.eventId}`)
   if (chatTaskId.value !== null && taskEvent.taskId !== chatTaskId.value) return
   if (taskEvent.type === 'agent.delta') {
+    // The task may already have been finalized from the persisted report after
+    // a dropped event stream. Do not append late duplicate text in that case.
+    if (chatFinalizedTaskId.value === taskEvent.taskId) return
+    if (taskEvent.channel === 'text') chatTextDeltaTaskIds.add(taskEvent.taskId)
     appendChatDelta(taskEvent.text)
     return
   }
@@ -1051,16 +1101,13 @@ function handleGatewayEvent(event: GatewayServerEvent): void {
     return
   }
   if (taskEvent.type === 'task.completed') {
-    const completedTaskId = taskEvent.taskId
-    chatStreamMessageId.value = null
-    appendChat('system', '任务完成')
-    void refreshChatArtifacts(completedTaskId)
-    chatTaskId.value = null
+    void finalizeChatTask(taskEvent.taskId)
     return
   }
   if (taskEvent.type === 'task.failed') {
     const failedTaskId = taskEvent.taskId
     chatStreamMessageId.value = null
+    chatFinalizedTaskId.value = failedTaskId
     chatLastFailure.value = { taskId: failedTaskId, message: taskEvent.error.message }
     appendChat('system', `任务失败（${failedTaskId}）：${taskEvent.error.message}`)
     void refreshChatArtifacts(failedTaskId)
@@ -1077,10 +1124,13 @@ async function submitChat(): Promise<void> {
   chatInput.value = ''
   appendChat('user', text)
   chatStreamMessageId.value = null
+  chatTaskId.value = null
+  chatFinalizedTaskId.value = null
+  chatFinalizingTaskId.value = null
   chatArtifacts.value = []
   try {
     const result = await sendTaskToShe(text)
-    if (result.taskId !== undefined) chatTaskId.value = result.taskId
+    if (result.taskId !== undefined && chatFinalizedTaskId.value === null) chatTaskId.value = result.taskId
     const rendered = renderIntentText(result.commandResult?.renderIntents)
     appendChat('assistant', rendered || (result.accepted ? 'Task accepted.' : 'Task was not accepted.'))
   } catch (cause) {
@@ -1572,7 +1622,7 @@ onBeforeUnmount(() => {
               {{ chatSending ? 'Sending…' : '布置任务' }}
             </button>
           </div>
-          <p class="muted small-note">Ctrl/Cmd + Enter 发送。agent 输出来自 task.agent_event → gateway event 流。</p>
+          <p class="muted small-note">Ctrl/Cmd + Enter 发送。agent 输出优先来自 task.agent_event → gateway event 流；若实时事件缺失，任务完成时会自动从持久化 report artifact 回填最终回复。</p>
           <p class="warn-text small-note">当前只有一个 OpenCode worker；多 agent 按任务路由尚未启用。默认 sandbox 镜像/资源可在 Packages 的 Sandbox 镜像与默认资源中配置。</p>
         </div>
       </section>

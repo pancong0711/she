@@ -207,3 +207,5 @@
 - 2026-11-27：Companion 更新分层：新增稳定 `she-launcher.mjs`，start.sh/start.ps1 变为薄 bootstrap；新增跨平台 Node companion installer，去掉页面更新对 bash installer 的依赖并开放 Windows 页面内更新；launcher 负责首次安装、75 重启和启动失败回滚；自启动指向稳定 launcher。发布 companion 0.7.3。
 
 - 2026-11-27：修复 GitHub Pages 跨源访问本地 companion 全部 offline：移除读请求中非 CORS-safelisted 的 `cache-control` 请求头，companion CORS 允许头补齐 cache-control/pragma，代理 503 也返回 CORS；PWA 增加全局连接诊断、本地网络权限提示和恢复默认地址按钮。发布 companion 0.7.4。
+
+- 2026-11-27：修复 Chat 任务成功但看不到 OpenCode 最终回复：确认真实 OpenCode 2.3.2 后端会产出 agent.delta + report artifact；PWA 在 task.completed 或 snapshot 发现 succeeded 时刷新 artifacts，未收到实时 text delta 则从 report artifact 回填最终回复，并显示明确诊断。发布 companion 0.7.5。

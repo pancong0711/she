@@ -97,6 +97,15 @@ export function artifactDownloadUrl(artifactId: string): string {
   return `${apiBase()}/v1/artifacts/${encodeURIComponent(artifactId)}/download`
 }
 
+export async function loadArtifactText(artifactId: string, signal?: AbortSignal): Promise<string> {
+  const response = await fetch(artifactDownloadUrl(artifactId), {
+    cache: 'no-store',
+    ...(signal === undefined ? {} : { signal }),
+  })
+  if (!response.ok) throw new Error(`artifact download failed: HTTP ${response.status}`)
+  return await response.text()
+}
+
 export async function loadAgentRuntime(signal?: AbortSignal): Promise<AgentRuntimeStatus> {
   return await getResult<AgentRuntimeStatus>('/v1/agents', signal)
 }
@@ -767,10 +776,10 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.1-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.7.4'
+export const COMPANION_RELEASE_VERSION = '0.7.5'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.7.4'
-export const COMPANION_RELEASE_TAG = 'v0.7.4-companion.1'
+export const COMPANION_MIN_VERSION = '0.7.5'
+export const COMPANION_RELEASE_TAG = 'v0.7.5-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/latest/download/companion-release-manifest.json'
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`
