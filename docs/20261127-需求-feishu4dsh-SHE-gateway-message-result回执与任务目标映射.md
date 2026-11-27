@@ -6,6 +6,15 @@
 > 说明：本文件位于 SHE 仓库，供 feishu4dsh 侧复核后迁移/落地；SHE 不直接修改
 > feishu4dsh 仓库。
 
+## 0. 结论
+
+需要 feishu4dsh 侧做一次小的兼容性开发：普通消息回执从 `void` 扩展为
+`GatewayMessageResult`，并在 runtime 中把 `taskId/topicId` 关联回原飞书
+RenderTarget。该改动只负责 transport 关联，不把 conversation→agent 业务路由
+搬到 feishu4dsh。
+
+companion/core 的页面在线升级问题与 feishu4dsh 无关，不需要 feishu4dsh 侧开发。
+
 ## 1. 背景
 
 SHE 侧已实现 `POST /v1/messages`。普通飞书消息不再需要 `/she` 前缀，SHE 按

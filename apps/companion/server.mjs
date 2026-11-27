@@ -8,11 +8,11 @@
  */
 
 import { createReadStream, existsSync } from 'node:fs'
-import { access, mkdir, readFile, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises'
 import { createServer, request as httpRequest } from 'node:http'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { homedir, userInfo } from 'node:os'
+import { homedir, tmpdir, userInfo } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
@@ -952,6 +952,47 @@ function scheduleCompanionExit(code, delayMs = 350) {
   setTimeout(() => process.exit(code), delayMs).unref()
 }
 
+function describeNetworkError(error) {
+  if (!(error instanceof Error)) return String(error)
+  const cause = error.cause
+  return cause instanceof Error ? `${error.message} (${cause.message})` : error.message
+}
+
+/**
+ * Download bytes with Node fetch, then fall back to curl.
+ *
+ * start.sh has historically been able to download through system curl while
+ * Node fetch failed on some DNS/proxy setups. The fallback keeps page-driven
+ * companion/core updates usable on those machines and reports both errors when
+ * neither transport works.
+ */
+async function fetchBytesWithCurlFallback(url, timeoutMs) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return Buffer.from(await response.arrayBuffer())
+  } catch (fetchError) {
+    const tempDir = await mkdtemp(join(tmpdir(), 'she-download-'))
+    const target = join(tempDir, 'download')
+    try {
+      const curl = await captureCommand(undefined, 'curl', [
+        '-fL', '--retry', '3', '--connect-timeout', '20', '--max-time', String(Math.max(1, Math.ceil(timeoutMs / 1000))), '-o', target, url,
+      ])
+      if (!curl.ok) {
+        const detail = curl.stderr || curl.stdout || `curl exited ${String(curl.code)}`
+        throw new Error(`fetch failed for ${url}: ${describeNetworkError(fetchError)}; curl fallback failed: ${detail}`)
+      }
+      return await readFile(target)
+    } finally {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
+}
+
+async function fetchTextWithCurlFallback(url, timeoutMs) {
+  return (await fetchBytesWithCurlFallback(url, timeoutMs)).toString('utf8')
+}
+
 async function checkCompanionUpdate(manifestUrl) {
   const validatedUrl = validateCompanionManifestUrl(manifestUrl)
   const manifest = validateCompanionManifest(await readManifest(validatedUrl))
@@ -972,9 +1013,7 @@ async function downloadCompanionBundle(manifestUrl, manifest) {
   if (url.protocol === 'file:') {
     bytes = await readFile(url)
   } else {
-    const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
-    if (!response.ok) throw new Error(`companion bundle HTTP ${response.status}`)
-    bytes = Buffer.from(await response.arrayBuffer())
+    bytes = await fetchBytesWithCurlFallback(url.href, 120_000)
   }
   const actual = createHash('sha256').update(bytes).digest('hex')
   if (actual !== String(manifest.bundle.sha256).toLowerCase()) {
@@ -1231,9 +1270,7 @@ async function readManifest(url) {
     return JSON.parse(await readFile(new URL(url), 'utf8'))
   }
   if (!/^https?:\/\//.test(url)) throw new Error('manifest URL must be http(s) or file://')
-  const response = await fetch(url, { signal: AbortSignal.timeout(20_000) })
-  if (!response.ok) throw new Error(`manifest HTTP ${response.status}`)
-  return await response.json()
+  return JSON.parse(await fetchTextWithCurlFallback(url, 20_000))
 }
 
 async function downloadBundle(manifestUrl, manifest, job) {
@@ -1248,9 +1285,7 @@ async function downloadBundle(manifestUrl, manifest, job) {
   if (url.startsWith('file://')) {
     bytes = await readFile(new URL(url))
   } else if (/^https?:\/\//.test(url)) {
-    const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
-    if (!response.ok) throw new Error(`bundle HTTP ${response.status}`)
-    bytes = Buffer.from(await response.arrayBuffer())
+    bytes = await fetchBytesWithCurlFallback(url, 120_000)
   } else {
     throw new Error('bundle URL must be http(s) or file://')
   }
