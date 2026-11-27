@@ -20,8 +20,7 @@ cp -a apps/pwa/dist "$STAGE/apps/pwa/dist"
 cp scripts/bootstrap-user.sh scripts/bootstrap-user.ps1 scripts/install-core-bundle.sh "$STAGE/scripts/"
 cp scripts/install-companion.sh scripts/install-companion.ps1 "$STAGE/scripts/"
 cp LICENSE README.md "$STAGE/"
-pnpm exec esbuild apps/companion/launcher.mjs --bundle --platform=node --format=esm --target=node22 --outfile="$OUT_DIR/she-launcher.mjs"
-node --check "$OUT_DIR/she-launcher.mjs"
+bash scripts/build-launcher-asset.sh "$OUT_DIR/she-launcher.mjs"
 cp "$OUT_DIR/she-launcher.mjs" "$STAGE/bin/she-launcher.mjs"
 chmod 0755 "$STAGE/bin/she-launcher.mjs"
 printf '%s\n' "$VERSION" > "$STAGE/VERSION"
@@ -37,7 +36,11 @@ tar -czf "$ARCHIVE" -C "$OUT_DIR" "she-companion-$VERSION"
 node scripts/companion-release-manifest.mjs --root "$ROOT" --bundle "$ARCHIVE" --launcher "$OUT_DIR/she-launcher.mjs" --release-tag "$RELEASE_TAG" --out "$OUT_DIR/companion-release-manifest.json"
 # Stable channel pointer. Pages serves this file; start scripts and the PWA
 # update checker read it instead of the ambiguous repository-level "latest".
+# PWA was built before the manifest was generated, so update both the public
+# source copy and every already-built dist used by pages/companion hosting.
 cp "$OUT_DIR/companion-release-manifest.json" "$ROOT/apps/pwa/public/companion-release-manifest.json"
+cp "$OUT_DIR/companion-release-manifest.json" "$ROOT/apps/pwa/dist/companion-release-manifest.json"
+cp "$OUT_DIR/companion-release-manifest.json" "$STAGE/apps/pwa/dist/companion-release-manifest.json"
 echo
 echo "Built companion bundle:"
 ls -lh "$ARCHIVE" "$OUT_DIR/she-launcher.mjs"

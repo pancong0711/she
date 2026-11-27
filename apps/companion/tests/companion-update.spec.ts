@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import {
   compareVersions,
   parseVersion,
+  resolveCompanionAssetUrl,
+  resolveCompanionBundleUrl,
   validateCompanionManifest,
   validateCompanionManifestUrl,
 } from '../companion-update.mjs'
@@ -26,6 +28,25 @@ describe('companion update helpers', () => {
     }
     expect(validateCompanionManifest(manifest)).toBe(manifest)
     expect(() => validateCompanionManifest({ ...manifest, schema: 2 })).toThrow(/invalid/)
+  })
+
+  it('uses absolute release asset URLs instead of the Pages channel directory', () => {
+    const manifestUrl = 'https://pancong0711.github.io/she/companion-release-manifest.json'
+    const manifest = {
+      schema: 1,
+      name: 'she-companion',
+      version: '0.7.8',
+      bundle: {
+        file: 'she-companion-0.7.8.tar.gz',
+        url: 'https://github.com/pancong0711/she/releases/download/v0.7.8-companion.1/she-companion-0.7.8.tar.gz',
+        sha256: 'a'.repeat(64),
+      },
+    }
+    expect(resolveCompanionBundleUrl(manifestUrl, manifest)).toBe(manifest.bundle.url)
+    expect(resolveCompanionAssetUrl(manifestUrl, { file: 'fallback.tar.gz' })).toBe(
+      'https://pancong0711.github.io/she/fallback.tar.gz',
+    )
+    expect(() => resolveCompanionAssetUrl(manifestUrl, { file: 'x', url: 'javascript:alert(1)' })).toThrow(/http/)
   })
 
   it('restricts update manifest URLs to SHE release downloads', () => {

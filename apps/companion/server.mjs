@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
 import { dockerGuidance, summarizePreflight } from './preflight.mjs'
 import { authorizeWorkspace, listWorkspaceAuthorizations, removeWorkspaceAuthorization } from './workspaces.mjs'
-import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
+import { compareVersions, resolveCompanionBundleUrl, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 import { installCompanionBundle } from './companion-installer.mjs'
 import { corsHeadersForOrigin } from './cors.mjs'
 import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
@@ -66,7 +66,7 @@ const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
 const launcherVersion = process.env.SHE_LAUNCHER_VERSION?.trim() || undefined
 const launcherPath = companionInstallRoot === undefined ? undefined : join(companionInstallRoot, 'launcher.mjs')
 const COMPANION_RESTART_EXIT_CODE = 75
-const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.3.1-core.1/release-manifest.json'
+const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.3.2-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
 const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
@@ -1008,7 +1008,7 @@ async function checkCompanionUpdate(manifestUrl) {
 
 async function downloadCompanionBundle(manifestUrl, manifest) {
   const file = basename(String(manifest.bundle.file))
-  const url = new URL(file, manifestUrl)
+  const url = new URL(resolveCompanionBundleUrl(manifestUrl, manifest))
   let bytes
   if (url.protocol === 'file:') {
     bytes = await readFile(url)

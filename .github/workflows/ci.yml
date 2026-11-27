@@ -62,6 +62,9 @@ jobs:
           pnpm build:companion
           node -e "const m=require('./artifacts/companion/companion-release-manifest.json'); if(!m.launcher?.sha256) process.exit(1)"
           test -f artifacts/companion/she-launcher.mjs
+          test -f apps/pwa/dist/she-launcher.mjs
+          node --check apps/pwa/dist/she-launcher.mjs
+          test "$(sha256sum artifacts/companion/she-launcher.mjs | awk '{print $1}')" = "$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').launcher.sha256)")"
           BUNDLE="artifacts/companion/$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').bundle.file)")"
           bash scripts/install-companion.sh "$BUNDLE" --sha256 "$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').bundle.sha256)")" --install-root /tmp/she-companion-install --bin-dir /tmp/she-companion-install/bin
           test -x /tmp/she-companion-install/current/bin/she-companion

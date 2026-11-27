@@ -36,7 +36,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 launch_local() {
   [ -f "$INSTALL_ROOT/launcher.mjs" ] || return 1
-  echo "SHE bootstrap: using installed launcher (release manifest unavailable)"
+  echo "SHE bootstrap: using installed launcher"
   exec env \
     SHE_PWA_PORT="$PORT" \
     SHE_COMPANION_ROOT="$INSTALL_ROOT" \
@@ -46,8 +46,31 @@ launch_local() {
     node "$INSTALL_ROOT/launcher.mjs"
 }
 
+# GitHub release downloads can intermittently fail with TLS EOF/proxy errors.
+# Try system curl first for compatibility, then Node's fetch stack.
+download_file() {
+  local url="$1"
+  local output="$2"
+  if curl -fL --http1.1 --retry 3 --retry-delay 1 --connect-timeout 20 --max-time 120 -o "$output" "$url"; then
+    return 0
+  fi
+  echo "SHE bootstrap: curl download failed; retrying with Node fetch" >&2
+  node --input-type=module - "$url" "$output" <<'NODE'
+const [url, output] = process.argv.slice(2)
+try {
+  const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(120_000) })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  const { writeFile } = await import('node:fs/promises')
+  await writeFile(output, Buffer.from(await response.arrayBuffer()))
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+}
+NODE
+}
+
 echo "SHE bootstrap: fetching launcher manifest"
-if ! curl -fL --retry 3 --connect-timeout 20 --max-time 120 -o "$WORK/manifest.json" "$MANIFEST_URL"; then
+if ! download_file "$MANIFEST_URL" "$WORK/manifest.json"; then
   launch_local || { echo "✗ cannot download launcher manifest and no local launcher exists" >&2; exit 1; }
 fi
 
@@ -81,18 +104,40 @@ case "$LAUNCHER_URL" in
   *) echo "✗ launcher URL must use https:// or file://" >&2; exit 1 ;;
 esac
 
-echo "SHE bootstrap: downloading launcher $LAUNCHER_FILE"
-curl -fL --retry 3 --connect-timeout 20 --max-time 120 -o "$WORK/$LAUNCHER_FILE" "$LAUNCHER_URL"
-if command -v sha256sum >/dev/null 2>&1; then
-  ACTUAL="$(sha256sum "$WORK/$LAUNCHER_FILE" | awk '{print $1}')"
-else
-  ACTUAL="$(shasum -a 256 "$WORK/$LAUNCHER_FILE" | awk '{print $1}')"
+# The Pages channel also mirrors the bundled launcher next to its manifest.
+# This gives fresh installs a second host when GitHub release downloads fail.
+LAUNCHER_FALLBACK_URL="$(node -e "process.stdout.write(new URL(process.argv[1], process.argv[2]).href)" "$LAUNCHER_FILE" "$MANIFEST_URL")"
+
+download_and_verify_launcher() {
+  local url="$1"
+  echo "SHE bootstrap: downloading launcher $LAUNCHER_FILE from $url"
+  download_file "$url" "$WORK/$LAUNCHER_FILE" || return 1
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL="$(sha256sum "$WORK/$LAUNCHER_FILE" | awk '{print $1}')"
+  else
+    ACTUAL="$(shasum -a 256 "$WORK/$LAUNCHER_FILE" | awk '{print $1}')"
+  fi
+  if [ "$ACTUAL" != "$LAUNCHER_SHA" ]; then
+    echo "✗ launcher SHA-256 mismatch: expected $LAUNCHER_SHA got $ACTUAL" >&2
+    return 1
+  fi
+  node --check "$WORK/$LAUNCHER_FILE" >/dev/null
+}
+
+if ! download_and_verify_launcher "$LAUNCHER_URL"; then
+  if [ "$LAUNCHER_FALLBACK_URL" != "$LAUNCHER_URL" ]; then
+    echo "SHE bootstrap: primary launcher download failed; trying channel mirror"
+    download_and_verify_launcher "$LAUNCHER_FALLBACK_URL" || launch_local || {
+      echo "✗ cannot download a verified launcher and no local launcher exists" >&2
+      exit 1
+    }
+  else
+    launch_local || {
+      echo "✗ cannot download a verified launcher and no local launcher exists" >&2
+      exit 1
+    }
+  fi
 fi
-if [ "$ACTUAL" != "$LAUNCHER_SHA" ]; then
-  echo "✗ launcher SHA-256 mismatch: expected $LAUNCHER_SHA got $ACTUAL" >&2
-  exit 1
-fi
-node --check "$WORK/$LAUNCHER_FILE" >/dev/null
 cp "$WORK/$LAUNCHER_FILE" "$INSTALL_ROOT/launcher.mjs.next"
 chmod 0755 "$INSTALL_ROOT/launcher.mjs.next"
 mv -f "$INSTALL_ROOT/launcher.mjs.next" "$INSTALL_ROOT/launcher.mjs"

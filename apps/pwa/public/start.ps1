@@ -44,7 +44,7 @@ New-Item -ItemType Directory -Force -Path $work | Out-Null
 function Launch-LocalLauncher {
   $localLauncher = Join-Path $InstallRoot 'launcher.mjs'
   if (-not (Test-Path $localLauncher)) { return $false }
-  Write-Host 'SHE bootstrap: using installed launcher (release manifest unavailable)'
+  Write-Host 'SHE bootstrap: using installed launcher'
   $env:SHE_PWA_PORT = [string]$Port
   $env:SHE_COMPANION_ROOT = $InstallRoot
   $env:SHE_BIN_DIR = $BinDir
@@ -54,12 +54,35 @@ function Launch-LocalLauncher {
   exit $LASTEXITCODE
 }
 
+function Download-File([string]$Uri, [string]$OutFile) {
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $OutFile
+    return $true
+  } catch {
+    Write-Host "SHE bootstrap: Invoke-WebRequest failed for $Uri; retrying with curl.exe" -ForegroundColor Yellow
+  }
+  $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+  if (-not $curl) { return $false }
+  & $curl.Source -fL --http1.1 --retry 3 --retry-delay 1 --connect-timeout 20 --max-time 120 -o $OutFile $Uri
+  return $LASTEXITCODE -eq 0
+}
+
+function Download-Launcher([string]$Uri) {
+  Write-Host "SHE bootstrap: downloading launcher $launcherFile from $Uri"
+  if (-not (Download-File $Uri $launcherPath)) { return $false }
+  $actualSha = (Get-FileHash $launcherPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($actualSha -ne $expectedSha.ToLowerInvariant()) {
+    Write-Host "✗ launcher SHA-256 mismatch: expected $expectedSha got $actualSha" -ForegroundColor Red
+    return $false
+  }
+  & node --check $launcherPath
+  return $LASTEXITCODE -eq 0
+}
+
 try {
   Write-Host 'SHE bootstrap: fetching launcher manifest...'
   $manifestPath = Join-Path $work 'companion-release-manifest.json'
-  try {
-    Invoke-WebRequest -UseBasicParsing -Uri $ManifestUrl -OutFile $manifestPath
-  } catch {
+  if (-not (Download-File $ManifestUrl $manifestPath)) {
     if (Launch-LocalLauncher) { exit 0 }
     throw 'cannot download launcher manifest and no local launcher exists'
   }
@@ -78,13 +101,20 @@ try {
   }
   if ($launcherUrl -notmatch '^https://') { throw 'launcher URL must use https://' }
 
-  Write-Host "SHE bootstrap: downloading launcher $launcherFile"
   $launcherPath = Join-Path $work $launcherFile
-  Invoke-WebRequest -UseBasicParsing -Uri $launcherUrl -OutFile $launcherPath
-  $actualSha = (Get-FileHash $launcherPath -Algorithm SHA256).Hash.ToLowerInvariant()
-  if ($actualSha -ne $expectedSha.ToLowerInvariant()) { throw "launcher SHA-256 mismatch: expected $expectedSha got $actualSha" }
-  & node --check $launcherPath
-  if ($LASTEXITCODE -ne 0) { throw 'downloaded launcher failed syntax check' }
+  if (-not (Download-Launcher $launcherUrl)) {
+    $fallbackUri = [System.Uri]::new([System.Uri]$ManifestUrl, $launcherFile).AbsoluteUri
+    if ($fallbackUri -ne $launcherUrl) {
+      Write-Host 'SHE bootstrap: primary launcher download failed; trying channel mirror'
+      if (-not (Download-Launcher $fallbackUri)) {
+        if (Launch-LocalLauncher) { exit 0 }
+        throw 'cannot download a verified launcher and no local launcher exists'
+      }
+    } else {
+      if (Launch-LocalLauncher) { exit 0 }
+      throw 'cannot download a verified launcher and no local launcher exists'
+    }
+  }
   $target = Join-Path $InstallRoot 'launcher.mjs'
   $next = "$target.next"
   Copy-Item $launcherPath $next -Force

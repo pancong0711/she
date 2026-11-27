@@ -26,7 +26,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
+import { compareVersions, resolveCompanionBundleUrl, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 import { installCompanionBundle, writeCompanionCommand } from './companion-installer.mjs'
 
 export const LAUNCHER_VERSION = '2'
@@ -127,10 +127,7 @@ async function fetchManifest(url) {
 async function downloadBundle(manifest) {
   const file = String(manifest.bundle.file).replace(/\\/g, '/').split('/').pop()
   if (!file) throw new Error('invalid companion bundle file name')
-  const fallbackUrl = new URL(file, new URL('.', manifestUrl).href).href
-  const url = new URL(typeof manifest.bundle.url === 'string' && manifest.bundle.url.trim() !== ''
-    ? manifest.bundle.url
-    : fallbackUrl)
+  const url = new URL(resolveCompanionBundleUrl(manifestUrl, manifest))
   const staging = join(installRoot, 'staging')
   await mkdir(staging, { recursive: true, mode: 0o700 })
   const target = join(staging, file)

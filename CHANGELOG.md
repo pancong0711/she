@@ -4,6 +4,13 @@ All notable changes to SHE are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Companion page updates now honor the manifest's absolute `bundle.url` instead of resolving it against the GitHub Pages channel directory, which previously downloaded an HTML 404 page.
+- `start.sh` / `start.ps1` now fall back from curl to Node fetch, then to a Pages-hosted launcher mirror, and finally to an already installed launcher when GitHub release downloads fail.
+- PWA builds now emit `she-launcher.mjs` beside the Pages channel manifest so first installs have a second bootstrap host.
+- Prepared companion 0.7.8 and core 0.3.2 releases; core 0.3.2 includes the gateway.v1 `POST /v1/messages` direct-message endpoint.
+
 ### Added
 
 - Added Sandbox creation form and detailed Agent Migration mount/network/runtime guidance.
