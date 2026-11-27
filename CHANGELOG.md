@@ -6,6 +6,13 @@ All notable changes to SHE are documented here.
 
 ### Fixed
 
+- Introduced the unified `SHE_HOME` app layout (app/core/config/state/run/bin/workspaces), with legacy-layout detection and a safe copy migration API/CLI.
+- Start scripts now use an installed launcher immediately and only bootstrap from the network on first install or explicit launcher repair.
+- New installs use `SHE_HOME/bin` and write both `she` and `she-companion` commands; legacy installs keep their old command location.
+- Core update channel is Pages-first with GitHub Release fallback, and Pages hosts the matching core bundle.
+- Marked the built-in Feishu gateway as legacy; new deployments should use feishu4dsh standalone gateway.
+- Added unified App/Core update status and PWA Settings controls for version checks and SHE_HOME migration.
+
 - Companion page updates now honor the manifest's absolute `bundle.url` instead of resolving it against the GitHub Pages channel directory, which previously downloaded an HTML 404 page.
 - `start.sh` / `start.ps1` now fall back from curl to Node fetch, then to a Pages-hosted launcher mirror, and finally to an already installed launcher when GitHub release downloads fail.
 - PWA builds now emit `she-launcher.mjs` beside the Pages channel manifest so first installs have a second bootstrap host.
