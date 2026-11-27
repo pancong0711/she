@@ -52,5 +52,6 @@ start.sh / start.ps1
 - [x] Pages 提供 `companion-release-manifest.json`；
 - [x] 测试保证 channel manifest 版本与 companion package 版本一致；
 - [x] 本地模拟新安装安装到当前最新版本；
-- [ ] 发布 companion 0.7.6，并标记 Companion release 为 Latest；
+- [x] 发布 companion 0.7.6，并标记 Companion release 为 Latest；
+- [x] 发现 0.7.6 launcher URL 校验仍拒绝 Pages manifest，补发并验证 0.7.7。
 - [x] 文档写明 core/packages release 不应抢占 latest。

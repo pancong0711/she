@@ -2,6 +2,7 @@
 
 > Release：`v0.7.6-companion.1`
 > 日期：2026-11-27
+> 注意：0.7.6 的 launcher 仍保留旧 manifest URL 校验，会拒绝 Pages channel manifest；请使用 0.7.7。
 
 ## 修复：新安装仍是 0.7.2 / companion 更新通道失效
 
