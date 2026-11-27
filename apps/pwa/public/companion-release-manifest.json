@@ -2,8 +2,8 @@
   "schema": 1,
   "name": "she-companion",
   "version": "0.7.7",
-  "commit": "68dfcac7f2aeaf2c45fd479788e2483dfe9246a3",
-  "generatedAt": "2026-11-27T02:16:07.818Z",
+  "commit": "a6f6f19df812cac3b89f62bae504435e2e804b54",
+  "generatedAt": "2026-11-27T02:16:32.627Z",
   "node": "^22.19.0 || >=24.0.0",
   "protocols": {
     "companionApi": "v1"
@@ -15,8 +15,8 @@
   "bundle": {
     "file": "she-companion-0.7.7.tar.gz",
     "url": "https://github.com/pancong0711/she/releases/download/v0.7.7-companion.1/she-companion-0.7.7.tar.gz",
-    "bytes": 725908,
-    "sha256": "232aae3704aa9e8af5ed3870669cced62c6670c9a5fa046305ab85b8e288fef9"
+    "bytes": 725918,
+    "sha256": "a3188eb3306edaa459c783cc44dfc2488bac808f0e1984a6770d630df0ea51ef"
   },
   "launcher": {
     "file": "she-launcher.mjs",
