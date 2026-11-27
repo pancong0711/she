@@ -230,3 +230,4 @@
 - 2026-11-27：完成宏观架构评审并新增 ADR-0005：明确稳定层是 launcher，companion + bundled PWA 是可更新 app shell，core 是高频业务运行时；start 入口改为本地 launcher 优先，只有首次安装/强制刷新才走网络 bootstrap，并补充回归测试。后续待确认 SHE_HOME 路径统一、app shell 职责收敛、内置 Feishu gateway legacy 化。
 - 2026-11-27：执行 App Shell 架构调整：引入统一 SHE_HOME 路径解析（`apps/companion/paths.mjs`），start 脚本和 launcher 本地优先；新增旧布局安全复制迁移 API/CLI；内置 Feishu gateway 标记 legacy；新增 `/api/updates/status` 与 PWA 统一版本/SHE_HOME 管理入口。准备 companion 0.7.12 / core 0.3.3。Vitest 132/132 通过。
 - 2026-11-27：companion 0.7.13 / core 0.3.4 将 core 更新也切到 Pages-first channel；core manifest 增加 bundle 主/备 URL，Pages workflow 同步 core bundle fallback；旧 manifest 继续兼容。准备发布。
+- 2026-11-27：修复新 SHE_HOME 安装的 bin 选择：新安装固定 `SHE_HOME/bin`，仅 legacy app 使用旧 `~/.local/bin`；生成 `she` 与 `she-companion` 命令。准备 companion 0.7.14。

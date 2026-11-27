@@ -14,10 +14,10 @@ else
 fi
 if [ -n "${SHE_BIN_DIR:-}" ]; then
   BIN_DIR="$SHE_BIN_DIR"
-elif [ -d "$SHE_HOME/bin" ] || [ ! -d "$HOME/.local/bin" ]; then
-  BIN_DIR="$SHE_HOME/bin"
-else
+elif [ "$INSTALL_ROOT" = "$SHE_HOME/companion" ] && [ -d "$HOME/.local/bin" ]; then
   BIN_DIR="$HOME/.local/bin"
+else
+  BIN_DIR="$SHE_HOME/bin"
 fi
 SHE_CORE_ROOT="${SHE_CORE_ROOT:-$SHE_HOME/core}"
 SHE_CONFIG_HOME="${SHE_CONFIG_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/she}"

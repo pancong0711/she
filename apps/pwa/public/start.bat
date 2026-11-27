@@ -16,10 +16,10 @@ if defined SHE_COMPANION_ROOT (
 )
 if defined SHE_BIN_DIR (
   set "BIN_DIR=%SHE_BIN_DIR%"
-) else if exist "%SHE_HOME%\bin" (
-  set "BIN_DIR=%SHE_HOME%\bin"
-) else (
+) else if "%INSTALL_ROOT%"=="%SHE_HOME%\companion" (
   set "BIN_DIR=%LOCALAPPDATA%\she\bin"
+) else (
+  set "BIN_DIR=%SHE_HOME%\bin"
 )
 if not defined SHE_CORE_ROOT set "SHE_CORE_ROOT=%SHE_HOME%\core"
 if not defined SHE_CONFIG_HOME set "SHE_CONFIG_HOME=%SHE_HOME%\config"

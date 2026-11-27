@@ -24,10 +24,10 @@ $InstallRoot = if ($env:SHE_COMPANION_ROOT) {
 }
 $BinDir = if ($env:SHE_BIN_DIR) {
   $env:SHE_BIN_DIR
-} elseif (Test-Path (Join-Path $SheHome 'bin')) {
-  Join-Path $SheHome 'bin'
-} else {
+} elseif ($InstallRoot -eq (Join-Path $SheHome 'companion')) {
   Join-Path $env:LOCALAPPDATA 'she\bin'
+} else {
+  Join-Path $SheHome 'bin'
 }
 $CoreRoot = if ($env:SHE_CORE_ROOT) { $env:SHE_CORE_ROOT } else { Join-Path $SheHome 'core' }
 $LegacyConfigRoot = Join-Path $env:USERPROFILE '.config\she'

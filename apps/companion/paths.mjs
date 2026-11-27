@@ -96,7 +96,10 @@ export function resolveShePaths(env = process.env, options = {}) {
     : xdgRuntime !== undefined
       ? api.resolve(xdgRuntime, 'she')
       : api.join(sheHome, 'run')
-  const binDir = envPath('SHE_BIN_DIR', existingOr(api.join(sheHome, 'bin'), legacy.binDir, exists))
+  const legacyAppSelected = appRoot === legacy.appRoot
+  const binDir = envPath('SHE_BIN_DIR', legacyAppSelected && exists(legacy.binDir)
+    ? legacy.binDir
+    : api.join(sheHome, 'bin'))
   return {
     home: sheHome,
     appRoot,
