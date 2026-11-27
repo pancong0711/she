@@ -11,6 +11,7 @@ function installScript(recipe) {
     'export HOME=/home/agent',
     'export PATH="/home/agent/.local/bin:$PATH"',
     `export NPM_CONFIG_PREFIX=/home/agent/.agents/${recipe.id}/${recipe.version}`,
+    'export NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com/}"',
     'mkdir -p /home/agent/.local/bin /home/agent/.config /home/agent/.local/share /home/agent/.agents /cache/npm',
     `PREFIX=/home/agent/.agents/${recipe.id}/${recipe.version}`,
     'rm -rf "$PREFIX"',

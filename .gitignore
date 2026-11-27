@@ -39,6 +39,7 @@ artifacts/
 
 # Local scratch
 tmp/
+.tmp/
 scratch/
 
 # Local session/compact archives (may contain private conversation data)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bindMountArg, buildDockerRunArgs, type DockerContainerSpec } from '@she/broker'
+import { bindMountArg, buildDockerRunArgs, sandboxEnvironment, type DockerContainerSpec } from '@she/broker'
 
 function spec(overrides: Partial<DockerContainerSpec> = {}): DockerContainerSpec {
   return {
@@ -44,12 +44,19 @@ describe('Docker run argv', () => {
     expect(mounts.some(mount => mount.endsWith(',rw'))).toBe(false)
   })
 
+  it('allows overriding the npm registry for restricted networks', () => {
+    expect(sandboxEnvironment({ SHE_NPM_REGISTRY: 'https://registry.example.test/' }))
+      .toContain('NPM_CONFIG_REGISTRY=https://registry.example.test/')
+    expect(sandboxEnvironment({})).toContain('NPM_CONFIG_REGISTRY=https://registry.npmmirror.com/')
+  })
+
   it('marks a read-only workspace and preserves fixed hardening flags', () => {
     const args = buildDockerRunArgs(spec({ workspaceReadOnly: true }))
     expect(bindMountArg('/src', '/dst', false)).toBe('type=bind,src=/src,dst=/dst')
     expect(bindMountArg('/src', '/dst', true)).toBe('type=bind,src=/src,dst=/dst,readonly')
     expect(args).toContain('--read-only')
     expect(args).toContain('no-new-privileges')
+    expect(args).toContain('NPM_CONFIG_REGISTRY=https://registry.npmmirror.com/')
     expect(args).toContain('sleep')
     expect(args.slice(-2)).toEqual(['sleep', 'infinity'])
     expect(mountValues(args)[0]).toContain(',readonly')

@@ -51,15 +51,19 @@ export interface DockerRuntime {
   exec(containerName: string, request: SandboxExecRequest): Promise<SandboxExecResult>
 }
 
-const SANDBOX_ENV = [
-  'HOME=/home/agent',
-  'PATH=/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-  'XDG_CONFIG_HOME=/home/agent/.config',
-  'XDG_DATA_HOME=/home/agent/.local/share',
-  'XDG_CACHE_HOME=/cache',
-  'NPM_CONFIG_PREFIX=/home/agent/.local',
-  'npm_config_cache=/cache/npm',
-]
+export function sandboxEnvironment(env: NodeJS.ProcessEnv = process.env): string[] {
+  const registry = env.SHE_NPM_REGISTRY?.trim() || 'https://registry.npmmirror.com/'
+  return [
+    'HOME=/home/agent',
+    'PATH=/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+    'XDG_CONFIG_HOME=/home/agent/.config',
+    'XDG_DATA_HOME=/home/agent/.local/share',
+    'XDG_CACHE_HOME=/cache',
+    'NPM_CONFIG_PREFIX=/home/agent/.local',
+    `NPM_CONFIG_REGISTRY=${registry}`,
+    'npm_config_cache=/cache/npm',
+  ]
+}
 
 /**
  * Build a Docker `--mount` value for a bind mount.
@@ -82,7 +86,7 @@ export function buildDockerRunArgs(spec: DockerContainerSpec): string[] {
     '--cap-drop', 'ALL',
     '--security-opt', 'no-new-privileges',
     '--network', spec.networkMode === 'none' ? 'none' : 'bridge',
-    ...SANDBOX_ENV.flatMap(value => ['--env', value]),
+    ...sandboxEnvironment().flatMap(value => ['--env', value]),
     '--mount', bindMountArg(spec.workspacePath, '/workspace', spec.workspaceReadOnly === true),
     '--mount', bindMountArg(spec.inboxPath, '/inbox', true),
     '--mount', bindMountArg(spec.outboxPath, '/outbox', false),
@@ -210,7 +214,7 @@ export class DockerCliRuntime implements DockerRuntime {
     const args = [
       'exec',
       '--workdir', cwd,
-      ...SANDBOX_ENV.flatMap(value => ['--env', value]),
+      ...sandboxEnvironment().flatMap(value => ['--env', value]),
       containerName,
       ...request.command,
     ]

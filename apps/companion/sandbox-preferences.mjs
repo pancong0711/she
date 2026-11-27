@@ -48,6 +48,13 @@ export const SANDBOX_IMAGE_PRESETS = [
   },
   { id: 'node24', label: 'Node 24 slim', image: 'node:24-bookworm-slim', description: '有 bash/coreutils/apt 和 Node/npm，但缺少 git、curl 等常见工具；agent 需要额外安装。' },
   { id: 'node22', label: 'Node 22 slim', image: 'node:22-bookworm-slim', description: '体积较小的 Node 基础镜像；需要先确认 agent 的 shell、git、curl 和原生依赖。' },
+  {
+    id: 'she-fallback-node24',
+    label: 'SHE Fallback Node 24（本地构建）',
+    image: 'she-sandbox-node:24.04',
+    description: '受限网络备用镜像：先运行 pnpm sandbox:fallback-image，再选择此项；已在本地时不需要访问 Docker registry。',
+    recommendedForAgents: true,
+  },
   { id: 'ubuntu2404', label: 'Ubuntu 24.04', image: 'ubuntu:24.04', description: '通用 Linux 环境，bash/apt 完整；不预装 Node，Node agent 需要自定义 Dockerfile 安装 Node。' },
   { id: 'debian12', label: 'Debian 12 slim', image: 'debian:bookworm-slim', description: '轻量通用 Debian 环境；保留 bash/apt，但没有 Node。' },
   { id: 'alpine320', label: 'Alpine 3.20（谨慎）', image: 'alpine:3.20', description: '使用 sh/busybox，默认没有 bash/glibc；只适合明确兼容 musl 的 recipe。' },

@@ -124,3 +124,8 @@ Agent Migration 打开时读取这些默认值，用户仍可对单次计划覆�
 - 未与 sandbox broker 的 image allowlist 绑定；
 - 多 agent 分发需要后续 target-agent 路由；
 - 运行期 `apt/npm` 安装不适合作为常规 agent 预装方式；使用预构建镜像。
+
+
+## 受限网络 fallback
+
+当 Docker Hub 和 registry 代理都不可用时，可使用清华 TUNA Ubuntu base rootfs 导入并构建本地 Node 镜像。完整测试与步骤见 `docs/SANDBOX-IMAGE-FALLBACKS.md`，脚本为 `scripts/build-sandbox-fallback-image.sh`。
