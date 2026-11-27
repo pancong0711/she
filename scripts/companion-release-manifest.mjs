@@ -33,16 +33,18 @@ const manifest = {
   entrypoint: { posix: 'apps/companion/server.mjs', windows: 'apps/companion/server.mjs' },
   bundle: {
     file: basename(bundle),
-    url: `${releaseBase}/${basename(bundle)}`,
-    fallbackUrl: `${channelBase}/${basename(bundle)}`,
+    // Pages is the stable, same-origin channel for clients. GitHub Release is
+    // kept as the immutable cross-check/fallback source.
+    url: `${channelBase}/${basename(bundle)}`,
+    fallbackUrl: `${releaseBase}/${basename(bundle)}`,
     bytes: (await stat(bundle)).size,
     sha256: createHash('sha256').update(bytes).digest('hex'),
   },
   ...(launcherBytes === undefined ? {} : {
     launcher: {
       file: basename(launcher),
-      url: `${releaseBase}/${basename(launcher)}`,
-      fallbackUrl: `${channelBase}/${basename(launcher)}`,
+      url: `${channelBase}/${basename(launcher)}`,
+      fallbackUrl: `${releaseBase}/${basename(launcher)}`,
       bytes: (await stat(launcher)).size,
       sha256: createHash('sha256').update(launcherBytes).digest('hex'),
     },

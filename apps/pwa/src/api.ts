@@ -54,7 +54,7 @@ function companionNetworkError(error: unknown): Error {
   const detail = error instanceof Error ? error.message : String(error)
   return new Error(
     `无法连接本地 companion（${companionTargetLabel()}）：${detail}。`
-    + '请确认 companion v0.7.10+ 正在运行；从 GitHub Pages 首次访问时，请在浏览器提示中允许“本地网络访问”，并确认没有拦截 http://127.0.0.1 的 HTTPS→HTTP 请求。',
+    + '请确认 companion v0.7.11+ 正在运行；从 GitHub Pages 首次访问时，请在浏览器提示中允许“本地网络访问”，并确认没有拦截 http://127.0.0.1 的 HTTPS→HTTP 请求。',
   )
 }
 
@@ -803,10 +803,10 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.2-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.7.10'
+export const COMPANION_RELEASE_VERSION = '0.7.11'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.7.10'
-export const COMPANION_RELEASE_TAG = 'v0.7.10-companion.1'
+export const COMPANION_MIN_VERSION = '0.7.11'
+export const COMPANION_RELEASE_TAG = 'v0.7.11-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = 'https://pancong0711.github.io/she/companion-release-manifest.json'
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

@@ -39,8 +39,8 @@ describe('companion update helpers', () => {
       version: '0.7.8',
       bundle: {
         file: 'she-companion-0.7.8.tar.gz',
-        url: 'https://github.com/pancong0711/she/releases/download/v0.7.8-companion.1/she-companion-0.7.8.tar.gz',
-        fallbackUrl: 'https://pancong0711.github.io/she/she-companion-0.7.8.tar.gz',
+        url: 'https://pancong0711.github.io/she/she-companion-0.7.8.tar.gz',
+        fallbackUrl: 'https://github.com/pancong0711/she/releases/download/v0.7.8-companion.1/she-companion-0.7.8.tar.gz',
         sha256: 'a'.repeat(64),
       },
     }
