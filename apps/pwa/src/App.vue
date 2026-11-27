@@ -43,6 +43,7 @@ import {
   loadSnapshot,
   loadTaskArtifacts,
   loadWorkerConfig,
+  loadWorkspaces,
   restartCompanion,
   saveSandboxPreferences,
   saveWorkerConfig,
@@ -72,6 +73,7 @@ import {
   type SandboxPreferences,
   type SandboxPreferencesResponse,
   type WorkerConfig,
+  type WorkspaceAuthorization,
 } from './api'
 
 type Tab = 'dashboard' | 'tasks' | 'agents' | 'workspaces' | 'sandboxes' | 'chat' | 'migrate' | 'setup' | 'packages' | 'gateway' | 'settings' | 'help'
@@ -113,6 +115,7 @@ const sandboxDraft = ref({
   memoryMb: 1024,
   pids: 256,
   command: 'sleep infinity',
+  workspaceAuthorizationId: '',
 })
 const loadingStats = ref('')
 const error = ref('')
@@ -172,6 +175,8 @@ const autostart = ref<AutostartStatus | null>(null)
 const autostartError = ref('')
 const autostartBusy = ref(false)
 const sandboxPreferences = ref<SandboxPreferencesResponse | null>(null)
+const sandboxWorkspaceOptions = ref<readonly WorkspaceAuthorization[]>([])
+const sandboxWorkspaceOptionsError = ref('')
 const sandboxAgentRecipes = ref<readonly SandboxAgentRecipe[]>([])
 const sandboxAgentRecipeError = ref('')
 const sandboxAgentRecipeId = ref('')
@@ -197,7 +202,7 @@ const companionOutdated = computed(() => companion.value !== null && isVersionOl
 
 async function refresh(): Promise<void> {
   loading.value = true
-  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult, platformResult, autostartResult, sandboxPreferencesResult] = await Promise.allSettled([
+  const [snapshotResult, sandboxResult, companionResult, coreStatusResult, packageResult, workerConfigResult, preflightResult, agentRuntimeResult, platformResult, autostartResult, sandboxPreferencesResult, workspaceResult] = await Promise.allSettled([
     loadSnapshot(),
     loadSandboxes(),
     loadCompanionHealth(),
@@ -209,6 +214,7 @@ async function refresh(): Promise<void> {
     loadPlatformStatus(),
     loadAutostart(),
     loadSandboxPreferences(),
+    loadWorkspaces(),
   ])
   if (snapshotResult.status === 'fulfilled') {
     health.value = snapshotResult.value.health
@@ -285,6 +291,13 @@ async function refresh(): Promise<void> {
     sandboxPreferences.value = null
     sandboxPreferenceForm.value = null
     sandboxPreferenceError.value = sandboxPreferencesResult.reason instanceof Error ? sandboxPreferencesResult.reason.message : String(sandboxPreferencesResult.reason)
+  }
+  if (workspaceResult.status === 'fulfilled') {
+    sandboxWorkspaceOptions.value = workspaceResult.value.workspaces
+    sandboxWorkspaceOptionsError.value = ''
+  } else {
+    sandboxWorkspaceOptions.value = []
+    sandboxWorkspaceOptionsError.value = workspaceResult.reason instanceof Error ? workspaceResult.reason.message : String(workspaceResult.reason)
   }
   if (workerConfigResult.status === 'fulfilled') {
     workerConfigResponse.value = workerConfigResult.value
@@ -696,6 +709,12 @@ async function submitSandbox(): Promise<void> {
       resolvedVersion = resolution.resolved
       sandboxAgentVersion.value = resolution.resolved
     }
+    const selectedWorkspace = draft.workspaceAuthorizationId === ''
+      ? undefined
+      : sandboxWorkspaceOptions.value.find(item => item.id === draft.workspaceAuthorizationId)
+    if (draft.workspaceAuthorizationId !== '' && selectedWorkspace === undefined) {
+      throw new Error('所选 Workspace 授权已不存在，请刷新后重新选择。')
+    }
     await createSandbox({
       name: draft.name,
       role: draft.role as 'standalone' | 'main' | 'worker' | 'observer' | 'utility',
@@ -704,6 +723,9 @@ async function submitSandbox(): Promise<void> {
       networkMode: recipe?.networkMode ?? draft.networkMode as 'none' | 'egress',
       resources: { cpus: draft.cpus, memoryMb: draft.memoryMb, pids: draft.pids },
       allowedCallers: ['main'],
+      ...(selectedWorkspace === undefined
+        ? {}
+        : { hostMounts: [{ source: selectedWorkspace.realPath, target: { kind: 'workspace' as const }, readOnly: selectedWorkspace.mode !== 'read-write' }] }),
       ...(recipe !== undefined
         ? { command: [...recipe.bootstrap.command] }
         : draft.command.trim() === '' ? {} : { command: parseCommandLine(draft.command) }),
@@ -1342,6 +1364,14 @@ onBeforeUnmount(() => {
                 </select>
               </label>
               <label>Agent ID<input v-model="sandboxDraft.agentId" placeholder="opencode" /></label>
+              <label class="wide-label">项目 Workspace（可选）
+                <select v-model="sandboxDraft.workspaceAuthorizationId">
+                  <option value="">不绑定长期项目：/workspace 使用 sandbox 临时 scratch</option>
+                  <option v-for="workspace in sandboxWorkspaceOptions" :key="workspace.id" :value="workspace.id">
+                    {{ workspace.label }} — {{ workspace.realPath }}（{{ workspace.mode }}）
+                  </option>
+                </select>
+              </label>
               <label>镜像预设
                 <select v-model="sandboxDraft.image" :disabled="selectedSandboxAgentRecipe !== undefined">
                   <optgroup label="Docker / 系统镜像">
@@ -1366,6 +1396,8 @@ onBeforeUnmount(() => {
               {{ sandboxPreferences.catalog.find(preset => preset.image === sandboxDraft.image)?.description ?? '自定义镜像：其 shell、Node、git、curl 和 agent runtime 均由镜像提供。' }}
             </p>
             <p v-if="sandboxAgentRecipeError" class="warn-text small-note">Agent recipe 目录不可用：{{ sandboxAgentRecipeError }}</p>
+            <p v-if="sandboxWorkspaceOptionsError" class="warn-text small-note">Workspace 授权列表不可用：{{ sandboxWorkspaceOptionsError }}。仍可不绑定 workspace 创建 sandbox。</p>
+            <p v-else-if="sandboxWorkspaceOptions.length === 0" class="muted small-note">还没有已授权的项目目录。可先到 Workspaces 页面添加；不添加也可以创建仅使用 scratch/inbox/outbox 的 worker。</p>
             <div v-if="selectedSandboxAgentRecipe" class="agent-recipe-help">
               <p><b>{{ selectedSandboxAgentRecipe.label }}</b> · <code>{{ selectedSandboxAgentRecipe.packageName }}@{{ selectedSandboxAgentRecipe.version }}</code></p>
               <p>{{ selectedSandboxAgentRecipe.description }}</p>
@@ -1390,6 +1422,7 @@ onBeforeUnmount(() => {
               <p v-if="sandboxAgentVersionResolution?.warning" class="warn-text small-note">{{ sandboxAgentVersionResolution.warning }}</p>
             </div>
             <div class="container-setting-explain">
+              <p><b>Workspace 与 Sandbox</b>：Sandbox 的 home/cache/inbox/outbox/logs 是运行时存储；不绑定项目时，<code>/workspace</code> 只是 sandbox 本地 scratch。需要长期维护项目时，请选择已在 Workspaces 页面授权的目录，broker 会把它显式挂载为 <code>/workspace</code>。worker 也可以只用 inbox/outbox 交付，不必拥有长期 workspace。</p>
               <p><b>启动命令</b>：追加在镜像之后，不经过宿主 shell。`sleep infinity` 只保持容器运行；要执行 shell 脚本，写 `sh -lc "..."` 并显式加引号。留空表示使用镜像自己的 ENTRYPOINT/CMD。</p>
               <p><b>CPUs 1.5</b>：Docker 的 CPU 配额，表示最多使用 1.5 个 CPU 核的算力（150%），不是“必须占用 1.5 核”。1 核建议给单个轻量 agent，编译任务可给 2–4。</p>
               <p><b>Memory</b>：cgroup 内存上限；超过会 OOM kill。Node agent + 浏览器/构建工具通常至少 1 GiB，开发构建建议 2–4 GiB。</p>

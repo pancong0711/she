@@ -2,18 +2,18 @@
 
 ## 1. Sandbox 不是 Workspace
 
-两者是不同层：
+两者是不同层，生命周期也应当分开：
 
 ```text
-Sandbox = 执行环境/容器边界
-Workspace = 挂载进 Sandbox 的持久化项目目录
+Sandbox   = 可重建的执行环境 + 运行时存储
+Workspace = agent 长期负责、用户显式授权的项目目录
 ```
 
-一个 sandbox 通常有：
+一个 sandbox 的运行时存储通常是：
 
 ```text
 ~/.local/share/she/sandboxes/<sandbox-name>/
-  workspace/    # 默认项目工作目录，bind mount 到容器 /workspace
+  scratch/      # sandbox 本地临时工作区，挂载到容器 /workspace（不是用户项目）
   inbox/        # 入站消息，只读挂载到 /inbox
   outbox/       # 出站文件，读写挂载到 /outbox
   home/         # agent HOME 持久化目录，挂载到 /home/agent
@@ -24,14 +24,26 @@ Workspace = 挂载进 Sandbox 的持久化项目目录
 
 其中：
 
-- `workspace` 是项目文件、代码、文档、报告；
+- `scratch` 是可重建的临时工作区，不是长期项目，也不应被当作 agent 的 workspace；
 - `home` 是 agent CLI/runtime、配置和会话状态（例如 `/home/agent/.agents`）；
 - `inbox/outbox` 是跨 sandbox 消息/文件路由；
 - `cache` 是可丢弃的缓存；
-- `sandbox.json` 是 broker registry 的元数据，不是用户 workspace。
+- `sandbox.json` 是 broker registry 的元数据。
 
-也可以把已授权的外部目录挂载为 sandbox workspace（read-write）或 `/legacy`（read-only）。
-此时 workspace 仍然是独立概念：sandbox 可以被删除，而不自动删除外部 workspace。
+长期项目必须来自用户授权的宿主机目录，并通过 broker 显式挂载：
+
+```text
+已授权 read-write 目录 -> /workspace
+已授权 read-only 目录  -> /legacy（迁移/参考）
+```
+
+因此：
+
+- 删除或重建 sandbox 不等于删除用户项目；
+- 外部 workspace 的生命周期由用户管理，不由 `docker rm` 决定；
+- worker 可以完全不用 workspace，只通过 inbox/outbox 接收任务和交付结果；
+- main 或长期 worktree agent 推荐绑定一个明确的 workspace；
+- 当前 Sandboxes 创建表单允许选择已授权 workspace；不选择时 `/workspace` 是 sandbox 本地 scratch。
 
 ## 2. stop / restart / destroy 的含义
 
@@ -106,7 +118,8 @@ Agent recipe 现在把每个版本安装到：
 ```
 
 两个版本可以同时存在于同一 sandbox 的持久化 home。
-把 current symlink 指向新版即可切换，无需删除 sandbox/workspace。
+把 current symlink 指向新版即可切换，无需删除 sandbox。若 agent 使用外部
+workspace，项目目录也不受 sandbox 升级/重建影响。
 
 > 当前 UI 的“安装 Agent”会把选定版本设为当前链接。
 > 真正运行中的 agent server 需要重启对应的容器内进程或 sandbox。

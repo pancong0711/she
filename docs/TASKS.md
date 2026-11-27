@@ -201,3 +201,5 @@
 - 2026-11-26：完成 Agent 版本管理：手填版本 + registry 校验 + 不存在回退 latest + 成功版本注册表（每 agent 最近 5 个）；安装改为 `/home/agent/.agents/<agent>/<version>` 多版本目录；OpenCode 内置推荐版本加入 2.4.2；Sandbox 创建/安装选择器两级化；新增 `docs/SANDBOX-LIFECYCLE.md`。发布 companion 0.7.0。
 
 - 2026-11-27：OpenCode v2 安装包切换为 `@opencode/cli`，解决 2.4.2 版本校验找不到的问题；Settings 检测新增 `/api/model` 模型列表和一键填入 provider/model；重新检测显示 url/health/model count；发布 companion 0.7.1。
+
+- 2026-11-27：修复 Docker `--mount` 生成非法裸 `rw` 导致 sandbox 创建必然失败的问题；新增 `buildDockerRunArgs()` 回归测试，并用本机 rootless Docker 完成真实容器挂载/读写验证。sandbox 临时目录改名为 `scratch/`，与用户项目 workspace 分离；Sandboxes 创建表单支持选择 Workspaces 授权目录并显式挂载为 `/workspace`。发布 companion 0.7.2 / core 0.3.1。新增 feishu4dsh 复用与分工建议文档；当前 feishu4dsh 主分支没有扫码 onboarding，扫码能力建议由 feishu4dsh 侧实现。

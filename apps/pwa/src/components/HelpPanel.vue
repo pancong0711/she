@@ -152,9 +152,10 @@ defineProps<{
       <ul>
         <li>所有 sandbox 数据位于当前用户可管理的 <code>$XDG_DATA_HOME/she/sandboxes</code>。</li>
         <li>broker 是唯一调用 Docker runtime 的组件，agent 不直接接触 Docker socket。</li>
-        <li>每个 sandbox 有独立 workspace/inbox/outbox/home/cache/logs。</li>
+        <li>每个 sandbox 有独立 scratch/inbox/outbox/home/cache/logs；scratch 不是用户项目 workspace。</li>
         <li>sandbox 默认是空容器：镜像决定使用什么 shell、Node/npm、git/curl 和 agent runtime。</li>
         <li>可在创建时选择 Agent recipe（OpenCode/dsh/Hermes/Pi），或创建后在卡片中安装；安装写入可写的 /home/agent/.local。</li>
+        <li>长期项目要绑定 Workspaces 页面授权的目录；worker 可以只用 inbox/outbox，不必拥有项目 workspace。</li>
         <li>每个 sandbox 卡片有“执行命令”入口，由 broker 通过 docker exec 执行一次性命令，不是完整 PTY。</li>
         <li>CPUs 是 CPU 核数配额（1.5 = 1.5 核算力）；PIDs 是容器内最大进程/线程数。</li>
         <li>egress 使用 Docker bridge 仅出站访问，不发布入站端口；none 完全离线。</li>
@@ -203,7 +204,7 @@ defineProps<{
         <dt>怎么进入 sandbox 执行命令？</dt>
         <dd>Sandboxes 卡片内点击“执行命令”，输入容器内 shell 命令。broker 通过 docker exec 执行，命令以 sh -lc 运行，并受 cwd、超时和输出大小限制。当前是一次性命令；完整交互式终端尚未实现。</dd>
         <dt>停止或删除 sandbox 会删除 workspace 吗？</dt>
-        <dd>stop/restart 只停止或重启容器，不删除数据。destroy 默认保留 sandbox 数据目录；只有显式 preserveData=false 才删除。workspace 是挂载进 sandbox 的项目目录，与容器生命周期不是同一个概念。</dd>
+        <dd>stop/restart 只停止或重启容器，不删除 sandbox 运行时数据。destroy 默认保留 sandbox 数据目录；只有显式 preserveData=false 才删除。用户项目 workspace 是单独授权的宿主机目录，与容器生命周期无关。</dd>
         <dt>升级 agent 版本需要重建 sandbox 吗？</dt>
         <dd>不需要。每个版本安装到 /home/agent/.agents/&lt;agent&gt;/&lt;version&gt;，当前版本链接到 /home/agent/.local/bin。可在同一 sandbox 安装新版本并重启对应进程；只有需要不同资源/网络/基础镜像时才建议新建 sandbox。</dd>
       </dl>

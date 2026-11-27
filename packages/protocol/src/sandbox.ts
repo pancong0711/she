@@ -83,14 +83,18 @@ export interface SandboxSpec {
   readonly extensions?: ExtensionBag
   /** Optional command executed inside the container after the image. */
   readonly command?: readonly string[]
-  /** Explicit host directory mounts, validated by the broker. */
+  /**
+   * Explicit host directory mounts, validated by the broker. When no
+   * workspace mount is supplied, `/workspace` is a sandbox-local scratch
+   * directory; it is not a user project workspace.
+   */
   readonly hostMounts?: readonly SandboxHostMount[]
 }
 
 export interface SandboxExecRequest {
   /** argv passed to `docker exec`; never interpreted by the host shell. */
   readonly command: readonly string[]
-  /** Absolute container path under an allowed writable/read-only root. Defaults to /workspace. */
+  /** Absolute container path under an allowed writable/read-only root. Defaults to /workspace (scratch unless a workspace host mount is configured). */
   readonly cwd?: string
   /** Hard timeout; defaults to 30s and is capped by the broker. */
   readonly timeoutMs?: number

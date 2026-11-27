@@ -97,7 +97,21 @@ POST body：
 
 页面支持查看授权、新增、选择 read-only/read-write、删除，并显示 realpath、r/w 权限、叶子目录状态和 warning。
 
-## 6. 强制边界
+## 6. Workspace 与 Sandbox 的关系
+
+```text
+Workspace = 用户授权的项目目录，可被 agent 长期使用
+Sandbox    = 可重建的执行环境和运行时存储
+```
+
+- 不绑定 workspace 时，容器的 `/workspace` 只是 sandbox 本地 scratch；
+- 绑定 read-write 授权目录时，broker 把它挂载为 `/workspace`；
+- read-only 授权目录可用于 `/legacy` 只读参考，不作为项目写工作区；
+- worker 可以只靠 `/inbox`、`/outbox` 交付，不必拥有 workspace；
+- main/长期 worktree agent 推荐绑定明确 workspace；
+- 删除 sandbox 不删除外部 workspace。
+
+## 7. 强制边界
 
 本版是授权策略注册表，不直接挂载宿主机目录。真正的目录挂载必须通过 broker 的 `hostMounts` 路径：broker 再次 realpath，拒绝根目录、home 本身、受保护系统路径、非目录，并强制 `/legacy` 和凭据 home 挂载只读。
 
@@ -111,7 +125,7 @@ POST body：
 
 因此 T6.5 标记为部分完成，不能把本页的 read-only 选择误解为已经对 worker 强制只读。
 
-## 7. 验收
+## 8. 验收
 
 - [x] 叶子目录校验；
 - [x] root/home/系统路径拒绝；

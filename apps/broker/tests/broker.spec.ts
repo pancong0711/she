@@ -141,7 +141,7 @@ describe('sandbox broker service', () => {
     const root = join(dir, 'sandboxes', 'sbx-0001')
     expect(await readFile(join(root, 'sandbox.json'), 'utf8')).toContain('sbx-0001')
     expect(await readFile(join(dir, 'broker', 'audit.jsonl'), 'utf8')).toContain('sandbox.created')
-    expect(docker.containers.get('she-sbx-0001')?.workspacePath).toBe(join(root, 'workspace'))
+    expect(docker.containers.get('she-sbx-0001')?.workspacePath).toBe(join(root, 'scratch'))
 
     expect((await service.start('sbx-0001')).status).toBe('running')
     expect((await service.stop('sbx-0001')).status).toBe('stopped')

@@ -19,6 +19,7 @@ Sandboxes → 新建 Sandbox
 - 镜像预设或自定义镜像；
 - 网络：egress/none；
 - 启动命令；
+- 可选：绑定 Workspaces 页面已授权的项目目录；
 - CPUs/Memory/PIDs。
 
 提交后调用：
@@ -87,6 +88,18 @@ cgroup 内存硬上限，超过会 OOM kill。Node agent 通常至少 1 GiB；�
 
 - `egress` → Docker bridge，仅出站访问模型/API，不发布入站端口；
 - `none` → 完全无网络。
+
+### Workspace 与 sandbox 本地 scratch
+
+`sandbox` 不是项目目录。sandbox 数据目录只保存 home/cache/inbox/outbox/logs
+以及临时 `scratch`。容器里的 `/workspace`：
+
+- 没有绑定项目时 → sandbox 本地 scratch，可重建；
+- 选择 Workspaces 页面授权的目录时 → broker 在 realpath 校验后把它显式挂载到
+  `/workspace`，项目生命周期不跟随 sandbox 删除。
+
+worker 可以只用 `/inbox` 和 `/outbox` 完成任务；需要长期项目/worktree 的 agent
+应绑定一个明确 workspace。详见 [Sandbox 生命周期](SANDBOX-LIFECYCLE.md)。
 
 ## 5. 让 sandbox 自带 agent
 
@@ -194,7 +207,8 @@ exec sleep infinity
 - 不自动停止/删除/重启 container（broker API 已有，PWA 生命周期 UI 待补）；
 - 当前安装发生在容器启动时，依赖 npm registry/GitHub 网络；生产环境仍推荐预构建并锁定 digest 的镜像；
 - 首次安装可能较慢，hermes 可能下载受管 Python runtime；
-- 首版创建表单不配置文件/凭据/workspace host mount；
+- 创建表单可选择已授权 workspace；不选择时 `/workspace` 是 sandbox 本地 scratch；
+- 文件/凭据 host mount 仍只在 Agent Migration 等受控流程中使用；
 - sandbox 创建需要 broker 与 Docker/rootless Docker 可用；
 - worker 当前仍运行在宿主用户空间，不会自动使用新 sandbox；
 - exec 是一次性命令，不是完整交互式 PTY。

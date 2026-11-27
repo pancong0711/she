@@ -6,6 +6,13 @@ import { BrokerError } from './errors.js'
 
 export interface SandboxPaths {
   readonly root: string
+  /**
+   * Sandbox-local scratch mounted at `/workspace` when no explicit host
+   * workspace is supplied. This is disposable runtime storage, not the
+   * user's project workspace.
+   */
+  readonly scratch: string
+  /** @deprecated compatibility alias for scratch (older registry entries). */
   readonly workspace: string
   readonly inbox: string
   readonly outbox: string
@@ -56,9 +63,11 @@ export function safeJoin(root: string, relativePath: string, label = 'path'): st
 
 export function sandboxPaths(dataRoot: string, name: string): SandboxPaths {
   const root = join(resolve(expandHome(dataRoot)), name)
+  const scratch = join(root, 'scratch')
   return {
     root,
-    workspace: join(root, 'workspace'),
+    scratch,
+    workspace: scratch,
     inbox: join(root, 'inbox'),
     outbox: join(root, 'outbox'),
     home: join(root, 'home'),

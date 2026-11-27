@@ -61,6 +61,49 @@ const SANDBOX_ENV = [
   'npm_config_cache=/cache/npm',
 ]
 
+/**
+ * Build a Docker `--mount` value for a bind mount.
+ *
+ * Docker rejects a literal `rw` field in `--mount` (`invalid field 'rw' must
+ * be a key=value pair`). Read-write is the default and must be expressed by
+ * omitting `readonly`; read-only uses the documented `readonly` field.
+ */
+export function bindMountArg(source: string, destination: string, readOnly: boolean): string {
+  return `type=bind,src=${source},dst=${destination}${readOnly ? ',readonly' : ''}`
+}
+
+/** Build the complete `docker run` argv. Exported so mount security can be tested without Docker. */
+export function buildDockerRunArgs(spec: DockerContainerSpec): string[] {
+  const args = [
+    'run', '-d',
+    '--name', spec.containerName,
+    '--hostname', spec.sandboxName,
+    '--read-only',
+    '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges',
+    '--network', spec.networkMode === 'none' ? 'none' : 'bridge',
+    ...SANDBOX_ENV.flatMap(value => ['--env', value]),
+    '--mount', bindMountArg(spec.workspacePath, '/workspace', spec.workspaceReadOnly === true),
+    '--mount', bindMountArg(spec.inboxPath, '/inbox', true),
+    '--mount', bindMountArg(spec.outboxPath, '/outbox', false),
+    '--mount', bindMountArg(spec.homePath, '/home/agent', false),
+    '--mount', bindMountArg(spec.cachePath, '/cache', false),
+    '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
+    '--label', `she.sandbox=${spec.sandboxName}`,
+    '--label', `she.role=${spec.role}`,
+  ]
+  if (spec.resources?.cpus !== undefined) args.push('--cpus', String(spec.resources.cpus))
+  if (spec.resources?.memoryMb !== undefined) args.push('--memory', `${String(spec.resources.memoryMb)}m`)
+  if (spec.resources?.pids !== undefined) args.push('--pids-limit', String(spec.resources.pids))
+  for (const mount of spec.extraMounts ?? []) {
+    args.push('--mount', bindMountArg(mount.source, mount.destination, mount.readOnly))
+  }
+  for (const [key, value] of Object.entries(spec.labels ?? {})) args.push('--label', `${key}=${value}`)
+  args.push(spec.image)
+  for (const arg of spec.command ?? []) args.push(arg)
+  return args
+}
+
 interface DockerState {
   readonly Status?: string
   readonly Running?: boolean
@@ -120,34 +163,7 @@ export class DockerCliRuntime implements DockerRuntime {
   }
 
   async createContainer(spec: DockerContainerSpec): Promise<void> {
-    const args = [
-      'run', '-d',
-      '--name', spec.containerName,
-      '--hostname', spec.sandboxName,
-      '--read-only',
-      '--cap-drop', 'ALL',
-      '--security-opt', 'no-new-privileges',
-      '--network', spec.networkMode === 'none' ? 'none' : 'bridge',
-      ...SANDBOX_ENV.flatMap(value => ['--env', value]),
-      '--mount', `type=bind,src=${spec.workspacePath},dst=/workspace,${spec.workspaceReadOnly === true ? 'ro' : 'rw'}`,
-      '--mount', `type=bind,src=${spec.inboxPath},dst=/inbox,ro`,
-      '--mount', `type=bind,src=${spec.outboxPath},dst=/outbox,rw`,
-      '--mount', `type=bind,src=${spec.homePath},dst=/home/agent,rw`,
-      '--mount', `type=bind,src=${spec.cachePath},dst=/cache,rw`,
-      '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
-      '--label', `she.sandbox=${spec.sandboxName}`,
-      '--label', `she.role=${spec.role}`,
-    ]
-    if (spec.resources?.cpus !== undefined) args.push('--cpus', String(spec.resources.cpus))
-    if (spec.resources?.memoryMb !== undefined) args.push('--memory', `${String(spec.resources.memoryMb)}m`)
-    if (spec.resources?.pids !== undefined) args.push('--pids-limit', String(spec.resources.pids))
-    for (const mount of spec.extraMounts ?? []) {
-      args.push('--mount', `type=bind,src=${mount.source},dst=${mount.destination},${mount.readOnly ? 'ro' : 'rw'}`)
-    }
-    for (const [key, value] of Object.entries(spec.labels ?? {})) args.push('--label', `${key}=${value}`)
-    args.push(spec.image)
-    for (const arg of spec.command ?? []) args.push(arg)
-    await this.run(args)
+    await this.run(buildDockerRunArgs(spec))
   }
 
   async start(containerName: string): Promise<void> {

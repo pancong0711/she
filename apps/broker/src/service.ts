@@ -247,7 +247,7 @@ export class SandboxBrokerService implements SandboxProvider {
     if (spec.image.trim() === '') throw new BrokerError('invalid_request', 'image must not be empty')
     const command = assertCommand(spec.command)
     const paths = sandboxPaths(this.options.dataRoot, name)
-    const hostMounts = await resolveHostMounts(spec.hostMounts, paths.workspace, this.options.homeDir ?? homedir())
+    const hostMounts = await resolveHostMounts(spec.hostMounts, paths.scratch, this.options.homeDir ?? homedir())
     const allowedCallers = spec.allowedCallers ?? ['main']
     const allowedTargets = spec.allowedTargets ?? []
     for (const value of [...allowedCallers, ...allowedTargets]) {
@@ -258,7 +258,7 @@ export class SandboxBrokerService implements SandboxProvider {
 
     await Promise.all([
       mkdir(paths.root, { recursive: true, mode: 0o700 }),
-      mkdir(paths.workspace, { recursive: true, mode: 0o700 }),
+      mkdir(paths.scratch, { recursive: true, mode: 0o700 }),
       mkdir(paths.inbox, { recursive: true, mode: 0o700 }),
       mkdir(paths.outbox, { recursive: true, mode: 0o700 }),
       mkdir(paths.home, { recursive: true, mode: 0o700 }),
