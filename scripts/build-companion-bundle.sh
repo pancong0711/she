@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${1:-${OUT_DIR:-$ROOT/artifacts/companion}}"
 VERSION="$(node -e "process.stdout.write(require('$ROOT/apps/companion/package.json').version)")"
+RELEASE_TAG="${SHE_COMPANION_RELEASE_TAG:-v${VERSION}-companion.1}"
 STAGE="$OUT_DIR/she-companion-$VERSION"
 ARCHIVE="$OUT_DIR/she-companion-$VERSION.tar.gz"
 
@@ -33,7 +34,10 @@ LAUNCHER
 chmod 0755 "$STAGE/bin/she-companion"
 
 tar -czf "$ARCHIVE" -C "$OUT_DIR" "she-companion-$VERSION"
-node scripts/companion-release-manifest.mjs --root "$ROOT" --bundle "$ARCHIVE" --launcher "$OUT_DIR/she-launcher.mjs" --out "$OUT_DIR/companion-release-manifest.json"
+node scripts/companion-release-manifest.mjs --root "$ROOT" --bundle "$ARCHIVE" --launcher "$OUT_DIR/she-launcher.mjs" --release-tag "$RELEASE_TAG" --out "$OUT_DIR/companion-release-manifest.json"
+# Stable channel pointer. Pages serves this file; start scripts and the PWA
+# update checker read it instead of the ambiguous repository-level "latest".
+cp "$OUT_DIR/companion-release-manifest.json" "$ROOT/apps/pwa/public/companion-release-manifest.json"
 echo
 echo "Built companion bundle:"
 ls -lh "$ARCHIVE" "$OUT_DIR/she-launcher.mjs"

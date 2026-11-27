@@ -27,14 +27,14 @@ import { fileURLToPath } from 'node:url'
 import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 import { installCompanionBundle, writeCompanionCommand } from './companion-installer.mjs'
 
-export const LAUNCHER_VERSION = '1'
+export const LAUNCHER_VERSION = '2'
 const RESTART_EXIT_CODE = 75
 const STARTUP_GRACE_MS = 20_000
 const installRoot = resolve(process.env.SHE_COMPANION_ROOT?.trim() || join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'share', 'she', 'companion'))
 const binDir = resolve(process.env.SHE_BIN_DIR?.trim() || join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.local', 'bin'))
 const port = Number(process.env.SHE_PWA_PORT ?? 8787)
 const manifestUrl = process.env.SHE_COMPANION_MANIFEST_URL?.trim()
-  || 'https://github.com/pancong0711/she/releases/latest/download/companion-release-manifest.json'
+  || 'https://pancong0711.github.io/she/companion-release-manifest.json'
 const currentPath = join(installRoot, 'current')
 const pendingPath = join(installRoot, 'update-pending.json')
 const checkUpdateOnStart = process.env.SHE_LAUNCHER_UPDATE_ON_START === '1'
@@ -70,10 +70,10 @@ async function fetchManifest(url) {
 async function downloadBundle(manifest) {
   const file = String(manifest.bundle.file).replace(/\\/g, '/').split('/').pop()
   if (!file) throw new Error('invalid companion bundle file name')
-  const baseUrl = manifestUrl.startsWith('file://')
-    ? new URL('.', manifestUrl).href
-    : new URL('.', manifestUrl).href
-  const url = new URL(file, baseUrl)
+  const fallbackUrl = new URL(file, new URL('.', manifestUrl).href).href
+  const url = new URL(typeof manifest.bundle.url === 'string' && manifest.bundle.url.trim() !== ''
+    ? manifest.bundle.url
+    : fallbackUrl)
   const staging = join(installRoot, 'staging')
   await mkdir(staging, { recursive: true, mode: 0o700 })
   const target = join(staging, file)

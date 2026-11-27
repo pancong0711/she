@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "name": "she-companion",
+  "version": "0.7.6",
+  "commit": "6511dc40315caed7ef8943736bb6ab48dfd932db",
+  "generatedAt": "2026-11-27T02:11:44.773Z",
+  "node": "^22.19.0 || >=24.0.0",
+  "protocols": {
+    "companionApi": "v1"
+  },
+  "entrypoint": {
+    "posix": "apps/companion/server.mjs",
+    "windows": "apps/companion/server.mjs"
+  },
+  "bundle": {
+    "file": "she-companion-0.7.6.tar.gz",
+    "url": "https://github.com/pancong0711/she/releases/download/v0.7.6-companion.1/she-companion-0.7.6.tar.gz",
+    "bytes": 725698,
+    "sha256": "b572c6b6989d8c6d85fc52caded0a174c548708c5a9c0ec564104a76737d69ef"
+  },
+  "launcher": {
+    "file": "she-launcher.mjs",
+    "url": "https://github.com/pancong0711/she/releases/download/v0.7.6-companion.1/she-launcher.mjs",
+    "bytes": 19735,
+    "sha256": "76cc7312874b5bb887297036e2dc453e56d356774a180b7782bc61df5ef2f594"
+  },
+  "installers": {
+    "posix": "install-companion.sh",
+    "windows": "install-companion.ps1"
+  }
+}

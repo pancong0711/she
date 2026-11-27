@@ -9,12 +9,18 @@ $Base = if ($env:SHE_COMPANION_RELEASE_BASE) {
 } elseif ($Tag) {
   "https://github.com/pancong0711/she/releases/download/$Tag"
 } else {
-  'https://github.com/pancong0711/she/releases/latest/download'
+  ''
 }
 $InstallRoot = if ($env:SHE_COMPANION_ROOT) { $env:SHE_COMPANION_ROOT } else { Join-Path $env:LOCALAPPDATA 'she\companion' }
 $BinDir = if ($env:SHE_BIN_DIR) { $env:SHE_BIN_DIR } else { Join-Path $env:LOCALAPPDATA 'she\bin' }
 $Port = if ($env:SHE_PWA_PORT) { [int]$env:SHE_PWA_PORT } else { 8787 }
-$ManifestUrl = if ($env:SHE_COMPANION_MANIFEST_URL) { $env:SHE_COMPANION_MANIFEST_URL } else { "$Base/companion-release-manifest.json" }
+$ManifestUrl = if ($env:SHE_COMPANION_MANIFEST_URL) {
+  $env:SHE_COMPANION_MANIFEST_URL
+} elseif ($env:SHE_COMPANION_RELEASE_BASE -or $Tag) {
+  "$Base/companion-release-manifest.json"
+} else {
+  'https://pancong0711.github.io/she/companion-release-manifest.json'
+}
 
 try {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -60,15 +66,21 @@ try {
   $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
   $launcherFile = [string]$manifest.launcher.file
   $expectedSha = [string]$manifest.launcher.sha256
+  $launcherUrl = [string]$manifest.launcher.url
   if (-not $launcherFile -or -not $expectedSha) {
     if (Launch-LocalLauncher) { exit 0 }
     throw 'release manifest has no launcher artifact; run the latest start.ps1 once'
   }
   if ($launcherFile -match '[\\/]' -or $launcherFile -match '\.\.') { throw 'invalid launcher file name' }
+  if (-not $launcherUrl) {
+    if (-not $Base) { throw 'release manifest has no launcher URL and no release base was provided' }
+    $launcherUrl = "$Base/$launcherFile"
+  }
+  if ($launcherUrl -notmatch '^https://') { throw 'launcher URL must use https://' }
 
   Write-Host "SHE bootstrap: downloading launcher $launcherFile"
   $launcherPath = Join-Path $work $launcherFile
-  Invoke-WebRequest -UseBasicParsing -Uri "$Base/$launcherFile" -OutFile $launcherPath
+  Invoke-WebRequest -UseBasicParsing -Uri $launcherUrl -OutFile $launcherPath
   $actualSha = (Get-FileHash $launcherPath -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($actualSha -ne $expectedSha.ToLowerInvariant()) { throw "launcher SHA-256 mismatch: expected $expectedSha got $actualSha" }
   & node --check $launcherPath

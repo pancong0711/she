@@ -211,3 +211,5 @@
 - 2026-11-27：修复 Chat 任务成功但看不到 OpenCode 最终回复：确认真实 OpenCode 2.3.2 后端会产出 agent.delta + report artifact；PWA 在 task.completed 或 snapshot 发现 succeeded 时刷新 artifacts，未收到实时 text delta 则从 report artifact 回填最终回复，并显示明确诊断。发布 companion 0.7.5。
 
 - 2026-11-27：核查 feishu4dsh R71 `gateway.v1` 薄适配：基础命令/卡片/事件/cursor 契约兼容；SHE 发布 `v0.1.0-packages.2`，`@she/client` 0.1.1 公开 artifacts/downloadArtifact 并增加 feishu4dsh consumer 契约测试。剩余跨仓库需求为 feishu4dsh 接入 artifact 下载与 Feishu sendFile/群聊审批，以及真机闭环。
+
+- 2026-11-27：修复 companion 更新通道被仓库级 GitHub latest 抢占的问题：发布 `v0.1.0-packages.2` 后 `releases/latest/download/companion-release-manifest.json` 变 404，旧 launcher fallback 导致新安装停留在 0.7.2。改为 Pages 独立 `companion-release-manifest.json` + manifest 内绝对 release URL；start.sh/start.ps1 去除版本/tag 硬编码；launcher 优先使用绝对 bundle URL。发布 companion 0.7.6。

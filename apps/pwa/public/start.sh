@@ -8,12 +8,18 @@ TAG="${SHE_COMPANION_RELEASE_TAG:-}"
 if [ -n "$TAG" ]; then
   BASE="${SHE_COMPANION_RELEASE_BASE:-https://github.com/pancong0711/she/releases/download/$TAG}"
 else
-  BASE="${SHE_COMPANION_RELEASE_BASE:-https://github.com/pancong0711/she/releases/latest/download}"
+  BASE="${SHE_COMPANION_RELEASE_BASE:-}"
 fi
 INSTALL_ROOT="${SHE_COMPANION_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/she/companion}"
 BIN_DIR="${SHE_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
 PORT="${SHE_PWA_PORT:-8787}"
-MANIFEST_URL="${SHE_COMPANION_MANIFEST_URL:-$BASE/companion-release-manifest.json}"
+if [ -n "${SHE_COMPANION_MANIFEST_URL:-}" ]; then
+  MANIFEST_URL="$SHE_COMPANION_MANIFEST_URL"
+elif [ -n "$BASE" ]; then
+  MANIFEST_URL="$BASE/companion-release-manifest.json"
+else
+  MANIFEST_URL="https://pancong0711.github.io/she/companion-release-manifest.json"
+fi
 
 if [ "$(id -u)" = "0" ]; then
   echo "✗ SHE companion must not run as root." >&2
@@ -52,18 +58,31 @@ const fs = require('fs')
 const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
 const file = manifest?.launcher?.file
 const sha = manifest?.launcher?.sha256
+const url = manifest?.launcher?.url
 if (typeof file !== 'string' || typeof sha !== 'string') process.exit(2)
-process.stdout.write(`${file}\n${sha}\n`)
+process.stdout.write(`${file}\n${sha}\n${typeof url === 'string' ? url : ''}\n`)
 NODE
 )" || { launch_local || { echo "✗ release manifest has no launcher artifact; run the latest start.sh once" >&2; exit 1; }; }
 LAUNCHER_FILE="$(printf '%s\n' "$LAUNCHER_META" | sed -n '1p')"
 LAUNCHER_SHA="$(printf '%s\n' "$LAUNCHER_META" | sed -n '2p')"
+LAUNCHER_URL="$(printf '%s\n' "$LAUNCHER_META" | sed -n '3p')"
 case "$LAUNCHER_FILE" in
   */*|..*) echo "✗ invalid launcher file name" >&2; exit 1 ;;
 esac
+if [ -z "$LAUNCHER_URL" ]; then
+  if [ -z "$BASE" ]; then
+    echo "✗ release manifest has no launcher URL and no release base was provided" >&2
+    exit 1
+  fi
+  LAUNCHER_URL="$BASE/$LAUNCHER_FILE"
+fi
+case "$LAUNCHER_URL" in
+  https://*|file://*) ;;
+  *) echo "✗ launcher URL must use https:// or file://" >&2; exit 1 ;;
+esac
 
 echo "SHE bootstrap: downloading launcher $LAUNCHER_FILE"
-curl -fL --retry 3 --connect-timeout 20 --max-time 120 -o "$WORK/$LAUNCHER_FILE" "$BASE/$LAUNCHER_FILE"
+curl -fL --retry 3 --connect-timeout 20 --max-time 120 -o "$WORK/$LAUNCHER_FILE" "$LAUNCHER_URL"
 if command -v sha256sum >/dev/null 2>&1; then
   ACTUAL="$(sha256sum "$WORK/$LAUNCHER_FILE" | awk '{print $1}')"
 else
