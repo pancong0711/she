@@ -56,10 +56,10 @@ artifacts/packages/
 feishu4dsh 侧可以使用：
 
 ```sh
-pnpm add /tmp/she-packages/she-protocol-0.1.0.tgz
-pnpm add /tmp/she-packages/she-client-0.1.0.tgz
+pnpm add /tmp/she-packages/she-protocol-0.1.1.tgz
+pnpm add /tmp/she-packages/she-client-0.1.2.tgz
 # 可选
-pnpm add /tmp/she-packages/she-gateway-sdk-0.1.0.tgz
+pnpm add /tmp/she-packages/she-gateway-sdk-0.1.1.tgz
 ```
 
 如果只安装 `she-client` 的 tarball，其传递依赖 `@she/protocol` 仍会按 semver 查找 registry；因此没有 registry 时，必须同时显式安装 `she-protocol` tarball 或在 pnpm overrides 中指向 tarball URL。
@@ -85,13 +85,13 @@ blockExoticSubdeps: false
 在 npm registry 发布前，使用 GitHub Release 固定 tarball：
 
 ```text
-https://github.com/pancong0711/she/releases/tag/v0.1.0-packages.2
+https://github.com/pancong0711/she/releases/tag/v0.1.1-packages.1
 ```
 
 消费说明见：
 
 ```text
-docs/RELEASE-0.1.0-PACKAGES.md
+docs/RELEASE-0.1.1-PACKAGES.1.md
 ```
 
 注意：tarball 的传递依赖需要同时配置 pnpm overrides，否则 `@she/protocol` / `@she/client` 会去找 registry。
@@ -132,7 +132,7 @@ GATEWAY_V1_SERVER_EVENT
 - [ ] `pnpm test` 通过；
 - [ ] `pnpm pack:public` 成功；
 - [ ] tarball 只包含 `dist/` 与 `package.json`；
-- [ ] client tarball dependency 已从 `workspace:*` 改写为 `0.1.0`；
+- [ ] client tarball dependency 已从 `workspace:*` 改写为当前 `@she/protocol` 版本；
 - [ ] golden fixtures 与 gateway protocol 一致；
 - [ ] README / CHANGELOG / 兼容矩阵已更新；
 - [ ] 记录 SHA-256 与 commit；
