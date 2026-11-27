@@ -1,6 +1,7 @@
-# Stable SHE companion bootstrap for Windows.
-# This file only fetches the checksum-verified stable launcher. Installation,
-# updates, restart and rollback live outside this script.
+# Stable SHE launcher entrypoint for Windows.
+# If the app is already installed, this script starts the local launcher
+# immediately (which checks for updates). Network bootstrap is only used for a
+# first install or an explicit launcher refresh.
 $ErrorActionPreference = 'Stop'
 
 $Tag = $env:SHE_COMPANION_RELEASE_TAG
@@ -38,6 +39,20 @@ if ($LASTEXITCODE -ne 0) { Write-Host "✗ Node.js must be ^22.19.0 || >=24.0.0"
 if (-not (Get-Command tar -ErrorAction SilentlyContinue)) { Write-Host "✗ tar.exe is required" -ForegroundColor Red; exit 1 }
 
 New-Item -ItemType Directory -Force -Path $InstallRoot, $BinDir | Out-Null
+
+# Local-first: after the first install, this is the normal app entrypoint.
+$localLauncher = Join-Path $InstallRoot 'launcher.mjs'
+if ($env:SHE_FORCE_LAUNCHER_REFRESH -ne '1' -and (Test-Path $localLauncher)) {
+  Write-Host 'SHE bootstrap: using installed launcher'
+  $env:SHE_PWA_PORT = [string]$Port
+  $env:SHE_COMPANION_ROOT = $InstallRoot
+  $env:SHE_BIN_DIR = $BinDir
+  $env:SHE_COMPANION_MANIFEST_URL = $ManifestUrl
+  $env:SHE_LAUNCHER_UPDATE_ON_START = '1'
+  & node $localLauncher
+  exit $LASTEXITCODE
+}
+
 $work = Join-Path $env:TEMP ("she-launcher-bootstrap-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 

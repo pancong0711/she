@@ -70,7 +70,15 @@ try {
 NODE
 }
 
-echo "SHE bootstrap: fetching launcher manifest"
+# Once installed, the local launcher is the application entrypoint. It owns
+# environment checks, remote version checks, updates and process supervision.
+# Set SHE_FORCE_LAUNCHER_REFRESH=1 only to repair/replace the launcher itself.
+if [ "${SHE_FORCE_LAUNCHER_REFRESH:-0}" != "1" ] && [ -f "$INSTALL_ROOT/launcher.mjs" ]; then
+  echo "SHE bootstrap: using installed launcher"
+  launch_local
+fi
+
+echo "SHE bootstrap: no usable local launcher; fetching launcher manifest"
 if ! download_file "$MANIFEST_URL" "$WORK/manifest.json" 30; then
   launch_local || { echo "✗ cannot download launcher manifest and no local launcher exists" >&2; exit 1; }
 fi

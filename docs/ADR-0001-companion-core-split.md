@@ -1,5 +1,7 @@
 # ADR-0001：稳定 companion + 可更新 core 的分层
 
+> 2026-11-27 更新：ADR-0005 修正了“companion 是稳定层”的表述。实际稳定层是 launcher；companion + bundled PWA 是可更新 app shell，core 是更高频业务运行时。
+
 > 日期：2026-11-25
 > 状态：已采纳，执行中（T7.1–T7.3 已落地）
 > 参考经验：`2609-assignment-assistant/docs/22-D71-engine-launcher-two-phase-update.md`

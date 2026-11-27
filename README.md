@@ -128,6 +128,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.2.tar.gz --core-
 - [SHE companion 0.2.1 发布说明](docs/RELEASE-0.2.1-COMPANION.md)
 - [ADR-0003：页面请求、supervisor 执行的 companion 更新](docs/ADR-0003-supervised-companion-update.md)
 - [ADR-0004：稳定 Companion Launcher](docs/ADR-0004-stable-companion-launcher.md)
+- [ADR-0005：App Shell、Launcher 与 Core 三层发布模型](docs/ADR-0005-app-shell-release-model.md)
 - [Companion 登录自启动](docs/AUTOSTART.md)
 - [Gateway 配置与 feishu4dsh 连接状态](docs/GATEWAY.md)
 - [Task Report Artifacts](docs/ARTIFACTS.md)
