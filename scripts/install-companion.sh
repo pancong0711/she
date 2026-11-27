@@ -38,6 +38,10 @@ if [ -e "$DEST" ]; then echo "✗ companion $VERSION already installed: $DEST" >
 if [ -L "$INSTALL_ROOT/current" ]; then ln -sfn "$(readlink "$INSTALL_ROOT/current")" "$INSTALL_ROOT/previous"; fi
 mv "$BUNDLE_DIR" "$DEST"
 ln -sfn "versions/$VERSION" "$INSTALL_ROOT/current"
+if [ -f "$DEST/bin/she-launcher.mjs" ]; then
+  cp "$DEST/bin/she-launcher.mjs" "$INSTALL_ROOT/launcher.mjs"
+  chmod 0755 "$INSTALL_ROOT/launcher.mjs"
+fi
 cat > "$INSTALL_ROOT/state.json" <<JSON
 {"schema":1,"current":"$VERSION","installedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","sourceArchive":"$(basename "$ARCHIVE")"}
 JSON
@@ -47,6 +51,9 @@ cat > "$BIN_DIR/she-companion" <<LAUNCHER
 set -euo pipefail
 export SHE_COMPANION_ROOT="$INSTALL_ROOT"
 export SHE_BIN_DIR="$BIN_DIR"
+if [ -f "$INSTALL_ROOT/launcher.mjs" ]; then
+  exec node "$INSTALL_ROOT/launcher.mjs" "\$@"
+fi
 exec node "$INSTALL_ROOT/current/apps/companion/supervisor.mjs" "\$@"
 LAUNCHER
 chmod 0755 "$BIN_DIR/she-companion"

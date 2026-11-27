@@ -19,6 +19,7 @@ import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
 import { dockerGuidance, summarizePreflight } from './preflight.mjs'
 import { authorizeWorkspace, listWorkspaceAuthorizations, removeWorkspaceAuthorization } from './workspaces.mjs'
 import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
+import { installCompanionBundle } from './companion-installer.mjs'
 import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
 import { autostartOptionsFromEnv, autostartStatus, disableAutostart, enableAutostart } from './autostart.mjs'
 import { probeGatewayAdapter, readGatewayConfig, writeGatewayConfig } from './gateway.mjs'
@@ -61,8 +62,10 @@ const agentVersionRegistryPath = process.env.SHE_AGENT_VERSION_REGISTRY?.trim() 
 const companionInstallRoot = process.env.SHE_COMPANION_ROOT?.trim() || undefined
 const companionBinDir = process.env.SHE_BIN_DIR?.trim() || join(homedir(), '.local', 'bin')
 const companionSupervised = process.env.SHE_COMPANION_SUPERVISED === '1'
+const launcherVersion = process.env.SHE_LAUNCHER_VERSION?.trim() || undefined
+const launcherPath = companionInstallRoot === undefined ? undefined : join(companionInstallRoot, 'launcher.mjs')
 const COMPANION_RESTART_EXIT_CODE = 75
-const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.3.0-core.1/release-manifest.json'
+const defaultCoreManifestUrl = process.env.SHE_CORE_MANIFEST_URL?.trim() || 'https://github.com/pancong0711/she/releases/download/v0.3.1-core.1/release-manifest.json'
 const controlSocketPath = process.env.SHE_CONTROL_SOCKET?.trim() || join(runtimeHome, 'she', 'control.sock')
 const controlTokenFile = process.env.SHE_TOKEN_FILE?.trim() || join(configHome, 'she', 'token')
 const brokerSocketPath = process.env.SHE_BROKER_SOCKET?.trim() || join(runtimeHome, 'she', 'broker.sock')
@@ -988,28 +991,24 @@ async function applyCompanionUpdate(manifestUrl) {
   if (!companionSupervised || companionInstallRoot === undefined) {
     throw new Error('companion is not running under the launcher supervisor; restart/update from the page is unavailable')
   }
-  if (process.platform === 'win32') {
-    throw new Error('page-driven companion update is currently available on Linux/macOS only; use start.ps1 on Windows')
-  }
   const checked = await checkCompanionUpdate(manifestUrl)
   if (!checked.needsUpdate) throw new Error(`companion is already ${companionVersion}`)
-  const previousTarget = await readlink(join(companionInstallRoot, 'current')).catch(() => undefined)
-  if (previousTarget === undefined) throw new Error('cannot resolve companion current version')
   const download = await downloadCompanionBundle(manifestUrl, checked.manifest)
-  const installScript = join(repoRoot, 'scripts/install-companion.sh')
-  const install = await captureCommand(undefined, 'bash', [
-    installScript,
-    download.path,
-    '--sha256', download.sha256,
-    '--install-root', companionInstallRoot,
-    '--bin-dir', companionBinDir,
-  ])
-  if (!install.ok) throw new Error(`companion installer failed: ${install.stderr || install.stdout || 'unknown error'}`)
+  const installed = await installCompanionBundle({
+    archivePath: download.path,
+    expectedVersion: checked.manifest.version,
+    expectedSha256: download.sha256,
+    installRoot: companionInstallRoot,
+    binDir: companionBinDir,
+    platform: process.platform,
+    sourceArchive: download.path.split(/[\\/]/).pop(),
+  })
+  if (typeof installed.previousTarget !== 'string') throw new Error('cannot resolve companion current version for rollback')
   await writeFile(join(companionInstallRoot, 'update-pending.json'), `${JSON.stringify({
     schema: 1,
     from: companionVersion,
     to: checked.manifest.version,
-    previousTarget,
+    previousTarget: installed.previousTarget,
     bundleSha256: download.sha256,
     createdAt: Date.now(),
   }, null, 2)}\n`, { mode: 0o600 })
@@ -1749,6 +1748,8 @@ async function handleCompanionApi(request, response) {
         supervised: companionSupervised,
         sourceCheckout,
         ...(companionInstallRoot === undefined ? {} : { installRoot: companionInstallRoot }),
+        ...(launcherVersion === undefined ? {} : { launcherVersion }),
+        ...(launcherPath === undefined ? {} : { launcherInstalled: existsSync(launcherPath) }),
         privilege: {
           rootRequired: false,
           executesSudo: false,

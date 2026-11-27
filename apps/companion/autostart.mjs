@@ -26,7 +26,7 @@ Type=simple
 Environment=${systemdQuote(`SHE_PWA_PORT=${options.port}`)}
 Environment=${systemdQuote(`SHE_COMPANION_ROOT=${options.installRoot}`)}
 Environment=${systemdQuote(`SHE_BIN_DIR=${options.binDir}`)}
-ExecStart=${systemdQuote(options.execPath)} ${systemdQuote(join(options.installRoot, 'current', 'apps', 'companion', 'supervisor.mjs'))}
+ExecStart=${systemdQuote(options.execPath)} ${systemdQuote(join(options.installRoot, 'launcher.mjs'))}
 Restart=on-failure
 RestartSec=2
 
@@ -44,7 +44,7 @@ export function buildLaunchAgentPlist(options) {
   <key>ProgramArguments</key>
   <array>
     <string>${xmlEscape(options.execPath)}</string>
-    <string>${xmlEscape(join(options.installRoot, 'current', 'apps', 'companion', 'supervisor.mjs'))}</string>
+    <string>${xmlEscape(join(options.installRoot, 'launcher.mjs'))}</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -60,7 +60,7 @@ export function buildLaunchAgentPlist(options) {
 }
 
 export function buildWindowsStartupCmd(options) {
-  return `@echo off\r\nset "SHE_PWA_PORT=${options.port}"\r\nset "SHE_COMPANION_ROOT=${options.installRoot}"\r\nset "SHE_BIN_DIR=${options.binDir}"\r\nstart "" /min "${options.execPath}" "${join(options.installRoot, 'current', 'apps', 'companion', 'supervisor.mjs')}"\r\n`
+  return `@echo off\r\nset "SHE_PWA_PORT=${options.port}"\r\nset "SHE_COMPANION_ROOT=${options.installRoot}"\r\nset "SHE_BIN_DIR=${options.binDir}"\r\nstart "" /min "${options.execPath}" "${join(options.installRoot, 'launcher.mjs')}"\r\n`
 }
 
 async function pathExists(path) {
@@ -111,7 +111,7 @@ export async function enableAutostart(options) {
     if (enabled) return autostartStatus(options)
     // Fallback for desktops without a usable user systemd manager.
     await unlink(unitPath).catch(() => undefined)
-    const exec = `env SHE_PWA_PORT=${options.port} SHE_COMPANION_ROOT=${systemdQuote(options.installRoot)} SHE_BIN_DIR=${systemdQuote(options.binDir)} ${systemdQuote(options.execPath)} ${systemdQuote(join(options.installRoot, 'current', 'apps', 'companion', 'supervisor.mjs'))}`
+    const exec = `env SHE_PWA_PORT=${options.port} SHE_COMPANION_ROOT=${systemdQuote(options.installRoot)} SHE_BIN_DIR=${systemdQuote(options.binDir)} ${systemdQuote(options.execPath)} ${systemdQuote(join(options.installRoot, 'launcher.mjs'))}`
     const desktop = `[Desktop Entry]\nType=Application\nName=SHE Companion\nComment=SHE local companion\nExec=${exec}\nX-GNOME-Autostart-enabled=true\nTerminal=false\n`
     await mkdir(join(options.configHome, 'autostart'), { recursive: true, mode: 0o700 })
     await writeFile(desktopPath, desktop, { mode: 0o644 })

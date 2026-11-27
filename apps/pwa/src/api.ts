@@ -216,6 +216,8 @@ export interface CompanionHealth {
   readonly supervised?: boolean
   readonly sourceCheckout?: boolean
   readonly installRoot?: string
+  readonly launcherVersion?: string
+  readonly launcherInstalled?: boolean
 }
 
 export interface JobSummary {
@@ -746,10 +748,10 @@ export interface CoreUpdateCheck {
 
 export const DEFAULT_CORE_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/download/v0.3.1-core.1/release-manifest.json'
 
-export const COMPANION_RELEASE_VERSION = '0.7.2'
+export const COMPANION_RELEASE_VERSION = '0.7.3'
 export const PWA_BUILD_VERSION = COMPANION_RELEASE_VERSION
-export const COMPANION_MIN_VERSION = '0.7.2'
-export const COMPANION_RELEASE_TAG = 'v0.7.2-companion.1'
+export const COMPANION_MIN_VERSION = '0.7.3'
+export const COMPANION_RELEASE_TAG = 'v0.7.3-companion.1'
 export const COMPANION_RELEASE_URL = `https://github.com/pancong0711/she/releases/tag/${COMPANION_RELEASE_TAG}`
 export const COMPANION_MANIFEST_URL = 'https://github.com/pancong0711/she/releases/latest/download/companion-release-manifest.json'
 export const COMPANION_BUNDLE_URL = `https://github.com/pancong0711/she/releases/download/${COMPANION_RELEASE_TAG}/she-companion-${COMPANION_RELEASE_VERSION}.tar.gz`

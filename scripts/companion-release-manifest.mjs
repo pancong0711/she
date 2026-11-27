@@ -14,9 +14,11 @@ const args = process.argv.slice(2).reduce((acc, item, index, list) => {
 }, {})
 const repoRoot = resolve(args.root ?? process.cwd())
 const bundle = resolve(args.bundle)
+const launcher = args.launcher === undefined ? undefined : resolve(args.launcher)
 const packageJson = JSON.parse(await readFile(resolve(repoRoot, 'apps/companion/package.json'), 'utf8'))
 const commit = args.commit ?? (await execFileAsync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'])).stdout.trim()
 const bytes = await readFile(bundle)
+const launcherBytes = launcher === undefined ? undefined : await readFile(launcher)
 const manifest = {
   schema: 1,
   name: 'she-companion',
@@ -31,6 +33,13 @@ const manifest = {
     bytes: (await stat(bundle)).size,
     sha256: createHash('sha256').update(bytes).digest('hex'),
   },
+  ...(launcherBytes === undefined ? {} : {
+    launcher: {
+      file: basename(launcher),
+      bytes: (await stat(launcher)).size,
+      sha256: createHash('sha256').update(launcherBytes).digest('hex'),
+    },
+  }),
   installers: {
     posix: 'install-companion.sh',
     windows: 'install-companion.ps1',

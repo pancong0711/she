@@ -107,15 +107,16 @@ PWA 静态资源内直接提供：
 ```text
 /start.bat       # Windows：下载并运行 start.ps1
 /start.ps1       # Windows：下载、校验、安装 companion、启动并打开浏览器
-/start.command   # macOS：下载并运行 start.sh
-/start.sh        # macOS/Linux：下载、校验、安装 companion、启动并打开浏览器
+/start.command   # macOS：首次运行 start.sh 的包装器
+/start.sh        # macOS/Linux：下载并校验稳定 launcher，然后由 launcher 安装/启动 companion
 ```
 
 用户从 PWA 点击下载后：
 
 - Windows：双击 `start.bat`；
 - macOS：双击 `start.command`；
-- Linux/macOS：`bash start.sh`。
+- Linux/macOS：首次运行 `bash start.sh`。
+- 之后 companion 的升级在 Settings 中“检查更新 → 安装并重启”完成，不需要重新下载 start.sh。
 
 launcher 会：
 

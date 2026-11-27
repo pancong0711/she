@@ -15,14 +15,14 @@ describe('companion autostart templates', () => {
     const unit = buildSystemdUnit(options)
     expect(unit).toContain('SHE_PWA_PORT=8787')
     expect(unit).toContain('/home/user/.local/share/she/companion')
-    expect(unit).toContain('supervisor.mjs')
+    expect(unit).toContain('launcher.mjs')
     expect(unit).toContain('WantedBy=default.target')
     expect(unit).not.toContain('User=root')
   })
 
   it('builds launchd and Windows startup artifacts', () => {
     expect(buildLaunchAgentPlist(options)).toContain('dev.she.companion')
-    expect(buildWindowsStartupCmd(options)).toContain('supervisor.mjs')
+    expect(buildWindowsStartupCmd(options)).toContain('launcher.mjs')
     expect(buildWindowsStartupCmd(options)).toContain('SHE_COMPANION_ROOT')
   })
 })

@@ -5,7 +5,7 @@
 
 ## 1. 是否每次都要运行 start.sh/bat
 
-默认是。`start.sh`/`start.bat` 是一次性启动器；关闭终端、停止进程或重启系统后不会自动恢复。
+首次需要运行一次 `start.sh`/`start.bat` 安装稳定 launcher。之后可通过已安装的 `she-companion` 命令或登录自启动恢复；关闭终端、停止进程或重启系统后默认不会自动恢复。
 
 可以在 Settings → Companion 版本与生命周期 → 登录自启动 中启用用户级自启动。
 
@@ -72,4 +72,4 @@ systemd --user 通常在桌面登录时启动。未登录启动需要 linger，�
 
 - macOS/Windows 自启动尚未真机验收；
 - Linux systemd --user 在不同桌面/容器环境可能不可用，已提供 XDG fallback；
-- 首次启用前需要 companion 由 start.sh supervisor 启动。
+- 首次启用前需要 companion 由 start.sh/start.ps1 安装的稳定 launcher 启动；自启动指向 `$INSTALL_ROOT/launcher.mjs`，不指向版本目录。

@@ -453,14 +453,14 @@ async function toggleAutostart(enabled: boolean): Promise<void> {
 
 async function shutdownCompanionFromPage(): Promise<void> {
   if (companionActionRunning.value !== '') return
-  if (!window.confirm('停止 companion 后，本页面将无法再访问本地 API。你需要重新运行 start.sh 才能恢复。继续吗？')) return
+  if (!window.confirm('停止 companion 后，本页面将无法再访问本地 API。可通过已安装的 she-companion 启动器恢复；尚未安装启动器时才需要重新运行一次 start.sh。继续吗？')) return
   companionActionRunning.value = 'shutdown'
   companionMessage.value = ''
   companionUpdateError.value = ''
   try {
     await shutdownCompanion()
     companion.value = null
-    companionMessage.value = 'Companion 已停止。请关闭页面并重新运行 start.sh/start.command/start.bat。'
+    companionMessage.value = 'Companion 已停止。可运行已安装的 she-companion/launcher 恢复；尚未安装时再运行一次 start.sh/start.command/start.bat。'
   } catch (cause) {
     companionUpdateError.value = cause instanceof Error ? cause.message : String(cause)
   } finally {
@@ -1582,7 +1582,7 @@ onBeforeUnmount(() => {
 
           <div class="card download-card">
             <h3>下载安装包</h3>
-            <p class="muted">首次使用需要在电脑上运行一次安装脚本。安装器和 bundle 均可校验 SHA-256，且不请求 root。</p>
+            <p class="muted">首次使用需要在电脑上运行一次启动脚本，它会安装稳定的 launcher。之后的 companion 升级在 Settings 中“检查更新 → 安装并重启”完成，不需要重新下载启动脚本。所有下载均校验 SHA-256，且不请求 root。</p>
             <div class="hero-actions">
               <a class="primary" href="./start.bat" download>Windows 一键启动 start.bat</a>
               <a class="primary" href="./start.command" download>macOS 一键启动 start.command</a>
@@ -1635,7 +1635,8 @@ onBeforeUnmount(() => {
               </p>
               <p>
                 这里是 127.0.0.1 本地 companion 提供的页面/API；GitHub Pages 更新不会自动替换本机正在运行的 companion。
-                请先在 Settings 中更新 companion，或停止旧进程后重新运行 start.sh / start.command / start.bat。
+                请在 Settings 中“检查 companion 更新 → 安装并重启”。稳定 launcher 会处理重启和失败回滚；
+                start.sh / start.command / start.bat 只用于首次安装或启动器缺失时的恢复。
               </p>
               <div class="hero-actions">
                 <button class="primary" @click="active = 'settings'">打开 Companion 更新</button>
@@ -1913,11 +1914,11 @@ onBeforeUnmount(() => {
             Docker/Node 等卡片的安装命令需要新版 companion 的 <code>/api/packages</code> 返回 <code>install</code> 字段。
           </p>
           <p>
-            仅安装新 bundle 不会替换正在运行的旧进程。请先停止旧 companion，再重新运行新版 <code>start.sh</code>，
-            然后回到本页点击 Refresh。
+            优先在 Settings 中执行“检查 companion 更新 → 安装并重启”。稳定 launcher 会切换到新版本并回滚启动失败的新版本。
+            只有在页面内更新不可用（例如首次从很旧的直接启动方式迁移）时，才需要停止旧 companion 后运行一次新版 <code>start.sh</code>。
           </p>
           <div class="package-actions">
-            <a class="primary" href="./start.sh" download>下载新版 start.sh</a>
+            <button class="primary" @click="active = 'settings'">打开 Companion 更新</button>
             <button class="secondary" :disabled="loading" @click="refresh">重新连接并刷新</button>
           </div>
         </div>
@@ -2087,12 +2088,13 @@ onBeforeUnmount(() => {
             <div><span>install root</span><b><code>{{ companion?.installRoot ?? '-' }}</code></b></div>
             <div><span>supervised</span><b>{{ companion?.supervised ? 'yes' : 'no' }}</b></div>
             <div><span>source checkout</span><b>{{ companion?.sourceCheckout === true ? 'yes' : companion?.sourceCheckout === false ? 'no (installed bundle)' : 'unknown' }}</b></div>
+            <div><span>launcher</span><b>{{ companion?.launcherVersion ?? '-' }} · {{ companion?.launcherInstalled ? 'installed' : 'legacy supervisor' }}</b></div>
           </div>
           <p v-if="companionMessage" class="success-text">{{ companionMessage }}</p>
           <p v-if="companionUpdateError" class="error-text">{{ companionUpdateError }}</p>
           <p v-if="!companion?.supervised" class="warn-text">
-            当前 companion 不是由 start.sh/start.command/start.bat 的 supervisor 启动，页面内重启和更新不可用。
-            请通过 launcher 启动后再使用这些操作。
+            当前 companion 不是由稳定 launcher/supervisor 启动，页面内重启和更新不可用。
+            运行一次最新启动脚本安装 stable launcher，之后即可在页面内更新；日常升级不需要重新下载启动脚本。
           </p>
           <div class="job-actions">
             <button class="secondary" :disabled="companionActionRunning !== '' || !companion?.supervised" @click="restartCompanionFromPage">

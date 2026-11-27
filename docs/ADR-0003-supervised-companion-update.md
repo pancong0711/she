@@ -1,7 +1,7 @@
 # ADR-0003：页面请求、supervisor 执行的 companion 更新
 
 > 日期：2026-11-26
-> 状态：已采纳
+> 状态：已采纳；更新安装细节由 [ADR-0004](ADR-0004-stable-companion-launcher.md) 演进
 > 关联：ADR-0001、companion 0.3.0
 
 ## 背景

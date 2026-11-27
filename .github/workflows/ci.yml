@@ -43,7 +43,10 @@ jobs:
       - name: Check stable companion/core scripts
         run: |
           node --check apps/companion/server.mjs
+          node --check apps/companion/launcher.mjs
+          node --check apps/companion/companion-installer.mjs
           node --check run-core.mjs
+          bash -n apps/pwa/public/start.sh
           node scripts/release-manifest.mjs --out /tmp/she-release-manifest.json
 
       - name: Build and install core bundle
@@ -56,9 +59,13 @@ jobs:
       - name: Build and install companion bundle
         run: |
           pnpm build:companion
+          node -e "const m=require('./artifacts/companion/companion-release-manifest.json'); if(!m.launcher?.sha256) process.exit(1)"
+          test -f artifacts/companion/she-launcher.mjs
           BUNDLE="artifacts/companion/$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').bundle.file)")"
           bash scripts/install-companion.sh "$BUNDLE" --sha256 "$(node -e "process.stdout.write(require('./artifacts/companion/companion-release-manifest.json').bundle.sha256)")" --install-root /tmp/she-companion-install --bin-dir /tmp/she-companion-install/bin
           test -x /tmp/she-companion-install/current/bin/she-companion
+          test -f /tmp/she-companion-install/launcher.mjs
+          node --check /tmp/she-companion-install/launcher.mjs
 
       - name: Build PWA
         run: pnpm pwa:build
