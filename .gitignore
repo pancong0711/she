@@ -8,6 +8,7 @@ node_modules/
 dist/
 lib/
 apps/pwa/public/she-launcher.mjs
+apps/pwa/public/she-companion-*.tar.gz
 *.tsbuildinfo
 *.tgz
 

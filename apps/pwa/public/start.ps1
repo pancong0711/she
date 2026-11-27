@@ -63,7 +63,7 @@ function Download-File([string]$Uri, [string]$OutFile) {
   }
   $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
   if (-not $curl) { return $false }
-  & $curl.Source -fL --http1.1 --retry 3 --retry-delay 1 --connect-timeout 20 --max-time 120 -o $OutFile $Uri
+  & $curl.Source -fL --http1.1 --retry 3 --retry-delay 1 --connect-timeout 20 --max-time 45 -o $OutFile $Uri
   return $LASTEXITCODE -eq 0
 }
 
@@ -90,6 +90,7 @@ try {
   $launcherFile = [string]$manifest.launcher.file
   $expectedSha = [string]$manifest.launcher.sha256
   $launcherUrl = [string]$manifest.launcher.url
+  $launcherFallbackUrl = [string]$manifest.launcher.fallbackUrl
   if (-not $launcherFile -or -not $expectedSha) {
     if (Launch-LocalLauncher) { exit 0 }
     throw 'release manifest has no launcher artifact; run the latest start.ps1 once'
@@ -103,7 +104,11 @@ try {
 
   $launcherPath = Join-Path $work $launcherFile
   if (-not (Download-Launcher $launcherUrl)) {
-    $fallbackUri = [System.Uri]::new([System.Uri]$ManifestUrl, $launcherFile).AbsoluteUri
+    $fallbackUri = if ($launcherFallbackUrl) {
+      $launcherFallbackUrl
+    } else {
+      [System.Uri]::new([System.Uri]$ManifestUrl, $launcherFile).AbsoluteUri
+    }
     if ($fallbackUri -ne $launcherUrl) {
       Write-Host 'SHE bootstrap: primary launcher download failed; trying channel mirror'
       if (-not (Download-Launcher $fallbackUri)) {

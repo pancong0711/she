@@ -26,7 +26,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { compareVersions, resolveCompanionBundleUrl, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
+import { compareVersions, companionAssetUrls, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 import { installCompanionBundle, writeCompanionCommand } from './companion-installer.mjs'
 
 export const LAUNCHER_VERSION = '2'
@@ -127,22 +127,28 @@ async function fetchManifest(url) {
 async function downloadBundle(manifest) {
   const file = String(manifest.bundle.file).replace(/\\/g, '/').split('/').pop()
   if (!file) throw new Error('invalid companion bundle file name')
-  const url = new URL(resolveCompanionBundleUrl(manifestUrl, manifest))
   const staging = join(installRoot, 'staging')
   await mkdir(staging, { recursive: true, mode: 0o700 })
   const target = join(staging, file)
-  let bytes
-  if (url.protocol === 'file:') {
-    bytes = await readFile(url)
-  } else {
-    bytes = await downloadBytesWithCurlFallback(url.href, 120_000)
+  let lastError
+  for (const href of companionAssetUrls(manifestUrl, manifest.bundle, 'bundle')) {
+    const url = new URL(href)
+    try {
+      const bytes = url.protocol === 'file:'
+        ? await readFile(url)
+        : await downloadBytesWithCurlFallback(url.href, 120_000)
+      const actual = createHash('sha256').update(bytes).digest('hex')
+      if (actual !== String(manifest.bundle.sha256).toLowerCase()) {
+        throw new Error(`companion bundle SHA-256 mismatch: expected ${String(manifest.bundle.sha256)} got ${actual}`)
+      }
+      await writeFile(target, bytes, { mode: 0o600 })
+      return { path: target, sha256: actual }
+    } catch (error) {
+      lastError = error
+      log(`companion bundle download failed from ${url.href}: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
-  const actual = createHash('sha256').update(bytes).digest('hex')
-  if (actual !== String(manifest.bundle.sha256).toLowerCase()) {
-    throw new Error(`companion bundle SHA-256 mismatch: expected ${String(manifest.bundle.sha256)} got ${actual}`)
-  }
-  await writeFile(target, bytes, { mode: 0o600 })
-  return { path: target, sha256: actual }
+  throw lastError instanceof Error ? lastError : new Error('companion bundle download failed')
 }
 
 async function ensureInstalled(targetManifest) {

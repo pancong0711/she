@@ -11,13 +11,15 @@ describe('companion release channel manifest', () => {
     const manifest = await readJson(new URL('../public/companion-release-manifest.json', import.meta.url))
     const version = String(companion.version)
     const tag = `v${version}-companion.1`
-    const bundle = manifest.bundle as { file?: string; url?: string; sha256?: string }
-    const launcher = manifest.launcher as { file?: string; url?: string; sha256?: string }
+    const bundle = manifest.bundle as { file?: string; url?: string; fallbackUrl?: string; sha256?: string }
+    const launcher = manifest.launcher as { file?: string; url?: string; fallbackUrl?: string; sha256?: string }
     expect(manifest.version).toBe(version)
     expect(bundle.file).toBe(`she-companion-${version}.tar.gz`)
     expect(bundle.url).toBe(`https://github.com/pancong0711/she/releases/download/${tag}/she-companion-${version}.tar.gz`)
+    expect(bundle.fallbackUrl).toBe(`https://pancong0711.github.io/she/she-companion-${version}.tar.gz`)
     expect(launcher.file).toBe('she-launcher.mjs')
     expect(launcher.url).toBe(`https://github.com/pancong0711/she/releases/download/${tag}/she-launcher.mjs`)
+    expect(launcher.fallbackUrl).toBe('https://pancong0711.github.io/she/she-launcher.mjs')
     expect(bundle.sha256).toMatch(/^[a-f0-9]{64}$/)
     expect(launcher.sha256).toMatch(/^[a-f0-9]{64}$/)
   })

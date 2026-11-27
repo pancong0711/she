@@ -34,13 +34,16 @@ chmod 0755 "$STAGE/bin/she-companion"
 
 tar -czf "$ARCHIVE" -C "$OUT_DIR" "she-companion-$VERSION"
 node scripts/companion-release-manifest.mjs --root "$ROOT" --bundle "$ARCHIVE" --launcher "$OUT_DIR/she-launcher.mjs" --release-tag "$RELEASE_TAG" --out "$OUT_DIR/companion-release-manifest.json"
-# Stable channel pointer. Pages serves this file; start scripts and the PWA
-# update checker read it instead of the ambiguous repository-level "latest".
-# PWA was built before the manifest was generated, so update both the public
-# source copy and every already-built dist used by pages/companion hosting.
+# Stable channel pointer. Pages serves this manifest plus fallback copies of
+# the bundle and launcher, so a blocked GitHub release host cannot break first
+# install or updates. PWA was built before these files were generated, so copy
+# them into both the public source tree and every already-built dist.
 cp "$OUT_DIR/companion-release-manifest.json" "$ROOT/apps/pwa/public/companion-release-manifest.json"
+cp "$ARCHIVE" "$ROOT/apps/pwa/public/$(basename "$ARCHIVE")"
 cp "$OUT_DIR/companion-release-manifest.json" "$ROOT/apps/pwa/dist/companion-release-manifest.json"
+cp "$ARCHIVE" "$ROOT/apps/pwa/dist/$(basename "$ARCHIVE")"
 cp "$OUT_DIR/companion-release-manifest.json" "$STAGE/apps/pwa/dist/companion-release-manifest.json"
+cp "$ARCHIVE" "$STAGE/apps/pwa/dist/$(basename "$ARCHIVE")"
 echo
 echo "Built companion bundle:"
 ls -lh "$ARCHIVE" "$OUT_DIR/she-launcher.mjs"

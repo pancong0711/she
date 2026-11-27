@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   compareVersions,
   parseVersion,
+  companionAssetUrls,
   resolveCompanionAssetUrl,
   resolveCompanionBundleUrl,
   validateCompanionManifest,
@@ -39,10 +40,15 @@ describe('companion update helpers', () => {
       bundle: {
         file: 'she-companion-0.7.8.tar.gz',
         url: 'https://github.com/pancong0711/she/releases/download/v0.7.8-companion.1/she-companion-0.7.8.tar.gz',
+        fallbackUrl: 'https://pancong0711.github.io/she/she-companion-0.7.8.tar.gz',
         sha256: 'a'.repeat(64),
       },
     }
     expect(resolveCompanionBundleUrl(manifestUrl, manifest)).toBe(manifest.bundle.url)
+    expect(companionAssetUrls(manifestUrl, manifest.bundle)).toEqual([
+      manifest.bundle.url,
+      manifest.bundle.fallbackUrl,
+    ])
     expect(resolveCompanionAssetUrl(manifestUrl, { file: 'fallback.tar.gz' })).toBe(
       'https://pancong0711.github.io/she/fallback.tar.gz',
     )

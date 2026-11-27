@@ -22,6 +22,9 @@ export function validateCompanionManifest(manifest) {
   if (manifest.bundle.url !== undefined && (typeof manifest.bundle.url !== 'string' || manifest.bundle.url.trim() === '')) {
     throw new Error('companion manifest bundle.url is invalid')
   }
+  if (manifest.bundle.fallbackUrl !== undefined && (typeof manifest.bundle.fallbackUrl !== 'string' || manifest.bundle.fallbackUrl.trim() === '')) {
+    throw new Error('companion manifest bundle.fallbackUrl is invalid')
+  }
   if (!/^[a-f0-9]{64}$/i.test(String(manifest.bundle?.sha256 ?? ''))) throw new Error('companion manifest bundle.sha256 is invalid')
   return manifest
 }
@@ -46,6 +49,27 @@ export function resolveCompanionAssetUrl(manifestUrl, asset, label = 'asset') {
     throw new Error(`companion manifest ${label}.url must use http(s) or file://`)
   }
   return url.href
+}
+
+export function resolveCompanionAssetFallbackUrl(manifestUrl, asset, label = 'asset') {
+  const declared = typeof asset?.fallbackUrl === 'string' ? asset.fallbackUrl.trim() : ''
+  if (declared === '') return undefined
+  let url
+  try {
+    url = new URL(declared, manifestUrl)
+  } catch {
+    throw new Error(`companion manifest ${label}.fallbackUrl is invalid`)
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:' && url.protocol !== 'file:') {
+    throw new Error(`companion manifest ${label}.fallbackUrl must use http(s) or file://`)
+  }
+  return url.href
+}
+
+export function companionAssetUrls(manifestUrl, asset, label = 'asset') {
+  const primary = resolveCompanionAssetUrl(manifestUrl, asset, label)
+  const fallback = resolveCompanionAssetFallbackUrl(manifestUrl, asset, label)
+  return fallback === undefined || fallback === primary ? [primary] : [primary, fallback]
 }
 
 export function resolveCompanionBundleUrl(manifestUrl, manifest) {

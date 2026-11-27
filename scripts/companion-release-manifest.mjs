@@ -18,6 +18,7 @@ const launcher = args.launcher === undefined ? undefined : resolve(args.launcher
 const packageJson = JSON.parse(await readFile(resolve(repoRoot, 'apps/companion/package.json'), 'utf8'))
 const releaseTag = String(args['release-tag'] ?? `v${packageJson.version}-companion.1`)
 const releaseBase = String(args['release-base'] ?? `https://github.com/pancong0711/she/releases/download/${releaseTag}`).replace(/\/+$/, '')
+const channelBase = String(args['channel-base'] ?? 'https://pancong0711.github.io/she').replace(/\/+$/, '')
 const commit = args.commit ?? (await execFileAsync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'])).stdout.trim()
 const bytes = await readFile(bundle)
 const launcherBytes = launcher === undefined ? undefined : await readFile(launcher)
@@ -33,6 +34,7 @@ const manifest = {
   bundle: {
     file: basename(bundle),
     url: `${releaseBase}/${basename(bundle)}`,
+    fallbackUrl: `${channelBase}/${basename(bundle)}`,
     bytes: (await stat(bundle)).size,
     sha256: createHash('sha256').update(bytes).digest('hex'),
   },
@@ -40,6 +42,7 @@ const manifest = {
     launcher: {
       file: basename(launcher),
       url: `${releaseBase}/${basename(launcher)}`,
+      fallbackUrl: `${channelBase}/${basename(launcher)}`,
       bytes: (await stat(launcher)).size,
       sha256: createHash('sha256').update(launcherBytes).digest('hex'),
     },

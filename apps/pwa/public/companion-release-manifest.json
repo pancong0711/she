@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "name": "she-companion",
-  "version": "0.7.8",
-  "commit": "7820ba635240878f77d3f7e35e9754264556a295",
-  "generatedAt": "2026-11-27T12:25:05.114Z",
+  "version": "0.7.9",
+  "commit": "9c594b231a07a2b8f9507476afa476db8960205c",
+  "generatedAt": "2026-11-27T12:31:23.726Z",
   "node": "^22.19.0 || >=24.0.0",
   "protocols": {
     "companionApi": "v1"
@@ -13,16 +13,18 @@
     "windows": "apps/companion/server.mjs"
   },
   "bundle": {
-    "file": "she-companion-0.7.8.tar.gz",
-    "url": "https://github.com/pancong0711/she/releases/download/v0.7.8-companion.1/she-companion-0.7.8.tar.gz",
-    "bytes": 736542,
-    "sha256": "80437785247705d3b42c8098c20fc735433e13d310fd22b80d82c12ada38a743"
+    "file": "she-companion-0.7.9.tar.gz",
+    "url": "https://github.com/pancong0711/she/releases/download/v0.7.9-companion.1/she-companion-0.7.9.tar.gz",
+    "fallbackUrl": "https://pancong0711.github.io/she/she-companion-0.7.9.tar.gz",
+    "bytes": 737122,
+    "sha256": "a032e36befd402bee8a699775d769a3f724ca747a1275f0076ac864aee6368ca"
   },
   "launcher": {
     "file": "she-launcher.mjs",
-    "url": "https://github.com/pancong0711/she/releases/download/v0.7.8-companion.1/she-launcher.mjs",
-    "bytes": 22762,
-    "sha256": "f7e7153b8eab3ffd8c68d046c837fca60bc01aa47bb3c1251d6f84563706066b"
+    "url": "https://github.com/pancong0711/she/releases/download/v0.7.9-companion.1/she-launcher.mjs",
+    "fallbackUrl": "https://pancong0711.github.io/she/she-launcher.mjs",
+    "bytes": 24058,
+    "sha256": "931712c8d63c096d7306cc85e8735985f0acbace04f499ea1e1d538603787797"
   },
   "installers": {
     "posix": "install-companion.sh",

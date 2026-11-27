@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { discoverAndPlan, scanLocalAgents } from './local-agents.mjs'
 import { dockerGuidance, summarizePreflight } from './preflight.mjs'
 import { authorizeWorkspace, listWorkspaceAuthorizations, removeWorkspaceAuthorization } from './workspaces.mjs'
-import { compareVersions, resolveCompanionBundleUrl, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
+import { compareVersions, companionAssetUrls, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
 import { installCompanionBundle } from './companion-installer.mjs'
 import { corsHeadersForOrigin } from './cors.mjs'
 import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
@@ -1008,23 +1008,28 @@ async function checkCompanionUpdate(manifestUrl) {
 
 async function downloadCompanionBundle(manifestUrl, manifest) {
   const file = basename(String(manifest.bundle.file))
-  const url = new URL(resolveCompanionBundleUrl(manifestUrl, manifest))
-  let bytes
-  if (url.protocol === 'file:') {
-    bytes = await readFile(url)
-  } else {
-    bytes = await fetchBytesWithCurlFallback(url.href, 120_000)
-  }
-  const actual = createHash('sha256').update(bytes).digest('hex')
-  if (actual !== String(manifest.bundle.sha256).toLowerCase()) {
-    throw new Error(`companion bundle SHA-256 mismatch: expected ${String(manifest.bundle.sha256)} got ${actual}`)
-  }
   if (companionInstallRoot === undefined) throw new Error('companion install root is unknown')
   const staging = join(companionInstallRoot, 'staging')
   await mkdir(staging, { recursive: true, mode: 0o700 })
   const target = join(staging, file)
-  await writeFile(target, bytes, { mode: 0o600 })
-  return { path: target, sha256: actual, bytes: bytes.byteLength }
+  let lastError
+  for (const href of companionAssetUrls(manifestUrl, manifest.bundle, 'bundle')) {
+    const url = new URL(href)
+    try {
+      const bytes = url.protocol === 'file:'
+        ? await readFile(url)
+        : await fetchBytesWithCurlFallback(url.href, 120_000)
+      const actual = createHash('sha256').update(bytes).digest('hex')
+      if (actual !== String(manifest.bundle.sha256).toLowerCase()) {
+        throw new Error(`companion bundle SHA-256 mismatch: expected ${String(manifest.bundle.sha256)} got ${actual}`)
+      }
+      await writeFile(target, bytes, { mode: 0o600 })
+      return { path: target, sha256: actual, bytes: bytes.byteLength }
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('companion bundle download failed')
 }
 
 async function applyCompanionUpdate(manifestUrl) {

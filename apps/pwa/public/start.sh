@@ -51,14 +51,15 @@ launch_local() {
 download_file() {
   local url="$1"
   local output="$2"
-  if curl -fL --http1.1 --retry 3 --retry-delay 1 --connect-timeout 20 --max-time 120 -o "$output" "$url"; then
+  local max_seconds="${3:-120}"
+  if curl -fL --http1.1 --retry 3 --retry-delay 1 --connect-timeout 20 --max-time "$max_seconds" -o "$output" "$url"; then
     return 0
   fi
   echo "SHE bootstrap: curl download failed; retrying with Node fetch" >&2
-  node --input-type=module - "$url" "$output" <<'NODE'
-const [url, output] = process.argv.slice(2)
+  node --input-type=module - "$url" "$output" "$max_seconds" <<'NODE'
+const [url, output, maxSeconds] = process.argv.slice(2)
 try {
-  const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(120_000) })
+  const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(Number(maxSeconds) * 1_000) })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   const { writeFile } = await import('node:fs/promises')
   await writeFile(output, Buffer.from(await response.arrayBuffer()))
@@ -70,7 +71,7 @@ NODE
 }
 
 echo "SHE bootstrap: fetching launcher manifest"
-if ! download_file "$MANIFEST_URL" "$WORK/manifest.json"; then
+if ! download_file "$MANIFEST_URL" "$WORK/manifest.json" 30; then
   launch_local || { echo "✗ cannot download launcher manifest and no local launcher exists" >&2; exit 1; }
 fi
 
@@ -82,13 +83,15 @@ const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
 const file = manifest?.launcher?.file
 const sha = manifest?.launcher?.sha256
 const url = manifest?.launcher?.url
+const fallbackUrl = manifest?.launcher?.fallbackUrl
 if (typeof file !== 'string' || typeof sha !== 'string') process.exit(2)
-process.stdout.write(`${file}\n${sha}\n${typeof url === 'string' ? url : ''}\n`)
+process.stdout.write(`${file}\n${sha}\n${typeof url === 'string' ? url : ''}\n${typeof fallbackUrl === 'string' ? fallbackUrl : ''}\n`)
 NODE
 )" || { launch_local || { echo "✗ release manifest has no launcher artifact; run the latest start.sh once" >&2; exit 1; }; }
 LAUNCHER_FILE="$(printf '%s\n' "$LAUNCHER_META" | sed -n '1p')"
 LAUNCHER_SHA="$(printf '%s\n' "$LAUNCHER_META" | sed -n '2p')"
 LAUNCHER_URL="$(printf '%s\n' "$LAUNCHER_META" | sed -n '3p')"
+LAUNCHER_FALLBACK_URL="$(printf '%s\n' "$LAUNCHER_META" | sed -n '4p')"
 case "$LAUNCHER_FILE" in
   */*|..*) echo "✗ invalid launcher file name" >&2; exit 1 ;;
 esac
@@ -106,12 +109,14 @@ esac
 
 # The Pages channel also mirrors the bundled launcher next to its manifest.
 # This gives fresh installs a second host when GitHub release downloads fail.
-LAUNCHER_FALLBACK_URL="$(node -e "process.stdout.write(new URL(process.argv[1], process.argv[2]).href)" "$LAUNCHER_FILE" "$MANIFEST_URL")"
+if [ -z "$LAUNCHER_FALLBACK_URL" ]; then
+  LAUNCHER_FALLBACK_URL="$(node -e "process.stdout.write(new URL(process.argv[1], process.argv[2]).href)" "$LAUNCHER_FILE" "$MANIFEST_URL")"
+fi
 
 download_and_verify_launcher() {
   local url="$1"
   echo "SHE bootstrap: downloading launcher $LAUNCHER_FILE from $url"
-  download_file "$url" "$WORK/$LAUNCHER_FILE" || return 1
+  download_file "$url" "$WORK/$LAUNCHER_FILE" 45 || return 1
   if command -v sha256sum >/dev/null 2>&1; then
     ACTUAL="$(sha256sum "$WORK/$LAUNCHER_FILE" | awk '{print $1}')"
   else
