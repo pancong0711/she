@@ -31,6 +31,8 @@ describe('companion update helpers', () => {
   it('restricts update manifest URLs to SHE release downloads', () => {
     expect(validateCompanionManifestUrl('https://github.com/pancong0711/she/releases/download/v0.3.0-companion.1/companion-release-manifest.json'))
       .toContain('github.com/pancong0711/she')
+    expect(validateCompanionManifestUrl('https://pancong0711.github.io/she/companion-release-manifest.json'))
+      .toBe('https://pancong0711.github.io/she/companion-release-manifest.json')
     expect(() => validateCompanionManifestUrl('https://example.com/manifest.json')).toThrow(/github.com/)
     expect(() => validateCompanionManifestUrl('https://github.com/other/repo/releases/download/x/y')).toThrow(/SHE/)
   })

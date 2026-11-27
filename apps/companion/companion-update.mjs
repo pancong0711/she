@@ -23,13 +23,18 @@ export function validateCompanionManifest(manifest) {
   return manifest
 }
 
+const SHE_COMPANION_CHANNEL_MANIFEST = 'https://pancong0711.github.io/she/companion-release-manifest.json'
+
 export function validateCompanionManifestUrl(value) {
   const text = String(value ?? '').trim()
   if (text.startsWith('file://')) return text
+  // The stable companion channel lives on GitHub Pages so core/packages
+  // releases cannot steal the repository-level GitHub "latest" pointer.
+  if (text === SHE_COMPANION_CHANNEL_MANIFEST) return text
   let url
   try { url = new URL(text) } catch { throw new Error('companion manifest URL is invalid') }
   if (url.protocol !== 'https:' || url.hostname !== 'github.com') {
-    throw new Error('companion manifest URL must be an https://github.com release URL')
+    throw new Error('companion manifest URL must be the SHE Pages channel or an https://github.com release URL')
   }
   if (!url.pathname.startsWith('/pancong0711/she/releases/download/')) {
     throw new Error('companion manifest URL must point to the SHE GitHub release downloads')
