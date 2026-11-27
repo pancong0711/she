@@ -8,6 +8,7 @@ import {
   loadSandboxPreferences,
   loadWorkspaces,
   planAgentMigration,
+  resolveSandboxImage,
   streamJobEvents,
   type AgentDiscovery,
   type AgentDiscoveryPlanResult,
@@ -18,6 +19,7 @@ import {
   type MigrationAgentInput,
   type MigrationRequest,
   type SandboxImagePreset,
+  type SandboxImageSource,
   type SandboxPreferences,
   type WorkspaceAuthorization,
 } from '../api'
@@ -39,6 +41,8 @@ const error = ref('')
 const selected = ref<Record<string, boolean>>({})
 const settings = ref<Record<string, AgentSettings>>({})
 const image = ref('node:24-bookworm')
+const imageSource = ref('official')
+const imageSources = ref<readonly SandboxImageSource[]>([])
 const commandText = ref('sleep infinity')
 const networkMode = ref<'none' | 'egress'>('egress')
 const cpus = ref(1)
@@ -108,7 +112,9 @@ async function loadSandboxDefaults(): Promise<void> {
     const response = await loadSandboxPreferences()
     sandboxPreferences.value = response.config
     sandboxImageCatalog.value = response.catalog
+    imageSources.value = response.imageSources ?? [{ id: 'official', label: 'Docker Hub 官方源', registryPrefix: null, description: '直接使用 docker.io。' }]
     image.value = sandboxPreferences.value.defaultImage
+    imageSource.value = sandboxPreferences.value.imageSource
     networkMode.value = sandboxPreferences.value.networkMode
     cpus.value = sandboxPreferences.value.resources.cpus
     memoryMb.value = sandboxPreferences.value.resources.memoryMb
@@ -155,6 +161,9 @@ async function scan(): Promise<void> {
   }
 }
 
+const selectedImageSource = computed(() => imageSources.value.find(source => source.id === imageSource.value))
+const resolvedImage = computed(() => resolveSandboxImage(image.value, selectedImageSource.value))
+
 function requestPayload(): MigrationRequest {
   const agents: MigrationAgentInput[] = selectedServices.value.map(service => {
     const config = settingsFor(service)
@@ -170,7 +179,7 @@ function requestPayload(): MigrationRequest {
   })
   return {
     agents,
-    image: image.value.trim(),
+    image: resolvedImage.value,
     command: parseCommandLine(commandText.value),
     networkMode: networkMode.value,
     resources: { cpus: cpus.value, memoryMb: memoryMb.value, pids: pids.value },
@@ -342,6 +351,12 @@ onMounted(async () => {
       <p v-if="sandboxPreferences" class="muted small-note">默认值来自 Packages → Sandbox 镜像与默认资源；可在此覆盖。</p>
       <div class="settings-grid migration-grid">
         <label>
+          镜像源
+          <select v-model="imageSource">
+            <option v-for="source in imageSources" :key="source.id" :value="source.id">{{ source.label }}</option>
+          </select>
+        </label>
+        <label>
           镜像预设
           <select v-model="image">
             <option v-for="preset in sandboxImageCatalog" :key="preset.id" :value="preset.image">{{ preset.label }} — {{ preset.image }}</option>
@@ -363,6 +378,9 @@ onMounted(async () => {
       </div>
       <p v-if="sandboxImageCatalog.find(preset => preset.image === image)" class="muted small-note">
         {{ sandboxImageCatalog.find(preset => preset.image === image)?.description }}
+      </p>
+      <p v-if="selectedImageSource" class="muted small-note">
+        实际镜像：<code>{{ resolvedImage }}</code>。{{ selectedImageSource.description }}
       </p>
       <div class="container-setting-explain">
         <p><b>镜像</b>：迁移不是“把本机进程搬进空容器”；原目录只读挂载到 <code>/legacy</code>，凭据目录只读挂载，容器仍需有对应 agent runtime。推荐用 Dockerfile 预构建并锁定版本，而不是每次启动安装。</p>

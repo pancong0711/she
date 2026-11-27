@@ -324,5 +324,8 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 
 - 镜像只解决 apt/GPG 下载问题；
 - `docker pull` 拉取镜像仍可能受 Docker Hub 网络影响，需要单独配置 registry mirror；
+- Packages → Sandbox 镜像与默认资源、Sandboxes 创建表单现在提供镜像源下拉，
+  可直接选择官方源或第三方 Docker Hub 镜像代理；该选项重写的是镜像引用，
+  不修改 apt 源或 Docker daemon 配置；
 - 不要为了绕过下载问题加入 root docker 组；
 - 镜像源不可信时，必须通过官方密钥指纹校验确认。

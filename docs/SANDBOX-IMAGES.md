@@ -13,6 +13,7 @@ Packages 页面需要成为 sandbox runtime 的统一入口，包括：
 
 - Docker/rootless Docker 安装；
 - sandbox 镜像选择；
+- Docker Hub 官方源与第三方镜像代理选择；
 - 默认网络模式；
 - 默认 CPU/memory/PIDs；
 - 本机已有镜像检测；
@@ -36,6 +37,31 @@ python:3.12-slim
 也可以输入自定义镜像。完整 shell/工具差异和外置 agent 镜像方案见
 [Agent Runtime Recipes](AGENT-RUNTIME-RECIPES.md)。
 
+### 2.1 镜像源
+
+Sandbox 创建表单和 Packages 默认镜像配置都支持镜像源下拉：
+
+```text
+Docker Hub 官方源
+DaoCloud 镜像代理（docker.m.daocloud.io）
+1ms.run 镜像代理（docker.1ms.run）
+1Panel 镜像代理（docker.1panel.live）
+```
+
+镜像源是“镜像引用重写”，不是 Docker daemon 全局配置。选择镜像代理后：
+
+```text
+node:24-bookworm
+  → docker.m.daocloud.io/library/node:24-bookworm
+
+some-user/agent:1.0
+  → docker.m.daocloud.io/some-user/agent:1.0
+```
+
+`ghcr.io/...`、`localhost:5000/...` 等已经带 registry 的引用保持不变，
+因为 Docker Hub 镜像代理无法代理其他 registry。第三方镜像源可能缓存、限流
+或改变镜像内容；敏感环境应使用官方源、私有 registry 或锁定 digest。
+
 ## 3. API
 
 ```text
@@ -51,10 +77,15 @@ GET 返回：
   "config": {
     "schema": 1,
     "defaultImage": "node:22-bookworm-slim",
+    "imageSource": "official",
     "networkMode": "egress",
     "resources": { "cpus": 1, "memoryMb": 1024, "pids": 256 }
   },
   "catalog": [...],
+  "imageSources": [
+    { "id": "official", "label": "Docker Hub 官方源", "registryPrefix": null },
+    { "id": "daocloud", "label": "DaoCloud 镜像代理", "registryPrefix": "docker.m.daocloud.io" }
+  ],
   "localImages": ["node:22-bookworm-slim"]
 }
 ```
@@ -74,18 +105,20 @@ docker images --format '{{.Repository}}:{{.Tag}}'
 Packages → Sandbox 镜像与默认资源：
 
 - 镜像下拉菜单；
+- 镜像源下拉菜单；
 - 自定义镜像输入；
 - 默认网络；
 - CPU/memory/PIDs；
 - 本机是否已有镜像；
-- 显示 `docker pull <image>` 命令；
-- 保存默认配置。
+- 显示解析后的实际镜像和 `docker pull <实际镜像>` 命令；
+- 保存默认镜像源。
 
 Agent Migration 打开时读取这些默认值，用户仍可对单次计划覆盖。
 
 ## 5. 限制
 
-- 下拉菜单只设置默认值，不负责拉取镜像；
+- 下拉菜单只设置默认值和解析规则，不负责拉取镜像；
+- 镜像源重写只对 Docker Hub 引用生效；
 - 镜像是否包含具体 agent runtime 仍由用户确认；
 - image digest 锁定、镜像扫描和权限验证尚未实现；
 - 未与 sandbox broker 的 image allowlist 绑定；

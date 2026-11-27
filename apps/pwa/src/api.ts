@@ -287,9 +287,17 @@ export interface SandboxImagePreset {
   readonly description: string
 }
 
+export interface SandboxImageSource {
+  readonly id: string
+  readonly label: string
+  readonly registryPrefix: string | null
+  readonly description: string
+}
+
 export interface SandboxPreferences {
   readonly schema: 1
   readonly defaultImage: string
+  readonly imageSource: string
   readonly networkMode: 'none' | 'egress'
   readonly resources: { readonly cpus: number; readonly memoryMb: number; readonly pids: number }
 }
@@ -298,7 +306,26 @@ export interface SandboxPreferencesResponse {
   readonly path: string
   readonly config: SandboxPreferences
   readonly catalog: readonly SandboxImagePreset[]
+  readonly imageSources: readonly SandboxImageSource[]
   readonly localImages: readonly string[]
+}
+
+/**
+ * Resolve a Docker Hub image through a selected mirror source. Full references
+ * to another registry are kept as-is because Docker Hub mirrors cannot serve
+ * arbitrary registries.
+ */
+export function resolveSandboxImage(image: string, source: SandboxImageSource | undefined): string {
+  const text = image.trim()
+  const prefix = source?.registryPrefix?.trim().replace(/\/+$/, '') ?? ''
+  if (text === '' || prefix === '') return text
+  const dockerHubReference = text.replace(/^(?:docker\.io|index\.docker\.io)\//, '')
+  const stripped = dockerHubReference !== text
+  const [first = '', ...rest] = dockerHubReference.split('/')
+  const firstLooksLikeRegistry = rest.length > 0 && (first.includes('.') || first.includes(':') || first === 'localhost')
+  if (!stripped && firstLooksLikeRegistry) return text
+  const repository = rest.length === 0 ? `library/${first}` : [first, ...rest].join('/')
+  return `${prefix}/${repository}`
 }
 
 export async function loadSandboxPreferences(signal?: AbortSignal): Promise<SandboxPreferencesResponse> {

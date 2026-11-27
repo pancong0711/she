@@ -25,7 +25,7 @@ import { dockerInstallGuide, readOsRelease } from './docker-install.mjs'
 import { autostartOptionsFromEnv, autostartStatus, disableAutostart, enableAutostart } from './autostart.mjs'
 import { probeGatewayAdapter, readGatewayConfig, writeGatewayConfig } from './gateway.mjs'
 import { terminateUnixSocketOwner } from './core-process.mjs'
-import { SANDBOX_IMAGE_PRESETS, readSandboxPreferences, writeSandboxPreferences } from './sandbox-preferences.mjs'
+import { SANDBOX_IMAGE_PRESETS, SANDBOX_IMAGE_SOURCES, readSandboxPreferences, writeSandboxPreferences } from './sandbox-preferences.mjs'
 import { defaultFeishu4dshPaths, inspectFeishu4dsh, validateFeishu4dshPackageSpec, validateFeishu4dshProfile } from './feishu4dsh.mjs'
 import { inspectOpenCodeService, reconcileOpenCodeWorkerConfig } from './opencode-service.mjs'
 import { sandboxAgentRecipeCatalog } from './sandbox-agent-recipes.mjs'
@@ -1023,6 +1023,7 @@ async function sandboxPreferencesStatus() {
     path: sandboxPreferencesPath,
     config,
     catalog: SANDBOX_IMAGE_PRESETS,
+    imageSources: SANDBOX_IMAGE_SOURCES,
     localImages: imagesResult.ok ? imagesResult.stdout.split('\n').filter(Boolean).sort() : [],
   }
 }

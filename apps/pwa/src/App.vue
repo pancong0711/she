@@ -48,6 +48,7 @@ import {
   loadWorkerConfig,
   loadWorkspaces,
   restartCompanion,
+  resolveSandboxImage,
   saveSandboxPreferences,
   saveWorkerConfig,
   setAutostart,
@@ -73,6 +74,7 @@ import {
   type PreflightResult,
   type SandboxAgentRecipe,
   type SandboxAgentVersionResolution,
+  type SandboxImageSource,
   type SandboxPreferences,
   type SandboxPreferencesResponse,
   type WorkerConfig,
@@ -113,6 +115,7 @@ const sandboxDraft = ref({
   role: 'utility',
   agentId: 'opencode',
   image: 'node:24-bookworm',
+  imageSource: 'official',
   networkMode: 'egress',
   cpus: 1,
   memoryMb: 1024,
@@ -194,7 +197,19 @@ const sandboxPreferenceForm = ref<SandboxPreferences | null>(null)
 const sandboxPreferenceError = ref('')
 const sandboxPreferenceMessage = ref('')
 const sandboxPreferenceSaving = ref(false)
+let sandboxImageSourceInitialized = false
 let timer: ReturnType<typeof setInterval> | undefined
+
+const sandboxImageSources = computed<readonly SandboxImageSource[]>(() => sandboxPreferences.value?.imageSources ?? [{
+  id: 'official',
+  label: 'Docker Hub 官方源',
+  registryPrefix: null,
+  description: '直接使用 docker.io；需要能访问 registry-1.docker.io。',
+}])
+const selectedSandboxImageSource = computed(() => sandboxImageSources.value.find(source => source.id === sandboxDraft.value.imageSource))
+const sandboxResolvedImage = computed(() => resolveSandboxImage(sandboxDraft.value.image, selectedSandboxImageSource.value))
+const selectedPreferenceImageSource = computed(() => sandboxImageSources.value.find(source => source.id === sandboxPreferenceForm.value?.imageSource))
+const resolvedPreferenceImage = computed(() => resolveSandboxImage(sandboxPreferenceForm.value?.defaultImage ?? '', selectedPreferenceImageSource.value))
 
 const iconUrl = `${import.meta.env.BASE_URL}icons/she.svg`
 const tasks = computed(() => [...(snapshot.value?.tasks ?? [])].reverse())
@@ -300,6 +315,12 @@ async function refresh(): Promise<void> {
   if (sandboxPreferencesResult.status === 'fulfilled') {
     sandboxPreferences.value = sandboxPreferencesResult.value
     sandboxPreferenceForm.value = { ...sandboxPreferencesResult.value.config, resources: { ...sandboxPreferencesResult.value.config.resources } }
+    if (!sandboxImageSourceInitialized) {
+      sandboxDraft.value.imageSource = sandboxPreferencesResult.value.config.imageSource
+      sandboxImageSourceInitialized = true
+    } else if (!(sandboxPreferencesResult.value.imageSources ?? []).some(source => source.id === sandboxDraft.value.imageSource)) {
+      sandboxDraft.value.imageSource = 'official'
+    }
     sandboxPreferenceError.value = ''
   } else {
     sandboxPreferences.value = null
@@ -736,11 +757,12 @@ async function submitSandbox(): Promise<void> {
     if (draft.workspaceAuthorizationId !== '' && selectedWorkspace === undefined) {
       throw new Error('所选 Workspace 授权已不存在，请刷新后重新选择。')
     }
+    const selectedImageSource = sandboxImageSources.value.find(source => source.id === draft.imageSource)
     await createSandbox({
       name: draft.name,
       role: draft.role as 'standalone' | 'main' | 'worker' | 'observer' | 'utility',
       agentId: recipe?.id ?? (draft.agentId.trim() || 'agent'),
-      image: recipe?.image ?? draft.image.trim(),
+      image: resolveSandboxImage(recipe?.image ?? draft.image.trim(), selectedImageSource),
       networkMode: recipe?.networkMode ?? draft.networkMode as 'none' | 'egress',
       resources: { cpus: draft.cpus, memoryMb: draft.memoryMb, pids: draft.pids },
       allowedCallers: ['main'],
@@ -1459,6 +1481,11 @@ onBeforeUnmount(() => {
                   </option>
                 </select>
               </label>
+              <label>镜像源
+                <select v-model="sandboxDraft.imageSource">
+                  <option v-for="source in sandboxImageSources" :key="source.id" :value="source.id">{{ source.label }}</option>
+                </select>
+              </label>
               <label>镜像预设
                 <select v-model="sandboxDraft.image" :disabled="selectedSandboxAgentRecipe !== undefined">
                   <optgroup label="Docker / 系统镜像">
@@ -1481,6 +1508,12 @@ onBeforeUnmount(() => {
             </div>
             <p v-if="sandboxPreferences" class="muted small-note">
               {{ sandboxPreferences.catalog.find(preset => preset.image === sandboxDraft.image)?.description ?? '自定义镜像：其 shell、Node、git、curl 和 agent runtime 均由镜像提供。' }}
+            </p>
+            <p v-if="selectedSandboxImageSource" class="muted small-note">
+              实际镜像：<code>{{ sandboxResolvedImage }}</code>。{{ selectedSandboxImageSource.description }}
+            </p>
+            <p v-if="selectedSandboxImageSource && selectedSandboxImageSource.id !== 'official' && sandboxDraft.image !== sandboxResolvedImage" class="warn-text small-note">
+              第三方镜像源可能缓存或改变镜像内容；敏感任务请使用官方源、私有 registry 或锁定 digest。仅 Docker Hub 镜像会被镜像源重写，ghcr.io/... 等其他 registry 保持原样。
             </p>
             <p v-if="sandboxAgentRecipeError" class="warn-text small-note">Agent recipe 目录不可用：{{ sandboxAgentRecipeError }}</p>
             <p v-if="sandboxWorkspaceOptionsError" class="warn-text small-note">Workspace 授权列表不可用：{{ sandboxWorkspaceOptionsError }}。仍可不绑定 workspace 创建 sandbox。</p>
@@ -2115,6 +2148,12 @@ onBeforeUnmount(() => {
               <input v-model="sandboxPreferenceForm.defaultImage" placeholder="node:24-bookworm 或 your-agent:1.0.0" />
             </label>
             <label>
+              默认镜像源
+              <select v-model="sandboxPreferenceForm.imageSource">
+                <option v-for="source in sandboxImageSources" :key="source.id" :value="source.id">{{ source.label }}</option>
+              </select>
+            </label>
+            <label>
               默认网络
               <select v-model="sandboxPreferenceForm.networkMode">
                 <option value="egress">egress（访问模型/API）</option>
@@ -2126,8 +2165,12 @@ onBeforeUnmount(() => {
             <label>PIDs<input v-model.number="sandboxPreferenceForm.resources.pids" type="number" min="16" max="16384" /></label>
           </div>
           <p v-if="sandboxPreferences && sandboxPreferenceForm" class="muted small-note">
-            当前镜像{{ sandboxPreferences.localImages.includes(sandboxPreferenceForm.defaultImage) ? '已存在于本机' : '尚未在本机检测到' }}。
-            拉取命令：<code>docker pull {{ sandboxPreferenceForm.defaultImage }}</code>
+            实际镜像：<code>{{ resolvedPreferenceImage }}</code>。
+            当前镜像{{ sandboxPreferences.localImages.includes(resolvedPreferenceImage) ? '已存在于本机' : '尚未在本机检测到' }}。
+            拉取命令：<code>docker pull {{ resolvedPreferenceImage }}</code>
+          </p>
+          <p v-if="selectedPreferenceImageSource && selectedPreferenceImageSource.id !== 'official'" class="muted small-note">
+            {{ selectedPreferenceImageSource.description }} 仅 Docker Hub 镜像会被重写。
           </p>
           <p v-if="sandboxPreferences" class="muted small-note">config: <code>{{ sandboxPreferences.path }}</code></p>
           <div class="job-actions">

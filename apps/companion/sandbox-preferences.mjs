@@ -4,6 +4,33 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 
+export const SANDBOX_IMAGE_SOURCES = [
+  {
+    id: 'official',
+    label: 'Docker Hub 官方源',
+    registryPrefix: null,
+    description: '直接使用 docker.io；需要能访问 registry-1.docker.io。',
+  },
+  {
+    id: 'daocloud',
+    label: 'DaoCloud 镜像代理（docker.m.daocloud.io）',
+    registryPrefix: 'docker.m.daocloud.io',
+    description: '第三方 Docker Hub 镜像代理。node:24-bookworm 会解析为 docker.m.daocloud.io/library/node:24-bookworm。',
+  },
+  {
+    id: '1ms',
+    label: '1ms.run 镜像代理（docker.1ms.run）',
+    registryPrefix: 'docker.1ms.run',
+    description: '第三方 Docker Hub 镜像代理。镜像内容与可用性由该服务提供方负责。',
+  },
+  {
+    id: '1panel',
+    label: '1Panel 镜像代理（docker.1panel.live）',
+    registryPrefix: 'docker.1panel.live',
+    description: '第三方 Docker Hub 镜像代理。镜像内容与可用性由该服务提供方负责。',
+  },
+]
+
 export const SANDBOX_IMAGE_PRESETS = [
   {
     id: 'node24-full',
@@ -31,6 +58,7 @@ export function defaultSandboxPreferences() {
   return {
     schema: 1,
     defaultImage: 'node:24-bookworm',
+    imageSource: 'official',
     networkMode: 'egress',
     resources: { cpus: 1, memoryMb: 1024, pids: 256 },
   }
@@ -43,8 +71,33 @@ export function validateSandboxImage(image) {
   return text
 }
 
+/**
+ * Resolve a Docker Hub image reference through a selected mirror source.
+ * Full references to another registry (for example ghcr.io/...) are left
+ * untouched because a Docker Hub mirror cannot serve them.
+ */
+export function resolveSandboxImage(image, imageSource = 'official') {
+  const text = validateSandboxImage(image)
+  const source = SANDBOX_IMAGE_SOURCES.find(item => item.id === imageSource)
+  const prefix = source?.registryPrefix
+  if (prefix === null || prefix === undefined || prefix === '') return text
+
+  const dockerHubReference = text.replace(/^(?:docker\.io|index\.docker\.io)\//, '')
+  const stripped = dockerHubReference !== text
+  const [first = '', ...rest] = dockerHubReference.split('/')
+  const firstLooksLikeRegistry = rest.length > 0 && (first.includes('.') || first.includes(':') || first === 'localhost')
+  if (!stripped && firstLooksLikeRegistry) return text
+  const repository = rest.length === 0 ? `library/${first}` : [first, ...rest].join('/')
+  return `${prefix.replace(/\/+$/, '')}/${repository}`
+}
+
+export function validateSandboxImageSource(imageSource, fallback = 'official') {
+  return SANDBOX_IMAGE_SOURCES.some(item => item.id === imageSource) ? imageSource : fallback
+}
+
 export function validateSandboxPreferences(input, current = defaultSandboxPreferences()) {
   const image = validateSandboxImage(input?.defaultImage ?? current.defaultImage)
+  const imageSource = validateSandboxImageSource(input?.imageSource, current.imageSource)
   const networkMode = input?.networkMode === 'none' ? 'none' : input?.networkMode === 'egress' ? 'egress' : current.networkMode
   const cpus = input?.resources?.cpus === undefined ? current.resources.cpus : Number(input.resources.cpus)
   const memoryMb = input?.resources?.memoryMb === undefined ? current.resources.memoryMb : Number(input.resources.memoryMb)
@@ -55,6 +108,7 @@ export function validateSandboxPreferences(input, current = defaultSandboxPrefer
   return {
     schema: 1,
     defaultImage: image,
+    imageSource,
     networkMode,
     resources: { cpus, memoryMb, pids },
   }
