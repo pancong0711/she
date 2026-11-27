@@ -1702,7 +1702,7 @@ onBeforeUnmount(() => {
 
           <div class="card download-card">
             <h3>下载安装包</h3>
-            <p class="muted">首次使用需要在电脑上运行一次启动脚本，它会安装稳定的 launcher。之后的 companion 升级在 Settings 中“检查更新 → 安装并重启”完成，不需要重新下载启动脚本。所有下载均校验 SHA-256，且不请求 root。</p>
+            <p class="muted">首次使用需要在电脑上运行一次启动脚本，它会安装稳定的 launcher。之后的 companion 升级可在 Settings 中“检查更新 → 安装并重启”完成，也可以关闭后重新运行 she-companion / 登录自启动：launcher 默认会检查发布 manifest 并更新到新版本。不需要重新下载启动脚本。所有下载均校验 SHA-256，且不请求 root。</p>
             <div class="hero-actions">
               <a class="primary" href="./start.bat" download>Windows 一键启动 start.bat</a>
               <a class="primary" href="./start.command" download>macOS 一键启动 start.command</a>

@@ -44,7 +44,12 @@ $SHE_COMPANION_ROOT/current/apps/companion/server.mjs（可更新）
 - 识别退出码 75 并重启；
 - 新版本启动 20 秒内失败时恢复 `previousTarget`；
 - 检测调试端口上已运行的 companion，避免重复启动；
-- `SHE_LAUNCHER_UPDATE_ON_START=1` 时可通过运行中 companion 的受控 API 请求更新。
+- **默认在每次 launcher 启动时检查 companion channel manifest**；
+  `SHE_LAUNCHER_UPDATE_ON_START=0` 可关闭该检查以支持完全离线启动；
+- 检查/下载首先使用 Node fetch，失败时回退系统 `curl`，以兼容 Node 与系统
+  curl 在 DNS/代理/TLS 路径上行为不同的主机；
+- 停止状态下发现新版本时，由 launcher 直接下载、校验并安装到版本目录，再启动
+  新版本；已运行的 companion 仍通过受控 update API 请求切换。
 
 ### companion installer
 

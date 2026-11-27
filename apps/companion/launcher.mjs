@@ -14,6 +14,7 @@ import {
   access,
   lstat,
   mkdir,
+  mkdtemp,
   readFile,
   readlink,
   rename,
@@ -22,6 +23,7 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compareVersions, validateCompanionManifest, validateCompanionManifestUrl } from './companion-update.mjs'
@@ -37,13 +39,73 @@ const manifestUrl = process.env.SHE_COMPANION_MANIFEST_URL?.trim()
   || 'https://pancong0711.github.io/she/companion-release-manifest.json'
 const currentPath = join(installRoot, 'current')
 const pendingPath = join(installRoot, 'update-pending.json')
-const checkUpdateOnStart = process.env.SHE_LAUNCHER_UPDATE_ON_START === '1'
+// Check for a newer companion on every launcher start by default. Set
+// SHE_LAUNCHER_UPDATE_ON_START=0 to force a fully offline start.
+const checkUpdateOnStart = process.env.SHE_LAUNCHER_UPDATE_ON_START !== '0'
 let child
 let shuttingDown = false
 let restarts = 0
 
 function log(message) {
   process.stdout.write(`[she-launcher] ${message}\n`)
+}
+
+function describeNetworkError(error) {
+  if (!(error instanceof Error)) return String(error)
+  const cause = error.cause
+  return cause instanceof Error ? `${error.message} (${cause.message})` : error.message
+}
+
+function runCurl(args, timeoutMs) {
+  return new Promise(resolvePromise => {
+    const stdout = []
+    const stderr = []
+    let settled = false
+    const child = spawn('curl', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+    }, timeoutMs)
+    const finish = result => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolvePromise(result)
+    }
+    child.stdout.on('data', chunk => stdout.push(Buffer.from(chunk)))
+    child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)))
+    child.on('error', error => finish({ ok: false, detail: error.message }))
+    child.on('close', code => finish({
+      ok: code === 0,
+      detail: Buffer.concat(stderr).toString('utf8').trim() || Buffer.concat(stdout).toString('utf8').trim() || `curl exited ${String(code)}`,
+    }))
+  })
+}
+
+/**
+ * Use Node fetch first, then system curl. This mirrors the companion server's
+ * recovery path for hosts where curl can reach GitHub but Node's fetch stack
+ * cannot (DNS/proxy/TLS differences).
+ */
+async function downloadBytesWithCurlFallback(url, timeoutMs) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return Buffer.from(await response.arrayBuffer())
+  } catch (fetchError) {
+    const tempDir = await mkdtemp(join(tmpdir(), 'she-launcher-download-'))
+    const target = join(tempDir, 'download')
+    try {
+      const curl = await runCurl([
+        '-fL', '--retry', '3', '--connect-timeout', '20', '--max-time', String(Math.max(1, Math.ceil(timeoutMs / 1000))), '-o', target, url,
+      ], timeoutMs + 10_000)
+      if (!curl.ok) {
+        throw new Error(`fetch failed for ${url}: ${describeNetworkError(fetchError)}; curl fallback failed: ${curl.detail}`)
+      }
+      return await readFile(target)
+    } finally {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
 }
 
 async function readCurrentVersion() {
@@ -56,15 +118,10 @@ async function readCurrentVersion() {
 
 async function fetchManifest(url) {
   const validated = validateCompanionManifestUrl(url)
-  let text
-  if (validated.startsWith('file://')) {
-    text = await readFile(new URL(validated), 'utf8')
-  } else {
-    const response = await fetch(validated, { signal: AbortSignal.timeout(20_000) })
-    if (!response.ok) throw new Error(`companion manifest HTTP ${response.status}`)
-    text = await response.text()
-  }
-  return validateCompanionManifest(JSON.parse(text))
+  const bytes = validated.startsWith('file://')
+    ? await readFile(new URL(validated))
+    : await downloadBytesWithCurlFallback(validated, 20_000)
+  return validateCompanionManifest(JSON.parse(bytes.toString('utf8')))
 }
 
 async function downloadBundle(manifest) {
@@ -81,9 +138,7 @@ async function downloadBundle(manifest) {
   if (url.protocol === 'file:') {
     bytes = await readFile(url)
   } else {
-    const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
-    if (!response.ok) throw new Error(`companion bundle HTTP ${response.status}`)
-    bytes = Buffer.from(await response.arrayBuffer())
+    bytes = await downloadBytesWithCurlFallback(url.href, 120_000)
   }
   const actual = createHash('sha256').update(bytes).digest('hex')
   if (actual !== String(manifest.bundle.sha256).toLowerCase()) {
@@ -278,6 +333,7 @@ async function main() {
   if (existing !== undefined) {
     if (checkUpdateOnStart) {
       try {
+        log(`checking companion updates from ${manifestUrl}`)
         const manifest = await fetchManifest(manifestUrl)
         if (await updateRunningCompanion(existing, manifest)) {
           log(`running companion updated to ${manifest.version}`)
@@ -299,6 +355,7 @@ async function main() {
     currentVersion = await ensureInstalled(manifest)
   } else if (checkUpdateOnStart) {
     try {
+      log(`checking companion updates from ${manifestUrl}`)
       const manifest = await fetchManifest(manifestUrl)
       const comparison = compareVersions(manifest.version, currentVersion)
       if (comparison !== undefined && comparison > 0) currentVersion = await ensureInstalled(manifest)

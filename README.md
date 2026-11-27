@@ -122,6 +122,7 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.1.tar.gz --core-
 - [feishu4dsh 复用与分工建议](docs/20261127-feishu4dsh-reuse-proposal.md)
 - [feishu4dsh 侧复核：message 回执与任务目标映射](docs/20261127-需求-feishu4dsh-SHE-gateway-message-result回执与任务目标映射.md)
 - [SHE gateway 直接消息与命令语义](docs/20261127-需求-SHE-gateway直接消息与命令语义.md)
+- [对比：assignment-assistant launcher/engine 与 SHE companion](docs/20261127-对比-assignment-assistant-launcher-engine与SHE-companion.md)
 - [SHE companion 0.2.0 发布说明](docs/RELEASE-0.2.0-COMPANION.md)
 - [SHE companion 0.2.1 发布说明](docs/RELEASE-0.2.1-COMPANION.md)
 - [ADR-0003：页面请求、supervisor 执行的 companion 更新](docs/ADR-0003-supervised-companion-update.md)
