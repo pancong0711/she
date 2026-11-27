@@ -27,3 +27,11 @@ export function sandboxCommandForCreate(
   if (text === '' || text === SANDBOX_RECIPE_PLACEHOLDER) return parseCommandLine('sleep infinity')
   return parseCommandLine(text)
 }
+
+/** Number of polls needed to cover a recipe bootstrap timeout plus startup grace. */
+export function sandboxBootstrapPollAttempts(timeoutMs: number, intervalMs = 5_000, graceMs = 60_000): number {
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 300_000
+  const interval = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5_000
+  const grace = Number.isFinite(graceMs) && graceMs >= 0 ? graceMs : 60_000
+  return Math.max(1, Math.ceil((timeout + grace) / interval))
+}

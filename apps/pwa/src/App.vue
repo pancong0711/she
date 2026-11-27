@@ -5,7 +5,7 @@ import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
 import WorkspaceAuthorizationPanel from './components/WorkspaceAuthorizationPanel.vue'
 import GatewayPanel from './components/GatewayPanel.vue'
 import SandboxToolsPanel from './components/SandboxToolsPanel.vue'
-import { SANDBOX_RECIPE_PLACEHOLDER, sandboxCommandForCreate } from './sandbox'
+import { SANDBOX_RECIPE_PLACEHOLDER, sandboxBootstrapPollAttempts, sandboxCommandForCreate } from './sandbox'
 import { extractAgentReportText } from './chat'
 import type { AgentRuntimeStatus, ArtifactListItem, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
@@ -768,8 +768,10 @@ async function checkSandboxAgentVersion(): Promise<void> {
 
 async function monitorAgentBootstrap(sandboxName: string, recipe: SandboxAgentRecipe, version: string): Promise<void> {
   // The container installs asynchronously after `docker run -d` returns. Poll
-  // the fixed verify command for a bounded time and record only a real success.
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  // the fixed verify command for the full recipe timeout plus startup grace;
+  // record only a real success.
+  const attempts = sandboxBootstrapPollAttempts(recipe.bootstrap.timeoutMs)
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     await new Promise(resolvePromise => setTimeout(resolvePromise, 5_000))
     try {
       const result = await execSandbox(sandboxName, {
@@ -786,6 +788,7 @@ async function monitorAgentBootstrap(sandboxName: string, recipe: SandboxAgentRe
       // Keep waiting; the bootstrap may still be installing.
     }
   }
+  sandboxError.value = `Agent ${recipe.label}@${version} 安装验证超时（${Math.round((recipe.bootstrap.timeoutMs + 60_000) / 1000)}s）。`
 }
 
 async function submitSandbox(): Promise<void> {

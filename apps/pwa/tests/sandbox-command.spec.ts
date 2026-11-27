@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SANDBOX_RECIPE_PLACEHOLDER, sandboxCommandForCreate } from '../src/sandbox'
+import { SANDBOX_RECIPE_PLACEHOLDER, sandboxBootstrapPollAttempts, sandboxCommandForCreate } from '../src/sandbox'
 
 describe('sandbox create command resolution', () => {
   it('uses the recipe bootstrap command instead of UI state', () => {
@@ -18,3 +18,8 @@ describe('sandbox create command resolution', () => {
     expect(sandboxCommandForCreate(undefined, 'sh -lc "echo ok"')).toEqual(['sh', '-lc', 'echo ok'])
   })
 })
+
+  it('polls long-running agent installs for the full recipe timeout', () => {
+    expect(sandboxBootstrapPollAttempts(300_000)).toBe(72)
+    expect(sandboxBootstrapPollAttempts(30_000)).toBe(18)
+  })

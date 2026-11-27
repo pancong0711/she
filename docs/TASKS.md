@@ -232,3 +232,4 @@
 - 2026-11-27：companion 0.7.13 / core 0.3.4 将 core 更新也切到 Pages-first channel；core manifest 增加 bundle 主/备 URL，Pages workflow 同步 core bundle fallback；旧 manifest 继续兼容。准备发布。
 - 2026-11-27：修复新 SHE_HOME 安装的 bin 选择：新安装固定 `SHE_HOME/bin`，仅 legacy app 使用旧 `~/.local/bin`；生成 `she` 与 `she-companion` 命令。准备 companion 0.7.14。
 - 2026-11-27：修复 Sandbox Agent recipe 创建 bug：PWA 曾把“Agent recipe 在容器启动时安装并保持运行”提示文案写入 command，recipe 状态丢失时会作为 Docker 参数发送。新增 sandboxCommandForCreate() 统一解析命令、旧占位文案自动降级为 sleep infinity，并增加回归测试。准备 companion 0.7.15。Vitest 135/135。
+- 2026-11-27：继续审核 Sandbox Agent recipe 生命周期，修复异步验证窗口固定 200s 短于 recipe bootstrap timeout（最长 300s）的问题；轮询改为 timeout+60s，并在超时后显示明确错误。准备 companion 0.7.16。Vitest 136/136。
