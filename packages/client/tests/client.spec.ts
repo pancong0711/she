@@ -92,7 +92,7 @@ describe('@she/client', () => {
       }
       if (request.url === '/v1/hello' && request.method === 'POST') {
         const hello = JSON.parse(body) as { clientVersion: string }
-        expect(hello.clientVersion).toBe('0.1.1')
+        expect(hello.clientVersion).toBe('0.1.2')
         json(response, 200, {
           protocolVersion: GATEWAY_PROTOCOL_VERSION,
           serverVersion: '0.1.0',

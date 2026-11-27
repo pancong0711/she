@@ -166,6 +166,8 @@ bash scripts/install-core-bundle.sh artifacts/core/she-core-0.3.1.tar.gz --core-
 - [SHE companion 0.7.6 发布说明](docs/RELEASE-0.7.6-COMPANION.md)
 - [SHE companion 0.7.7 发布说明](docs/RELEASE-0.7.7-COMPANION.md)
 - [Public packages compatibility update](docs/RELEASE-0.1.0-PACKAGES.2.md)
+- [feishu4dsh 侧复核：切换到 SHE packages.1](docs/20261127-需求-feishu4dsh-切换到SHE-packages.1.md)
+- [Public packages direct-message update](docs/RELEASE-0.1.1-PACKAGES.1.md)
 - [feishu4dsh R71 兼容性核查](docs/20261127-feishu4dsh-r71-compatibility.md)
 - [ADR-0002：不请求、不执行 root](docs/ADR-0002-no-root-privilege-policy.md)
 - [部署命名与本地约定](docs/DEPLOYMENT.md)

@@ -2,7 +2,7 @@
 
 import type { SheErrorCode } from '@she/protocol'
 
-export const SHE_CLIENT_VERSION = '0.1.1'
+export const SHE_CLIENT_VERSION = '0.1.2'
 
 export type SheClientErrorCode = SheErrorCode | 'transport_error'
 

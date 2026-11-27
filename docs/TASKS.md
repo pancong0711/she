@@ -221,3 +221,5 @@
 - 2026-11-27：修复部分网络环境下网页 companion/core 更新报 `fetch failed`：Node fetch 失败时自动回退系统 `curl` 下载 manifest/bundle，并在两者都失败时返回带 URL、fetch cause 和 curl stderr 的可操作错误。launcher/start.sh 分层不变：start 脚本仅首次安装/恢复，日常 companion 更新继续由页面触发、launcher 重启和回滚。
 
 - 2026-11-27：将 companion launcher 对齐 assignment-assistant 的 `稳定 launcher + 启动时检查更新` 模型：launcher 默认每次启动读取 Pages channel manifest，停止状态下用 curl fallback 下载/校验/安装新 companion；`SHE_LAUNCHER_UPDATE_ON_START=0` 可禁用。这样正常重启 `she-companion` / 登录自启动即可发现发布版本，`start.sh` 仅首次安装、恢复或刷新 launcher artifact 时使用。已完成本地真实 launcher 更新测试：0.0.1 → 0.0.2、current 切换、supervised companion health OK。
+
+- 2026-11-27：发布 SHE public packages `v0.1.1-packages.1`：`@she/protocol` 0.1.1（GatewayMessageRequest/Result）、`@she/client` 0.1.2（原生 message()）、`@she/gateway-sdk` 0.1.1；按 feishu4dsh R73 反馈准备类型/依赖收口，并写复核单要求其删除本地 SheGatewayMessageResult 镜像、切到正式 `@she/protocol` 类型与原生 client.message()。
