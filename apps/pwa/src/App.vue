@@ -5,7 +5,7 @@ import AgentMigrationPanel from './components/AgentMigrationPanel.vue'
 import WorkspaceAuthorizationPanel from './components/WorkspaceAuthorizationPanel.vue'
 import GatewayPanel from './components/GatewayPanel.vue'
 import SandboxToolsPanel from './components/SandboxToolsPanel.vue'
-import { parseCommandLine } from './command'
+import { SANDBOX_RECIPE_PLACEHOLDER, sandboxCommandForCreate } from './sandbox'
 import { extractAgentReportText } from './chat'
 import type { AgentRuntimeStatus, ArtifactListItem, GatewayHealth, GatewayServerEvent, GatewaySnapshot, RenderIntent, SandboxBrokerHealth, SandboxStats, SandboxView } from '@she/protocol'
 import {
@@ -729,6 +729,10 @@ function applySandboxAgentRecipe(): void {
   if (recipe === undefined) {
     sandboxAgentVersion.value = ''
     sandboxAgentVersionResolution.value = null
+    sandboxDraft.value = {
+      ...sandboxDraft.value,
+      command: 'sleep infinity',
+    }
     return
   }
   sandboxAgentVersion.value = recipe.version
@@ -738,7 +742,9 @@ function applySandboxAgentRecipe(): void {
     agentId: recipe.id,
     image: recipe.image,
     networkMode: recipe.networkMode,
-    command: '由 Agent recipe 在容器启动时安装并保持运行',
+    // The UI disables this field while a recipe is selected. The actual
+    // command is resolved from the pinned recipe at submit time.
+    command: 'sleep infinity',
   }
 }
 
@@ -809,6 +815,8 @@ async function submitSandbox(): Promise<void> {
       throw new Error('所选 Workspace 授权已不存在，请刷新后重新选择。')
     }
     const selectedImageSource = sandboxImageSources.value.find(source => source.id === draft.imageSource)
+    const createCommand = sandboxCommandForCreate(recipe, draft.command)
+    if (draft.command.trim() === SANDBOX_RECIPE_PLACEHOLDER) sandboxDraft.value = { ...sandboxDraft.value, command: 'sleep infinity' }
     await createSandbox({
       name: draft.name,
       role: draft.role as 'standalone' | 'main' | 'worker' | 'observer' | 'utility',
@@ -820,9 +828,7 @@ async function submitSandbox(): Promise<void> {
       ...(selectedWorkspace === undefined
         ? {}
         : { hostMounts: [{ source: selectedWorkspace.realPath, target: { kind: 'workspace' as const }, readOnly: selectedWorkspace.mode !== 'read-write' }] }),
-      ...(recipe !== undefined
-        ? { command: [...recipe.bootstrap.command] }
-        : draft.command.trim() === '' ? {} : { command: parseCommandLine(draft.command) }),
+      ...(createCommand === undefined ? {} : { command: [...createCommand] }),
     })
     if (recipe !== undefined) void monitorAgentBootstrap(draft.name, recipe, resolvedVersion)
     sandboxCreateOpen.value = false
