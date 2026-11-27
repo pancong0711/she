@@ -85,5 +85,5 @@ PWA 检查更新
 - [x] 旧 supervisor/update-pending 回滚契约不被破坏；
 - [x] 故意提供启动失败版本，launcher 成功回滚到上一版本；
 - [x] start.sh 从本地 release 目录完成 launcher 下载、SHA 校验和首次安装；
-- [ ] CI / Pages 通过；
+- [x] CI / Pages 通过；
 - [x] 更新 PWA Help / 文档 / release 说明。
